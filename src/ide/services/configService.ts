@@ -83,6 +83,12 @@ export interface AppConfig {
   keyboardMouseMode?: boolean;
   terminalFontSize?: number;
   editorSettings: EditorSettings;
+  githubClientId?: string;
+  githubClientSecret?: string;
+  githubToken?: string;
+  githubUsername?: string;
+  githubEmail?: string;
+  githubAvatarUrl?: string;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -96,6 +102,12 @@ const DEFAULT_CONFIG: AppConfig = {
   keyboardMouseMode: false,
   terminalFontSize: 14,
   editorSettings: { ...DEFAULT_EDITOR_SETTINGS },
+  githubClientId: "",
+  githubClientSecret: "",
+  githubToken: "",
+  githubUsername: "",
+  githubEmail: "",
+  githubAvatarUrl: "",
 };
 
 export function normalizeApiKeys(keys?: string[], fallbackKey?: string): string[] {
