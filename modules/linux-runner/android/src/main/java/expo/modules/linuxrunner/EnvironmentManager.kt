@@ -316,7 +316,7 @@ alias opencode='[ -f /root/.theme_env ] && . /root/.theme_env; opencode'
 export HOME=/root
 export USER=root
 export SHELL=/bin/bash
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.local/bin:/root/.npm-global/bin
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.local/bin:/root/.npm-global/bin:/root/.opencode/bin:/root/.bun/bin:/root/.cargo/bin:/root/go/bin
 export NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules
 export LANG=C.UTF-8
 export LC_ALL=C.UTF-8
@@ -326,6 +326,14 @@ export EXPO_USE_LOCAL_CLI=1
 # Plain prompt on purpose: keep it ASCII-safe for the xterm renderer
 # and consistent across shells (dash, bash).
 export PS1='linux:\w# '
+# Keep arrow-key history working even if a stray INPUTRC remaps it.
+if [ -n "${'$'}BASH_VERSION" ]; then
+  set -o emacs 2>/dev/null
+  bind '"\e[A": previous-history' 2>/dev/null
+  bind '"\e[B": next-history' 2>/dev/null
+  bind '"\e[C": forward-char' 2>/dev/null
+  bind '"\e[D": backward-char' 2>/dev/null
+fi
 export NODE_OPTIONS="--dns-result-order=ipv4first"
 alias ll='ls -la'
 alias l='ls -lh'
