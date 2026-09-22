@@ -1,8 +1,119 @@
 # Project Progress Tracker
 
 ## Status
-- **Current Phase:** Phase 2 Complete (Split Terminal Mode Viewport Scrolling & Prompt Visibility) - All Phases Complete!
-- **Last Updated:** September 19, 2026
+- **Current Phase:** opencode postinstall repair card installed as v9 - awaiting on-device user verify
+- **Last Updated:** September 23, 2026
+
+### [2026-09-23] - opencode WORKING on device (1.18.32) via adb-driven fix
+- **Sequence:** repair log proved an orphan dead stub at /usr/local/bin/opencode shadowed the good curl binary. User`s typed rm missed the leading slash (relative path, deleted nothing). Drove the phone over adb: `input text` the absolute `rm -f /usr/local/bin/opencode`, then `hash -r` (bash had cached the dead path), then `opencode --version` -> **1.18.32** on screen.
+- **Note:** prompt shows `linux:/workspaces/laravel#` - bash + cwd fixes confirmed live on device too.
+### [2026-09-23] - opencode root cause: orphaned dead stub shadowing the good binary
+- **Evidence (pulled repair log):** npm global root has NO opencode-ai dir; `npm install -g` dies with EEXIST on `/usr/local/bin/opencode` (orphan file, no owning package - `npm rm` says "up to date"); the curl installer then succeeds 100% into ~/.opencode/bin but `command -v` still resolves the dead stub first. So every launch hits the stub`s postinstall error while a working binary sits shadowed.
+- **Fix:** repair step 2b retries npm install after `rm -f` of the EEXIST path + half module dir; step 4 removes the shadowing orphan directly (only when verify proves the winner broken) instead of the useless `npm rm`. Rebuilt + installed (dumpsys 2026-09-23 02:20:59).
+- **Verify (pending):** user taps Repair again (or runs `rm -f /usr/local/bin/opencode && opencode --version` now - the curl binary is already on the phone from the last run).
+### [2026-09-23] - opencode repair v2: shadow-stub removal + visible repair log
+- **User Report:** still broken after first repair; adb cannot reach the guest (release build, no run-as; logcat holds no app logs; /data has 27G free so disk is fine). Registry check from PC: `opencode-linux-arm64@1.18.32` EXISTS, so the platform binary is fetchable - failure is environmental, not a missing package.
+- **Fix:** `repairOpencode()` step 4: after the curl installer, if the winning binary is still the dead npm stub (shadows ~/.opencode/bin), `npm rm -g opencode-ai` then re-verify. Repair card now shows a View log toggle with the full step log so the next failure arrives with evidence instead of "same problem".
+- **Verify:** `npx tsc --noEmit` clean; card 158 lines (Rule 5). `assembleRelease` BUILD SUCCESSFUL (3m 29s); `adb install -r` Success; `dumpsys` confirms versionCode=9, install 2026-09-23 02:00:24.
+- **Verify (pending):** user taps Repair in Settings -> Linux, expands View log on failure, sends the log.
+### [2026-09-23] - opencode "postinstall not run" repair (in-app card + immediate command)
+- **User Report:** running `opencode` prints "postinstall script not run", opencode not working. (Also reverted an unbuilt auto-download-default detour: that was not what the user meant.)
+- **Root Cause (verified vs opencode docs/issues):** the `opencode-ai` npm wrapper ships a stub until `postinstall.mjs` downloads the platform binary. Postinstall never ran (ignore-scripts config, pnpm/bun-style blocking, or offline install) so the stub aborts every launch. Official remedies: rerun postinstall in place, or `npm i -g --ignore-scripts=false opencode-ai`.
+- **Fix:**
+  1. `opencodeService.ts` (new): `checkOpencode()` detects ok / broken-postinstall / missing; `repairOpencode()` reruns `postinstall.mjs` in `$(npm root -g)/opencode-ai`, else npm reinstall with scripts forced on, else official `curl ... | bash` installer; verifies `opencode --version` after each step.
+  2. `OpencodeRepairCard.tsx` (new, Settings -> Linux top): live status + Repair/Reinstall button.
+  3. `EnvironmentSection.tsx`: renders the card (+2 lines).
+- **Verify:** `npx tsc --noEmit` clean; service 90 lines, card 130, section 426 (Rule 5). `assembleRelease` BUILD SUCCESSFUL (3m 5s, lint skipped - lock); `adb install -r` Success; `dumpsys` confirms versionCode=9, install 2026-09-23 01:45:10.
+- **Verify (pending):** user taps Repair in Settings -> Linux, then `opencode --version` works in terminal.
+### [2026-09-23] - Override: redirect login restored, verified bundle, install blocked (phone offline)
+- **User Directive:** "override it continue what you are supposed to" — redirect (PKCE) login is authoritative; device-code flow removed.
+- **Actions:**
+  1. Restored `gitHubAuthService.ts` (PKCE web flow: `signInWithBrowser`/`completeGitHubLogin`/session/`ensureGitHubCredentials`/`logoutGitHub`/credential helpers) + `GitBrowserLoginTab.tsx` (one-tap UI, saved ID + masked secret, account card + logout).
+  2. `gitService.ts` re-exports + `GitCredentialsModal.tsx` default tab back to Browser; deleted `gitHubDeviceAuthService.ts` + `GitDeviceLoginTab.tsx`; `configService.ts` keeps `githubClientSecret` (removed external purge line); reinstalled `expo-crypto@15.0.9` (had been removed).
+  3. Terminal fixes (scroll/clear/wheel) untouched and intact on disk.
+- **Verify:** `npx tsc --noEmit` clean. `assembleRelease` BUILD SUCCESSFUL (3m 13s, lint skipped — lint-cache file lock from concurrent session). APK bundle inspected entry-wise: `astra://oauth/callback` + `Sign in with GitHub` present, `Login Code` + device service absent. (Note: Hermes renames JS identifiers, so verification used string literals only.)
+- **Blocked:** `adb devices` empty (twice) — phone unplugged. APK ready at `Downloads/app-release.apk` + `Downloads/astra-release.apk`; install + `dumpsys` still pending.
+- **Infra notes:** C: nearly full (~945 MB free) — full APK extractions fail; verify via single-entry zip reads. Another session runs `expo start --dev-client` + edits same files; release builds collide (lint-cache lock).
+
+### [2026-09-23] - GitHub device-code login restored (no redirect or client secret)
+- **User Directive:** replace the OAuth redirect experience with the simpler GitHub-style code login, then deploy it to the connected phone through ADB.
+- **Phase 2 implementation:**
+  1. Added `gitHubDeviceAuthService.ts`: requests the GitHub user/device codes, polls at GitHub's required interval, handles `slow_down`/expiry/decline/disabled-flow errors, supports cancellation, opens and dismisses the GitHub verification page, saves the approved account, and wires HTTPS git credentials.
+  2. Added `GitDeviceLoginTab.tsx`: saved Client ID, automatic code copy + GitHub launch, visible copyable code and expiry countdown, retry/open/cancel actions, saved account card, and logout. Async work, browser state, timers, and polling abort cleanly on close/unmount.
+  3. Changed the default credentials tab from `Browser` to `Login Code`; existing Fine-Grained Token and SSH Key methods remain available.
+  4. Removed the `astra://oauth` Android callback intent, PKCE/redirect exports, Client Secret storage, and the now-unused `expo-crypto` dependency. Old saved Client Secrets are stripped during config loading.
+  5. Bumped Android `versionCode` from 8 to 9.
+- **Phase 2 verify:** `npx tsc --noEmit` clean; `git diff --check` clean; relevant files remain below 500 lines (`gitHubDeviceAuthService.ts` 246, `GitDeviceLoginTab.tsx` 379, modal 293, config 310, git service 482).
+- **Phase 3 pending user go:** build the Debug APK, launch Metro in its dedicated terminal, install with `adb install -r`, and confirm versionCode 9 on the connected Huawei CLT-L29.
+
+### [2026-09-23] - One-tap redirect login (OAuth code flow + PKCE, replaces device codes)
+- **User Directive:** tap Sign in → browser → log in → auto-redirect back logged in, no OAuth setup friction per login. Verified against GitHub docs: PKCE S256 supported (Jul 2025 changelog); custom-scheme callback URLs allowed; token exchange still requires the app secret, so ID + secret are pasted once and saved.
+- **Fix:**
+  1. `AndroidManifest.xml`: `astra://oauth` intent-filter on MainActivity (singleTask) so GitHub redirects straight back.
+  2. `expo-crypto@15.0.9` installed (PKCE verifier/challenge + state randomness).
+  3. `gitHubAuthService.ts` rewritten: `signInWithBrowser` (`openAuthSessionAsync` + state check + code→token exchange with `code_verifier`, readable errors for `redirect_uri_mismatch`/`bad_verification_code`/bad credentials); device-flow code removed. Kept `completeGitHubLogin`/session/`ensureGitHubCredentials`/`logoutGitHub`; added `saveGitHubAppCredentials`/`resolveClientSecret`/`loadGitHubAppCredentials` (secret never exposed).
+  4. `configService.ts`: added `githubClientSecret`.
+  5. `GitBrowserLoginTab.tsx` rewritten: setup card with tap-to-copy `astra://oauth/callback`, saved ID + masked saved secret, one-tap Sign in, account card + Log out.
+- **Verify:** `npx tsc --noEmit` clean; service 210 lines, tab 239, modal 278 (Rule 5). `assembleRelease` BUILD SUCCESSFUL (3m 23s); Downloads updated; `adb install -r` Success; `dumpsys` confirms install 2026-09-23 00:23:17.
+- **Verify (pending):** user creates OAuth App with callback `astra://oauth/callback`, pastes ID + secret, taps Sign in → browser → approve → back in app with account card.
+- **Phase 2 (pending user go):** repo list at opening + clone outside workspaces.
+
+### [2026-09-23] - Phase 1: GitHub browser login (Device Flow) + saved account + logout
+- **User Directive:** GitHub auth should redirect to the browser instead of manual token paste, save the account, allow logout. Method chosen: OAuth Device Flow with the user's own OAuth App client ID.
+- **Fix:**
+  1. `gitHubAuthService.ts` (new, 1 feature = 1 file): `startDeviceLogin` (device/user codes), `pollDeviceToken` (cancel-aware, slow_down/expired/denied handling), `openVerificationPage` (expo-web-browser), `finishDeviceLogin` (profile + primary email via api.github.com, persists session, wires git via `configureGitCredentials`), `ensureGitHubCredentials` (re-wires `~/.git-credentials` when guest file is missing), `logoutGitHub` (clears token + guest creds, keeps commit name/email). Re-exported from `gitService.ts`.
+  2. `configService.ts`: new `githubClientId/Token/Username/Email/AvatarUrl` fields (same storage convention as apiKey).
+  3. `GitBrowserLoginTab.tsx` (new): client-ID input (saved), Sign in → auto-opens browser with prefilled code, big copyable user code, expiry countdown, cancel; logged-in account card + Log out (confirm).
+  4. `GitCredentialsModal.tsx`: new default "Browser" tab alongside Token/SSH.
+- **Verify:** `npx tsc --noEmit` clean; all files under Rule 5. `assembleRelease` BUILD SUCCESSFUL (2m 46s); Downloads updated; `adb install -r` Success (data-preserving); `dumpsys` confirms install 2026-09-23 00:07:41.
+- **Verify (pending):** user creates OAuth App (Device Flow enabled), pastes client ID, taps Sign in → browser approval → account card appears; Log out clears it.
+- **Phase 2 (pending user go):** repo list at opening + clone outside workspaces.
+
+### [2026-09-22] - Fix: scroll pops keyboard, arrows print garbage, Clear can't rescue line
+- **User Report:** "when i scroll up the keyboard is popuping even if i close ... i cant scroll up" + "arrow up/down not showing previous commands, types characters i cant understand" + "cant make another type or clear what it typed"
+- **Root Causes:**
+  1. Scroll→keyboard: (a) `TerminalView.tsx` pane `onStartShouldSetResponderCapture` called `handleFocusTerminal()` (IME raise) on every touch-down, including scroll starts; (b) xterm HTML `window click` listener posted `tap` unconditionally, so the synthetic click after a touch-scroll raised the keyboard (the earlier touchstart-tap removal alone wasn't enough).
+  2. Arrows→garbage: escape sequences reach the PTY intact (JS path verified), so the guest line editor wasn't interpreting them = shell without readline (dash fallback). Device was on v7 (pre-fix install) while tree was v8.
+  3. Unclearable line: xterm Clear sent `"clear\n"` appended onto the corrupted line, executing `<garbage>clear` as one command.
+- **Fix:**
+  1. `TerminalView.tsx`: pane capture handlers now only switch pane focus — keyboard raises solely via genuine taps (`XtermView onRequestKeyboard`). `build-xterm-html.js`: synthetic clicks within 750ms of a scroll/pinch end are dropped; regenerated `xtermHtml.generated.ts`.
+  2. `EnvironmentManager.kt` profile: bash-guarded explicit readline binds (`previous-history`/`next-history`/`forward-char`/`backward-char` + `set -o emacs`); `ProotSessionConfig.kt`: logs `shell=<bin>` + warning when dash fallback triggers (read-only on-device diagnosis).
+  3. xterm Clear now sends `\x15clear\r` (Ctrl+U kills the line at kernel/readline level without killing processes, then `clear` runs fresh).
+- **Verify:** `npx tsc --noEmit` clean; `TerminalView.tsx` 485 lines, `build-xterm-html.js` ~388 lines (Rule 5). `assembleRelease` BUILD SUCCESSFUL (4m 59s); copied to `Downloads/astra-release.apk` + `Downloads/app-release.apk`; `adb install -r` Success (data-preserving); `dumpsys` confirms versionCode=8.
+- **Verify (pending):** user opens terminal on-device — (a) scroll up with keyboard closed stays closed; (b) ↑/↓ recalls history (`shell=/bin/bash` in logcat); (c) Clear wipes a garbled line.
+
+### [2026-09-22] - Fix: terminal cwd for custom-location projects (no toolchain reinstall)
+- **User Report:** "after making a project the terminals is not cd or targeted the folder structure where the project is" + "fix this without re installing the dependencies"
+- **Root Cause:** File explorer resolves the real folder via registry `dirPath` (`getWorkspaceDirPath()`), but all three native guest entry points mapped the workspace slug straight to `/workspaces/<slug>` and never read the registry: `ProotSessionConfig.build()` (PTY + legacy sessions) and the duplicated inline mapping in `ProcessExecutor.execute()` (run/git one-shots). Projects created at Specific Directory / opened / cloned therefore got shells rooted at an empty auto-created `/workspaces/<slug>` instead of the real project folder.
+- **Fix (native only, toolchain untouched):**
+  1. `ProotSessionConfig.kt`: added `resolveGuestDir()` — registry-aware (`workspaces_registry.json` via `org.json`): default-storage slugs keep `/workspaces/<id>` (zero behavior change); custom/opened/cloned paths resolve to the absolute host path (covered by existing `/sdcard`, `/storage`, and explicit targetDir binds); missing registry falls back to legacy path. Added `Log.i workspace=<id> targetDir=<dir>` for read-only on-device verification.
+  2. `ProcessExecutor.kt`: replaced duplicated mapping with `ProotSessionConfig.resolveGuestDir()` so one-shots match terminal cwd.
+  3. `android/app/build.gradle`: versionCode 5 → 6.
+- **Deploy:** `assembleRelease` BUILD SUCCESSFUL; copied to `Downloads/astra-release.apk` + `Downloads/app-release.apk`; `adb install -r` Success (data-preserving — debian guest + `.developer_toolchain_ready_debian_v4` marker intact, no apt reinstall). `dumpsys` confirms versionCode=6.
+- **Verify (pending):** user opens the project on-device; watch logcat `ProotSessionConfig` for `targetDir=` pointing at the real project folder + prompt `linux:<path>#`.
+
+### [2026-09-22] - Follow-up: prompt stuck at literal `linux:\w#` (dash vs bash)
+- **User Report:** "it is still linux : \w#"
+- **On-device evidence:** new code IS running — logcat `ProotSessionConfig: workspace=laravel targetDir=/workspaces/laravel`, session started. So cwd resolution executed; remaining symptom is display-only.
+- **Root Cause:** interactive guest shell is `/bin/sh` = dash (`EnvironmentManager.kt:156` confirms). Dash does not expand PS1 backslash-escapes, so `PS1='linux:\w# '` renders literally forever — the prompt can never show the folder even when cwd is correct.
+- **Fix:** `ProotSessionConfig.build()` now launches `/bin/bash -l -i` when `bin/bash` exists in the extracted rootfs (Debian always ships it; Stage 1 installs it too), falling back to `/bin/sh -l -i`. Also added `Log.d registry dirPath` line for read-only diagnosis of custom-path resolution.
+- **Deploy:** `assembleRelease` BUILD SUCCESSFUL (29s incremental); copied to Downloads; `adb install -r` Success (data-preserving, versionCode 6 unchanged).
+- **Verify (pending):** user opens project → terminal prompt should read `linux:<real-path>#` (e.g. `linux:/workspaces/laravel#`).
+
+### [2026-09-22] - Fix: `opencode: command not found` after install (adaptable PATH)
+- **User Report:** "i also install opencode, the opencode command not found it SAYS, make this app can use the opencode after install, it must be adaptable"
+- **Root Cause:** the official opencode installer places its binary at `/root/.opencode/bin`, which was in neither the guest profile PATH nor the session env PATH (`EnvironmentManager.kt:319`, `ProotSessionConfig.kt` env) — so a successful install still resolved to "command not found". Same gap for bun/cargo/go user installs.
+- **Fix (config only, no toolchain reinstall):** extended PATH in all three places (guest `/root/.profile` + `.bashrc`, PTY/legacy session env, one-shot `ProcessExecutor` prefix + env) with `/root/.opencode/bin:/root/.bun/bin:/root/.cargo/bin:/root/go/bin`. Deliberately did NOT add an `opencode` smart-launcher shim — it would shadow the real binary and misroute through node/npx. `ensureSystemConfigs` refreshes the profile within ~30s of proot activity, so existing installs pick it up with a fresh shell.
+- **Deploy:** versionCode 6 → 7; `assembleRelease` BUILD SUCCESSFUL; Downloads updated; `adb install -r` Success (data-preserving). `dumpsys` confirms versionCode=7.
+- **Verify (pending):** user opens a NEW terminal session, runs `command -v opencode && opencode --version`.
+
+### [2026-09-22] - Release APK Build (assembleRelease, user override of debug-only rule)
+- **User Directive:** "release the app of this project then put it in the downloads the apk file" + "build the release not the debug"
+- **Actions:**
+  1. `npm install` (782 packages).
+  2. `gradlew.bat assembleRelease --parallel` in `android/` — BUILD SUCCESSFUL in ~15m 40s, 482 tasks.
+  3. Copied `android/app/build/outputs/apk/release/app-release.apk` (87.4 MB) to `C:\Users\Jay\Downloads\astra-release.apk` and `C:\Users\Jay\Downloads\app-release.apk`.
+- **Note:** Release build is signed with debug keystore per `android/app/build.gradle` (release signingConfig = debug). Bundle is embedded (Metro `export:embed`, 957 modules).
 
 ### [2026-09-19] - Phase 2 Complete: Fix Split Terminal Mode Viewport Scrolling & Prompt Visibility
 - **User Directive:** "next issue is the split terminal mode(2 terminal) the problem is, the whole terminal block( the selected terminal) goes up instead of the terminal ui scrolling up so the highlighted input shows."
