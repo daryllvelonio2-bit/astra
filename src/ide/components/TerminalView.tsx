@@ -221,7 +221,10 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
         onClearSession={() => {
           clearInput();
           if (isXterm) {
-            sendInputToTarget("clear\n");
+            // ^U (kill-line) first: discards any half-typed garbage on the
+            // current line at the kernel/readline level without killing
+            // running processes, so `clear` always runs on a fresh line.
+            sendInputToTarget("\x15clear\r");
             return;
           }
           clearActiveSession();
@@ -270,11 +273,14 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
               isLandscape ? { width: 0 } : { height: 0 },
             ]}
             onStartShouldSetResponderCapture={() => {
+              // Pane focus switch only — never raise the keyboard here.
+              // Scroll gestures begin with the same touch-down; raising the
+              // IME on capture is what popped the keyboard on every scroll.
+              // Genuine taps raise it via XtermView onRequestKeyboard.
               if (focusedPane !== "primary") {
                 setFocusedPane("primary");
                 xtermRef.current?.focusTerminal();
               }
-              handleFocusTerminal();
               return false;
             }}
           >
@@ -326,11 +332,12 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
               isLandscape ? { width: 0 } : { height: 0 },
             ]}
             onStartShouldSetResponderCapture={() => {
+              // Same as primary pane: focus switch only, no IME raise —
+              // otherwise every scroll in this pane pops the keyboard.
               if (focusedPane !== "secondary") {
                 setFocusedPane("secondary");
                 xtermRefSecondary.current?.focusTerminal();
               }
-              handleFocusTerminal();
               return false;
             }}
           >
