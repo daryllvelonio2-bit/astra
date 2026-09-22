@@ -1,0 +1,26 @@
+{
+  "name": "linux-runner",
+  "version": "1.0.0",
+  "description": "Embedded PRoot and Alpine Linux userland runner for Android & Expo",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "react-native",
+    "expo",
+    "proot",
+    "alpine",
+    "linux",
+    "sandbox"
+  ],
+  "author": "Developer",
+  "license": "MIT",
+  "dependencies": {
+    "expo-modules-core": "~1.12.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

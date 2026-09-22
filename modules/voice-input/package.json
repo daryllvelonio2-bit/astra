@@ -1,0 +1,21 @@
+{
+  "name": "voice-input",
+  "version": "1.0.0",
+  "description": "On-device speech-to-text for chat input via Android SpeechRecognizer",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "keywords": [
+    "react-native",
+    "expo",
+    "speech",
+    "voice",
+    "microphone"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "expo-modules-core": "~3.0.30"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
