@@ -18,7 +18,7 @@ import {
 import { buildXtermHtml } from "./xtermHtml.generated";
 import { utf8ToB64 } from "./terminalEncoding";
 import { TerminalTheme, getXtermTheme } from "./terminalThemes";
-import { stripLeakedTerminalText } from "./terminalBuffer";
+import { stripLeakedTerminalText, stripReplayQueries } from "./terminalBuffer";
 
 export interface XtermViewHandle {
   focusTerminal: () => void;
@@ -185,7 +185,9 @@ export const XtermView = memo(
       if (sessionRef.current !== id) return; // switched away mid-flight
       // Banner first: native history never contains it (legacy renderer kept
       // its own copy), and reset wiped the grid so it paints exactly once.
-      const cleanHist = stripLeakedTerminalText(hist || "");
+      // Replay-only query sanitizing: stale device queries in the snapshot
+      // must not trigger ghost replies into the new shell's stdin.
+      const cleanHist = stripReplayQueries(stripLeakedTerminalText(hist || ""));
       injectWrite(utf8ToB64(bannerRef.current + cleanHist));
       paintFitRef.current = lastFitRef.current ? { ...lastFitRef.current } : null;
       if (!isKeyboardVisibleRef.current) {
@@ -305,12 +307,13 @@ export const XtermView = memo(
     if (msg.type === "ready") {
       handleReady();
     } else if (msg.type === "data" && typeof msg.data === "string") {
-      // Drop automated escape sequence responses (Cursor Position Report ^[[...R,
-      // Device Attributes ^[[?...c, Status reports ^[[...n) so they never leak into
-      // the shell's stdin or echo as raw control characters on screen.
-      if (/^\x1b\[\??[0-9;]*[Rrcnt]$/.test(msg.data)) {
-        return;
-      }
+      // Everything xterm emits — typed keys AND automatic answers to the
+      // shell's own device queries (cursor-position reports ^[[..R, device
+      // attributes ^[[?..c, status reports) — belongs to the shell.
+      // Swallowing those replies hangs fullscreen TUIs (opencode, vim) on
+      // a blank screen: they wait forever for an answer that never comes.
+      // Stale answers from history replays are prevented at paint time
+      // (stripReplayQueries), never by dropping live traffic.
       writeTerminalInput(sessionRef.current, msg.data);
     } else if (
       msg.type === "resize" &&
