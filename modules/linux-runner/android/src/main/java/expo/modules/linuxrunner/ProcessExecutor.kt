@@ -72,26 +72,16 @@ object ProcessExecutor {
 
         EnvironmentManager.ensureSystemConfigs(context, File(filesDir, "debian"))
 
-        val targetDir = if (!workspaceId.isNullOrBlank()) {
-            val clean = workspaceId.removePrefix("file://").trimEnd('/')
-            if (clean.startsWith("/")) {
-                val dir = File(clean)
-                if (!dir.exists()) dir.mkdirs()
-                clean
-            } else {
-                val specificWs = File(filesDir, "workspaces/$workspaceId")
-                if (!specificWs.exists()) specificWs.mkdirs()
-                "/workspaces/$workspaceId"
-            }
-        } else {
-            "/workspace"
-        }
+        // Workspace -> guest dir is registry-aware (custom project
+        // locations included); single source of truth lives in
+        // ProotSessionConfig so one-shot commands match terminal cwd.
+        val targetDir = ProotSessionConfig.resolveGuestDir(context, workspaceId)
 
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
         val loaderPath = "$nativeLibDir/libproot-loader.so"
         val loader32Path = "$nativeLibDir/libproot-loader32.so"
 
-        val fullCommand = "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.local/bin:/root/.npm-global/bin; export NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules; export HOME=/root; export USER=root; export SHELL=/bin/bash; export CI=1; export EXPO_NO_TELEMETRY=1; export EXPO_USE_LOCAL_CLI=1; export NODE_OPTIONS=--dns-result-order=ipv4first; $command"
+        val fullCommand = "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.local/bin:/root/.npm-global/bin:/root/.opencode/bin:/root/.bun/bin:/root/.cargo/bin:/root/go/bin; export NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules; export HOME=/root; export USER=root; export SHELL=/bin/bash; export CI=1; export EXPO_NO_TELEMETRY=1; export EXPO_USE_LOCAL_CLI=1; export NODE_OPTIONS=--dns-result-order=ipv4first; $command"
         val pbArgs = mutableListOf(
             prootPath,
             "-r", debianDir,
@@ -138,7 +128,7 @@ object ProcessExecutor {
         pb.redirectErrorStream(true)
 
         val env = pb.environment()
-        env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.local/bin:/root/.npm-global/bin"
+        env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.local/bin:/root/.npm-global/bin:/root/.opencode/bin:/root/.bun/bin:/root/.cargo/bin:/root/go/bin"
         env["NODE_PATH"] = "/usr/local/lib/node_modules:/usr/lib/node_modules"
         env["HOME"] = "/root"
         env["USER"] = "root"
