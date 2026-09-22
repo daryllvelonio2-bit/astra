@@ -15,6 +15,18 @@ export {
   getGitRemoteUrl,
   setGitRemoteUrl,
 } from "./gitRemoteService";
+export {
+  GITHUB_REDIRECT_URI,
+  signInWithBrowser,
+  completeGitHubLogin,
+  loadGitHubSession,
+  loadGitHubAppCredentials,
+  saveGitHubAppCredentials,
+  resolveClientSecret,
+  ensureGitHubCredentials,
+  logoutGitHub,
+} from "./gitHubAuthService";
+export type { GitHubSession, GitHubAppCredentials } from "./gitHubAuthService";
 export { invalidateGitStatusCache };
 
 function formatRelativeTime(epochSeconds: number): string {
