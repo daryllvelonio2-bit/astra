@@ -19,6 +19,7 @@ import {
 import { Clipboard } from "../../services/clipboardService";
 import { GitTokenTab } from "./GitTokenTab";
 import { GitSshKeyTab } from "./GitSshKeyTab";
+import { GitBrowserLoginTab } from "./GitBrowserLoginTab";
 
 interface GitCredentialsModalProps {
   visible: boolean;
@@ -28,7 +29,7 @@ interface GitCredentialsModalProps {
 export function GitCredentialsModal({ visible, onClose }: GitCredentialsModalProps) {
   const { theme } = useTheme();
   const { isKeyboardVisible, keyboardOffset } = useAccurateKeyboard(12);
-  const [activeTab, setActiveTab] = useState<"token" | "ssh">("token");
+  const [activeTab, setActiveTab] = useState<"browser" | "token" | "ssh">("browser");
 
   // Token state
   const [username, setUsername] = useState("");
@@ -132,6 +133,32 @@ export function GitCredentialsModal({ visible, onClose }: GitCredentialsModalPro
             <TouchableOpacity
               style={[
                 styles.tabBtn,
+                activeTab === "browser" && {
+                  borderBottomColor: theme.accent,
+                  borderBottomWidth: 2,
+                },
+              ]}
+              onPress={() => setActiveTab("browser")}
+            >
+              <Octicons
+                name="mark-github"
+                size={13}
+                color={activeTab === "browser" ? theme.accent : theme.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.tabText,
+                  { color: activeTab === "browser" ? theme.accent : theme.textSecondary },
+                  activeTab === "browser" && { fontWeight: "700" },
+                ]}
+              >
+                Browser
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.tabBtn,
                 activeTab === "token" && {
                   borderBottomColor: theme.accent,
                   borderBottomWidth: 2,
@@ -184,7 +211,9 @@ export function GitCredentialsModal({ visible, onClose }: GitCredentialsModalPro
 
           {/* Body */}
           <ScrollView contentContainerStyle={styles.body}>
-            {activeTab === "token" ? (
+            {activeTab === "browser" ? (
+              <GitBrowserLoginTab />
+            ) : activeTab === "token" ? (
               <GitTokenTab
                 username={username}
                 email={email}
