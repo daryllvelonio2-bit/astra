@@ -93,6 +93,7 @@ html, body {
   var touchStartY = 0;
   var touchStartX = 0;
   var lastTouchY = 0;
+  var lastTouchX = 0;
   var lastTouchTime = 0;
   var touchVelocityY = 0;
   var isTouchScrolling = false;
@@ -100,12 +101,82 @@ html, body {
   var momentumRaf = null;
   var pinchStartDist = 0;
   var pinchBaseFontSize = 14;
+  // Timestamp of the last scroll/pinch gesture end. WebView fires a
+  // synthetic click after touch gestures — without this guard every scroll
+  // raised the keyboard via the click->tap bridge below.
+  var lastGestureEnd = 0;
 
   var stopMomentum = function () {
     if (momentumRaf) {
       cancelAnimationFrame(momentumRaf);
       momentumRaf = null;
     }
+  };
+
+  // Fullscreen TUIs (opencode, vim, htop) run on the alternate screen, which
+  // has no scrollback: term.scrollLines() is a no-op there. Those apps opt
+  // into mouse reporting instead (bubbletea enables SGR mouse mode), so
+  // finger drags must reach them as wheel events. term.modes and
+  // term.buffer.active are public xterm.js APIs (no proposed-API gate).
+  var appMouseMode = function () {
+    try {
+      return (term.modes && term.modes.mouseTrackingMode) || 'none';
+    } catch (e) {
+      return 'none';
+    }
+  };
+  var isAltScreen = function () {
+    try {
+      return !!(term.buffer && term.buffer.active && term.buffer.active.type === 'alternate');
+    } catch (e) {
+      return false;
+    }
+  };
+  var cellAt = function (px, py) {
+    var r = { left: 0, top: 0 };
+    try {
+      var br = termEl.getBoundingClientRect();
+      r = { left: br.left, top: br.top };
+    } catch (e) {}
+    var w = 9, h = 18;
+    try {
+      var d = term._core && term._core._renderService && term._core._renderService.dimensions;
+      if (d && d.css && d.css.cell) {
+        w = d.css.cell.width || w;
+        h = d.css.cell.height || h;
+      }
+    } catch (e2) {}
+    var maxC = 80, maxR = 24;
+    try {
+      maxC = term.cols || maxC;
+      maxR = term.rows || maxR;
+    } catch (e3) {}
+    // #terminal padding is 6px top / 8px left (see CSS above).
+    var col = Math.floor((px - r.left - 8) / w) + 1;
+    var row = Math.floor((py - r.top - 6) / h) + 1;
+    return {
+      col: Math.max(1, Math.min(maxC, col || 1)),
+      row: Math.max(1, Math.min(maxR, row || 1))
+    };
+  };
+  // Negative lines = finger dragged down = show older = wheel-up (64);
+  // positive = wheel-down (65). SGR format: bubbletea-class apps enable it.
+  var scrollByLines = function (lineDelta, px, py) {
+    if (lineDelta === 0) return;
+    if (appMouseMode() !== 'none') {
+      var cell = cellAt(px, py);
+      var btn = lineDelta < 0 ? 64 : 65;
+      var count = Math.min(Math.abs(lineDelta), 12);
+      for (var i = 0; i < count; i++) {
+        post({ type: 'data', data: '\x1b[<' + btn + ';' + cell.col + ';' + cell.row + 'M' });
+      }
+      return;
+    }
+    if (!isAltScreen()) {
+      term.scrollLines(lineDelta);
+    }
+    // Alt screen without mouse mode: nothing is scrollable (authentic
+    // terminal behavior — the app owns all input there).
   };
 
   var getRowHeight = function () {
@@ -121,11 +192,15 @@ html, body {
 
   termEl.addEventListener('touchstart', function (e) {
     stopMomentum();
-    post({ type: 'tap' });
+    // NOTE: no tap post here — touch-down also begins scroll/pinch
+    // gestures, and raising the keyboard on every touch-down broke
+    // scrolling (e.g. opencode TUI history). A tap is reported on
+    // touchend only when no scroll/pinch happened (see below).
     if (e.touches.length === 1) {
       touchStartY = e.touches[0].pageY;
       touchStartX = e.touches[0].pageX;
       lastTouchY = touchStartY;
+      lastTouchX = touchStartX;
       lastTouchTime = Date.now();
       touchVelocityY = 0;
       isTouchScrolling = false;
@@ -159,13 +234,14 @@ html, body {
         touchVelocityY = deltaY / dt;
         lastTouchTime = now;
         lastTouchY = touchY;
+        lastTouchX = touchX;
 
         var rowH = getRowHeight();
         var rawLines = (-deltaY + scrollRemainder) / rowH;
         var wholeLines = Math.trunc(rawLines);
         scrollRemainder = (rawLines - wholeLines) * rowH;
         if (wholeLines !== 0) {
-          term.scrollLines(wholeLines);
+          scrollByLines(wholeLines, touchX, touchY);
         }
       }
     } else if (e.touches.length === 2 && pinchStartDist > 0) {
@@ -186,6 +262,10 @@ html, body {
 
   termEl.addEventListener('touchend', function (e) {
     if (e.touches.length === 0) {
+      var wasGesture = isTouchScrolling || pinchStartDist !== 0;
+      if (wasGesture) {
+        lastGestureEnd = Date.now();
+      }
       if (!isTouchScrolling && pinchStartDist === 0) {
         post({ type: 'tap' });
       } else if (isTouchScrolling && Math.abs(touchVelocityY) > 0.15) {
@@ -199,7 +279,7 @@ html, body {
           var deltaLines = (-velocity * 16) / rowH;
           var whole = Math.trunc(deltaLines);
           if (whole !== 0) {
-            term.scrollLines(whole);
+            scrollByLines(whole, lastTouchX, lastTouchY);
           }
           velocity *= 0.92;
           momentumRaf = requestAnimationFrame(momentumStep);
@@ -267,6 +347,9 @@ html, body {
     }
   });
   window.addEventListener('click', function () {
+    // Drop the synthetic click that follows a scroll/pinch gesture —
+    // only genuine taps (already reported by touchend) may raise the IME.
+    if (Date.now() - lastGestureEnd < 750) return;
     post({ type: 'tap' });
   });
   window.addEventListener('resize', function () {
