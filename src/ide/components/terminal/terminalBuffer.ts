@@ -111,6 +111,8 @@ export function diffNativeText(prev: string, text: string): { removed: number; a
 /**
  * Strips leaked internal export commands (COLORFGBG, COLORTERM, TERM_PROGRAM)
  * and non-tty warnings from terminal outputs and history replay.
+ * NOTE: this must NOT strip device queries/replies — live fullscreen apps
+ * need those answered. Replay-only sanitizing lives in stripReplayQueries.
  */
 export function stripLeakedTerminalText(text: string): string {
   if (!text) return "";
@@ -119,6 +121,27 @@ export function stripLeakedTerminalText(text: string): string {
     .replace(/(?:^|\r?\n)(?:[^\r\n]*[#$]\s*)?export\s+COLORFGBG=[^\r\n]*(?:\r?\n|$)/gi, "\r\n")
     .replace(/^export\s+COLORFGBG=[^\r\n]*(?:\r?\n|$)/gim, "")
     .replace(/\r\n\r\n\r\n/g, "\r\n\r\n");
+}
+
+/**
+ * Replay-only sanitizer: removes terminal device queries and their replies
+ * (cursor-position reports `ESC[{row};{col}R`, device attributes `ESC[?..c`,
+ * status reports `ESC[..n`, kitty keyboard probes `ESC[?..u`) from history
+ * snapshots BEFORE they are painted into a fresh xterm grid.
+ *
+ * Why replay-only: when a snapshot containing a stale query (e.g. `\x1b[6n`
+ * a TUI printed long ago) is re-fed to xterm, xterm dutifully answers it —
+ * and that stale answer lands in the NEW shell's stdin as ghost input.
+ * Live streams are never passed through here: a live fullscreen app's own
+ * queries must reach xterm AND xterm's answers must reach the shell,
+ * otherwise the app hangs forever on a blank screen waiting for a reply
+ * that was swallowed.
+ */
+export function stripReplayQueries(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/\x1b\[\??[0-9;]*[Rcn]/g, "")
+    .replace(/\x1b\[\?[0-9;]*u/g, "");
 }
 
 
