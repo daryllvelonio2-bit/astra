@@ -12,7 +12,6 @@ export const FILE_ICONS: Record<string, { icon: any; color: string }> = {
   json: { icon: "code-json", color: "#cbcb41" },
   md: { icon: "language-markdown", color: "#519aba" },
   py: { icon: "language-python", color: "#3572A5" },
-  php: { icon: "language-php", color: "#777bb4" },
   html: { icon: "language-html5", color: "#e34c26" },
   css: { icon: "language-html5", color: "#e34c26" },
   java: { icon: "language-java", color: "#ea2d2e" },

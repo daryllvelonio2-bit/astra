@@ -1,4 +1,4 @@
-# AI Agent Guidelines (`agent.md`)
+# AI Agent Guidelines (`agents.md`)
 
 **MANDATORY:** Read this file first before making any changes or generating code in this repository.
 

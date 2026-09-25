@@ -1,14 +1,34 @@
+# Project Progress Tracker
+
+## Status
+- **Current Phase:** Repo cleanup — dead code, dead modules, stale docs
+- **Last Updated:** September 25, 2026
+
+### [2026-09-25] - Repo cleanup: removed dead PHP/voice/agent-code paths, fixed broken scripts, rewrote stale docs
+- **User Directive:** "fix all anomalies and remove unnecessary things" + "also remove that built in php please" (all PHP support, not just the stub).
+- **Removed (dead code; zero importers verified before cutting):**
+  1. `modules/php-engine/` — fake embedded PHP engine (canned output like a fake `migrate ... DONE`, never wired: no expo-module.config.json, no android/build.gradle, no CMakeLists in the module, no `node_modules/php-engine` symlink). Also deleted `src/ai/runner/` (`index.ts`, `clientRunner.ts`, `types.ts`) and `src/ide/services/terminalRunner.ts`, whose `executeCode`/`dispatchTerminalCommand` had no callers anywhere.
+  2. `modules/voice-input/` — mic speech module, unreferenced since the chat/voice UI was removed (only a stale `node_modules/voice-input` symlink remained).
+  3. `scratch/` (3 throwaway benchmarks), `test_overlap.html`, `scripts/test_cm.js`, `scripts/test_edit.js`, empty `dist/`, `.agents/` (ai-coder-native era sentinel briefings for an abandoned Kotlin rewrite).
+- **PHP removed everywhere (user chose full removal over stub-only):** deleted `src/ide/services/phpEngineService.ts`; dropped `createLaravelProject` + dead `installPackage` from `prootService.ts` (117→56 lines); removed the PHP tokenizer entry (`syntaxTokenizer.ts`), PHP LSP lint tool + `phpRegex` parser (`nativeLspService.ts`), `php` DIRECT_RUNNER and Laravel/artisan project detection + message text (`runService.ts`), `php: "PHP"` badge (`runFormatter.ts`), PHP runtime + extension-map entries (`extensionRuntimeService.ts`, `extensionRegistry.ts`), `language-php` icon (`fileExplorerUtils.tsx`), artisan detection in `runningTasksInspect.ts` / `runningTasksService.ts` / `processTreeKill.ts` (incl. dead `php83 -S` kill patterns), and the `php artisan serve` browser hint.
+- **Anomalies fixed:**
+  1. **Broken script paths** — `start-debug.sh`, `metro.sh`, `metro-wifi.sh`, `start-wifi.sh`, `build-local-apk.sh` all hardcoded `/home/janelle/Documents/projects/ai-coder` or `~/Downloads/ai-coder-extracted` (both nonexistent). All now resolve from `$BASH_SOURCE`; `metro-wifi.sh` also gained its missing `cd`.
+  2. **Stale agent-era string** — `WebBrowserErrorView.tsx` read "ask Astra AI" and suggested `php artisan serve`; now theme-neutral with a Python server hint.
+  3. **Project name** — `android/settings.gradle` `rootProject.name` "AI Coder" → "Astra".
+  4. **Stale deps/config** — `package.json`: removed `voice-input`, `monaco-editor-core` (never imported), dev `jsdom` (unused). `tsconfig.json` no longer excludes the deleted `astra-cli`; `.gitignore` dropped the `astra-cli/cli-binary/` rule.
+  5. **539M stale native cache** — `android/app/.cxx` held `compile_commands.json` pointing at the dead `ai-coder` path (gitignored; regenerates on the next native build).
+  6. **PROGRESS.md structure** — the two newer entries had been prepended *above* the `# Project Progress Tracker` title; they now sit below the header with this entry.
+- **Docs rewritten to match the real product** (4 tabs: Editor/Terminal/Browser/Git; 3 settings tabs: General/Editor/Linux):
+  - Deleted `docs/ai-engine.md` (documented only the removed agent/chat/voice stack) and `agent.md` (byte-identical duplicate of `agents.md`).
+  - Rewrote `docs/README.md`, `getting-started.md`, `architecture.md`, `ide.md`, `native-modules.md`, `configuration.md`, `conventions.md`, `troubleshooting.md`, and root `README.md`: dropped Desktop/VNC, VS Code tab, Agents tab, chat/chathead, voice, Keys/Appearance/Navigation settings sections, the astra-cli payload, 4-stage provisioning (now 3), `EnvironmentAstraHelper.kt`, `PROJECT_INFO.md`, and all PHP/Laravel mentions. `conventions.md` corrected from "11 rules" to the 13 in `agents.md` (which also no longer self-labels as `agent.md`).
+- **Verify:** `npx tsc --noEmit` clean (0 errors); every touched file under 500 lines; zero remaining `php`/`voice-input`/`php-engine`/`astra-cli`/`ai-coder` references in source.
+
 ### [2026-09-25] - CodeMirror fold gutter exact overlap
 - **Summary:** Overlaid the fold gutter markers exactly onto the line numbers.
 - **Details:** Re-enabled the fold gutter but modified the CSS to pull it `-22px` to the left. Created a solid background on the `.cm-foldMarker` tied to a dynamic `--gutter-bg` CSS variable so it completely eclipses the underlying line number *only* when a fold marker is present.
 ### [2026-09-25] - CodeMirror editor gutter styling adjustment
 - **Summary:** Reduced the width of the line numbering gutter in the IDE.
 - **Details:** Modified `.cm-lineNumbers .cm-gutterElement` padding (to `0 4px 0 2px`) and `minWidth` (to `16px`) in `scripts/codemirror-entry.js` and hid the fold gutter (`.cm-foldGutter: display: "none"`) to reclaim horizontal screen space on mobile. Rebuilt CodeMirror bundle and triggered a debug APK build.
-# Project Progress Tracker
-
-## Status
-- **Current Phase:** CodeMirror fold gutter exact overlap
-- **Last Updated:** September 25, 2026
 
 ### [2026-09-23] - opencode WORKING on device (1.18.32) via adb-driven fix
 - **Sequence:** repair log proved an orphan dead stub at /usr/local/bin/opencode shadowed the good curl binary. User`s typed rm missed the leading slash (relative path, deleted nothing). Drove the phone over adb: `input text` the absolute `rm -f /usr/local/bin/opencode`, then `hash -r` (bash had cached the dead path), then `opencode --version` -> **1.18.32** on screen.

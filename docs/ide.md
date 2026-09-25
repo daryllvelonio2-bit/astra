@@ -2,8 +2,8 @@
 
 `src/ide/` holds the workspace UI. `src/theme/` holds the global theme
 (`themeContext.tsx`, `useOrientation.ts`). App navigation lives in `App.tsx`
-(picker / chat / editor; chat+editor stay mounted once opened so agent turns
-and PTY sessions survive navigation).
+(picker / editor; the editor stays mounted once opened so PTY sessions
+survive navigation).
 
 ## Workspaces
 
@@ -40,12 +40,15 @@ modals:
 - `CloneRepoModal.tsx` — clone any GitHub URL or `user/repo` shorthand over
   HTTPS/SSH, with inline token/SSH-key auth recovery and live progress.
 - `ProjectInspectorModal.tsx` — details, open, and destructive delete
-  (deletes the directory + its saved conversation).
+  (deletes the directory).
 
 ## Editor tab
 
-- `EditorView.tsx` — virtualized viewer (`WINDOW_SIZE = 100` lines) with a
-  transparent `TextInput` over token-colored rendering.
+- `EditorView.tsx` — virtualized viewer (`WINDOW_SIZE = 100` lines) hosting
+  `CodeMirrorEditorView.tsx`, which runs CodeMirror 6 inside a WebView
+  (offline bundle from `scripts/build-codemirror-html.js`).
+  `MonacoEngineHost.tsx` provides a secondary highlight engine for
+  non-plaintext files.
 - `CodeSyntaxHighlighter.tsx` + `syntaxTokenizer.ts` — regex tokenizer with
   separate dark/light palettes; `codeDiagnosticsService.ts` — bracket
   matching and error/warning analysis shown in `ProblemsPanel.tsx`.
@@ -55,14 +58,14 @@ modals:
   `useWorkspaceFileActions`, `useSidebarResizer`, `FileActionModal`) —
   tree with expand/collapse, inline create, drag-drop move, long-press
   actions, animated resizable sidebar.
-- `chatFileLinkService.ts` — normalizes agent/PRoot/`file://` paths to
-  workspace-relative paths; `ideActionService.ts` is the event bus the agent
-  uses to open files, browser URLs, the terminal, or switch tabs.
+- `chatFileLinkService.ts` — normalizes `file://`/PRoot/workspace paths to
+  workspace-relative paths; `ideActionService.ts` is the event bus used to
+  open files, browser URLs, the terminal, or switch tabs.
 - **Run button** (`runService.ts`) — saves the file, then executes it in the
   on-device Debian guest: `.html` is served (`http.server`) and opened in
-  the Browser tab; `.js/.py/.php/.ts`, C/C++/Go/Rust/Java/Ruby/Lua/shell/SQL
+  the Browser tab; `.js/.py/.ts`, C/C++/Go/Rust/Java/Ruby/Lua/shell/SQL
   run directly with the guest toolchain; unknown files fall back to project
-  detection (`package.json` start/main, `artisan serve`, Django `runserver`,
+  detection (`package.json` start/main, Django `runserver`,
   `app.py`/`main.py`, `go.mod`, `Cargo.toml`, `index.html`). Output streams
   into the Terminal tab's dedicated ▶ Run session (`RUN_IN_TERMINAL` action,
   `useRunSession.ts`). Nothing is auto-installed: a missing runtime shows
@@ -85,8 +88,8 @@ modals:
 ## Browser tab
 
 `WebBrowserPreview.tsx` — WebView with nav bar, running-task port chips,
-and error view. Localhost URLs are normalized; dev servers started by the
-agent are detected (`runningTasksInspect.ts`) and can auto-open here.
+and error view. Localhost URLs are normalized; dev servers started in the
+terminal are detected (`runningTasksInspect.ts`) and can auto-open here.
 
 ## Git tab
 
@@ -96,21 +99,22 @@ A GitHub-Desktop-style client backed by the guest `git` binary:
   master-detail in portrait) composing header, changes, history, diff, and
   branch/credentials/remote modals.
 - `gitService.ts` — status, stage/unstage, commit, log/show, branches,
-  fetch/pull/push, remotes, credentials, SSH key management.
+  fetch/pull/push, remotes, credentials, SSH key management (plus
+  `gitStatusCache.ts` for the 2s status cache,
+  `gitRemoteService.ts` for auth/remote ops).
 - `GitChangesList.tsx` — file staging + AI-generated commit summary
   (`gitCommitSummary.ts`, uses your own Gemini key) with a keyboard-aware
   commit box; `GitDiffViewer.tsx` + `diffParser.ts` — unified diff with
   dual gutters; `GitHistoryList.tsx`, `GitCommitFilesList.tsx`,
   `GitBranchModal.tsx`, `GitRemoteModal.tsx`.
 - `gitCloneService.ts` — non-interactive clone with auth-error detection;
-  `GitCredentialsModal.tsx` + `GitTokenTab` / `GitSshKeyTab` — fine-grained
-  PAT and ed25519 SSH onboarding.
-- The floating AI button auto-hides on this tab to keep diffs unobstructed.
+  `GitCredentialsModal.tsx` with `GitBrowserLoginTab` (OAuth/PKCE),
+  `GitTokenTab` (fine-grained PAT) and `GitSshKeyTab` (ed25519) onboarding.
 
 ## Bottom navigation
 
-`IDEBottomBar.tsx` — Editor / Agents / Terminal / Browser / Git.
-Visibility is user-configurable, see [configuration](configuration.md).
+`IDEBottomBar.tsx` — Editor / Terminal / Browser / Git. Visibility is
+user-configurable, see [configuration](configuration.md).
 
 ## Settings
 
@@ -119,10 +123,9 @@ autosave and a Saved indicator:
 
 | Tab | Contents |
 |---|---|
-| Theme | `AppearanceSection` — dark / light / midnight |
-| Keys | `ApiKeyManager` — multiple Gemini keys, masked display |
-| Linux | `EnvironmentSection` — toolchain stages, live APT log, binary health, Optional Extras |
-| Tabs | `NavigationSection` — all six bottom-tab toggles + Astra AI master switch |
+| General | `GeneralSection` — theme (dark / light / midnight), Gemini keys, bottom-tab toggles, keyboard/mouse mode |
+| Editor | `EditorSection` — tab size, auto-close, indent, completions, format-on-save, indent guides, font size |
+| Linux | `EnvironmentSection` — toolchain stages, live APT log, binary health, opencode repair, Optional Extras |
 
 All values persist in `config.json` via `configService.ts`.
 
@@ -150,7 +153,6 @@ shell ships in bookworm; `bat` runs as `batcat`; `magick` is `convert`.
 
 Every component styles through `useTheme()` tokens (`bg*`, `text*`,
 `accent*`, borders, overlays) — no hardcoded colors. `useOrientation()`
-drives landscape-compact bars, the collapsible sidebar, and desktop
-fullscreen. Syntax colors (`syntaxTokenizer.ts`) and terminal themes
-(`terminalThemes.ts`) are the only separate palettes, both with dark/light
-variants.
+drives landscape-compact bars and the collapsible sidebar. Syntax colors
+(`syntaxTokenizer.ts`) and terminal themes (`terminalThemes.ts`) are the
+only separate palettes, both with dark/light variants.

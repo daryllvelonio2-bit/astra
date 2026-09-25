@@ -120,6 +120,4 @@ Thumbs.db
 # -----------------------------------------------------------------------------
 # Project Specific
 # -----------------------------------------------------------------------------
-# Standalone CLI binary exceeds GitHub's 100 MB file limit (packaged in assets tarball)
-astra-cli/cli-binary/
 app-release.apk

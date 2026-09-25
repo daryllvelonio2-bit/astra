@@ -109,7 +109,7 @@ function formatUniversal(code: string, fileName?: string, tabSize: number = 2): 
       continue;
     }
 
-    // Bracketed languages (JS, TS, C, C++, Java, PHP, Rust, Go, CSS, etc.)
+    // Bracketed languages (JS, TS, C, C++, Java, Rust, Go, CSS, etc.)
     const startsClosing = /^[)\]}]/.test(trimmed) || trimmed.startsWith("</");
     if (startsClosing && indentLevel > 0) {
       indentLevel--;

@@ -61,10 +61,10 @@ export function WebBrowserErrorView({
 
       {/* Suggestion Commands */}
       <View style={[styles.suggestionCard, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
-        <Text style={[styles.suggestionTitle, { color: theme.textSecondary }]}>💡 Start server in terminal or ask Astra AI:</Text>
+        <Text style={[styles.suggestionTitle, { color: theme.textSecondary }]}>💡 Start the server in the terminal:</Text>
         <Text style={[styles.suggestionCode, { color: theme.accent }]}>$ npm run dev</Text>
         <Text style={[styles.suggestionCode, { color: theme.accent }]}>$ npx expo start --web</Text>
-        <Text style={[styles.suggestionCode, { color: theme.accent }]}>$ php artisan serve</Text>
+        <Text style={[styles.suggestionCode, { color: theme.accent }]}>$ python3 -m http.server</Text>
       </View>
 
       {/* Actions */}

@@ -61,7 +61,6 @@ export async function runBackgroundDiagnostics(
       kts: ["kotlinc"],
       go: ["go"],
       py: ["ruff", "flake8", "python3"],
-      php: ["php"],
       sh: ["shellcheck", "bash"],
       bash: ["shellcheck", "bash"],
       zsh: ["shellcheck", "bash"],
@@ -112,8 +111,6 @@ export async function runBackgroundDiagnostics(
         checkCmd = `ruff check "${linuxPath}" 2>&1`;
       } else if (tool === "flake8") {
         checkCmd = `flake8 "${linuxPath}" 2>&1`;
-      } else if (tool === "php") {
-        checkCmd = `php -l "${linuxPath}" 2>&1`;
       } else if (tool === "shellcheck") {
         checkCmd = `shellcheck -f gcc "${linuxPath}" 2>&1`;
       } else if (tool === "bash") {
@@ -172,8 +169,6 @@ export function parseUniversalDiagnostics(
 
   // Standard unix format: [path:]line:col: [code] [severity:] message
   const standardRegex = /(?:^|[\r\n])(?:[^\r\n:]+:)?(\d+):(?:(\d+):?)?\s*(?:\[([^\]]+)\]\s*)?(?:(error|warning|warn|info|note|fatal|syntax error):?\s*)?(.+)/i;
-  // PHP format: Parse error: syntax error... in path on line 12
-  const phpRegex = /(?:Parse error|Fatal error):\s*(.*?)\s+in\s+.*?\s+on\s+line\s+(\d+)/i;
   const pyLineRegex = /File ".*?", line (\d+)/i;
   const rustLocRegex = /-->\s*(?:[^\r\n:]+:)?(\d+):(\d+)/i;
 
@@ -235,18 +230,6 @@ export function parseUniversalDiagnostics(
       if (last && last.col === 1 && caretCol > 1) {
         last.col = caretCol;
       }
-      continue;
-    }
-
-    const phpMatch = cleanLine.match(phpRegex);
-    if (phpMatch) {
-      diagnostics.push({
-        line: parseInt(phpMatch[2], 10) || 1,
-        col: 1,
-        message: phpMatch[1]?.trim() || "Syntax Error",
-        severity: "error",
-        source: sourceName,
-      });
       continue;
     }
 

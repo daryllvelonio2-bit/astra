@@ -101,19 +101,11 @@ export async function killByCommandPattern(pattern: string): Promise<number> {
 
 /**
  * Distinctive cmdline fragments per server type. The tracked pid's tree is
- * the primary target; these catch pid-less tasks and double-forked children
- * (e.g. `php83 -S`, whose cmdline never contains "artisan serve").
+ * the primary target; these catch pid-less tasks and double-forked children.
  */
 export function killPatternsFor(command: string, port?: number): string[] {
   const cmd = (command || "").toLowerCase();
   const pats: string[] = [];
-  if (/artisan/.test(cmd)) {
-    pats.push("artisan serve");
-    pats.push(port ? `-S 0.0.0.0:${port}` : "php83 -S");
-    if (port) pats.push(`-S 127.0.0.1:${port}`);
-    pats.push("php -S");
-    return pats;
-  }
   if (/expo|metro/.test(cmd)) return ["expo start", "metro"];
   if (/vite/.test(cmd)) return ["vite"];
   if (/http\.server|python/.test(cmd)) {
@@ -306,7 +298,6 @@ export async function isServerAlive(srv: ServerIdentity, workspaceId?: string): 
     if (srv.port || srv.pid) return false;
     const lowerCmd = (srv.command || "").toLowerCase();
     const psText = procs.map((p) => p.cmd.toLowerCase()).join("\n");
-    if (/artisan|php/i.test(lowerCmd) && (/artisan/i.test(psText) || /(^|\s)php/i.test(psText))) return true;
     if (/expo|metro/i.test(lowerCmd) && (/expo/i.test(psText) || /metro/i.test(psText))) return true;
     if (/vite/i.test(lowerCmd) && /vite/i.test(psText)) return true;
     const first = lowerCmd.replace(/^[a-z0-9_\-./]+\//i, "").split(/\s+/)[0] || "";

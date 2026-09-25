@@ -110,7 +110,6 @@ const DIRECT_RUNNERS: Record<string, DirectRunner> = {
   mjs: { runtime: "node", build: (f) => `node ${q(f)}` },
   cjs: { runtime: "node", build: (f) => `node ${q(f)}` },
   py: { runtime: "python3", build: (f) => `python3 ${q(f)}` },
-  php: { runtime: "php", build: (f) => `php ${q(f)}` },
   ts: {
     runtime: "node",
     build: (f) => {
@@ -220,19 +219,6 @@ export async function resolveRunPlan(
     } catch (_) {}
   }
 
-  // Laravel / artisan
-  if (has("artisan")) {
-    const port = pickPort();
-    return {
-      kind: "browser",
-      command: `cd ${q(`/workspaces/${workspaceId}`)} && php artisan serve --host=127.0.0.1 --port=${port} &`,
-      displayName: `artisan serve :${port}`,
-      runtime: "php",
-      url: `http://127.0.0.1:${port}`,
-      port,
-    };
-  }
-
   // Django
   if (has("manage.py")) {
     const port = pickPort();
@@ -293,7 +279,7 @@ export async function resolveRunPlan(
     kind: "unsupported",
     command: "",
     displayName: name,
-    message: `No runnable entry found for "${name}". Run supports .html/.js/.py/.php/.ts, C/C++/Go/Rust/Java/Ruby/Lua/shell/SQL directly, plus Node, Laravel, Django, Go and Cargo projects.`,
+    message: `No runnable entry found for "${name}". Run supports .html/.js/.py/.ts, C/C++/Go/Rust/Java/Ruby/Lua/shell/SQL directly, plus Node, Django, Go and Cargo projects.`,
   };
 }
 

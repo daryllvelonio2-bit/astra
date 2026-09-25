@@ -210,7 +210,6 @@ function isLanguageMatch(snippetLang: string, fileExt: string): boolean {
     java: ["java"],
     kotlin: ["kt", "kts"],
     csharp: ["cs"],
-    php: ["php"],
     ruby: ["rb"],
     dart: ["dart"],
     shellscript: ["sh", "bash", "zsh"],

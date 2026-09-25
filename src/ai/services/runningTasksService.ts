@@ -115,9 +115,8 @@ class RunningTasksServiceImpl {
       }
       // Match by Command similarity
       const isExpo = /expo\s+start/i.test(command) && /expo\s+start/i.test(task.command);
-      const isPhp = /artisan\s+serve/i.test(command) && /artisan\s+serve/i.test(task.command);
       const isVite = /vite/i.test(command) && /vite/i.test(task.command);
-      if (isExpo || isPhp || isVite || (task.command === command && command !== "Background Server")) {
+      if (isExpo || isVite || (task.command === command && command !== "Background Server")) {
         existingTask = task;
         break;
       }
@@ -415,9 +414,7 @@ class RunningTasksServiceImpl {
         if (!isAlive) {
           const lowerCmd = (task.command || "").toLowerCase();
 
-          if (/artisan|php/i.test(lowerCmd) && (/artisan/i.test(lowerPs) || /php/i.test(lowerPs) || /php83/i.test(lowerPs))) {
-            isAlive = true;
-          } else if (/expo|metro/i.test(lowerCmd) && (/expo/i.test(lowerPs) || /metro/i.test(lowerPs) || /node/i.test(lowerPs))) {
+          if (/expo|metro/i.test(lowerCmd) && (/expo/i.test(lowerPs) || /metro/i.test(lowerPs) || /node/i.test(lowerPs))) {
             isAlive = true;
           } else if (/vite/i.test(lowerCmd) && (/vite/i.test(lowerPs) || /node/i.test(lowerPs))) {
             isAlive = true;

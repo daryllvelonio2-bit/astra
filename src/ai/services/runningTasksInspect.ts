@@ -56,10 +56,6 @@ export function inspectAndRegisterFromText(
     if (!port) port = 8081;
     if (!url) url = `exp://127.0.0.1:${port}`;
     isServer = true;
-  } else if (/php\s+artisan\s+serve/i.test(text)) {
-    command = "php artisan serve";
-    if (!port) port = 8000;
-    isServer = true;
   } else if (/npm\s+run\s+dev|yarn\s+dev|npx\s+vite|\bvite\s+dev\b/i.test(text)) {
     command = "npm run dev (Vite)";
     if (!port) port = 5173;

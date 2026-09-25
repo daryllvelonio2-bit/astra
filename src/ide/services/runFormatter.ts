@@ -20,7 +20,6 @@ const RUNTIME_BADGES: Record<string, string> = {
   go: "Go",
   rustc: "Rust",
   rust: "Rust",
-  php: "PHP",
   ruby: "Ruby",
   lua: "Lua",
   "lua5.4": "Lua",

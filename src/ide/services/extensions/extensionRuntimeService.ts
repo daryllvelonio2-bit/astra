@@ -65,13 +65,6 @@ export const KNOWN_RUNTIMES: RuntimeInfo[] = [
     matchPatterns: ["python", "pylance", "pyright", "black-formatter"],
   },
   {
-    id: "php",
-    name: "PHP Runtime",
-    binary: "php",
-    apt: ["php", "php-curl", "php-mbstring"],
-    matchPatterns: ["php", "intelephense", "laravel"],
-  },
-  {
     id: "ruby",
     name: "Ruby Runtime",
     binary: "ruby",

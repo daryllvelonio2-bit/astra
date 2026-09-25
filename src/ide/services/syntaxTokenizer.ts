@@ -156,18 +156,6 @@ const BUILTIN_GRAMMARS: LanguageGrammar[] = [
     keywords: new Set(["http", "https", "link", "image"]),
   },
   {
-    id: "php",
-    name: "PHP",
-    extensions: ["php"],
-    lineComment: "//",
-    keywords: new Set([
-      "php", "echo", "print", "function", "class", "public", "private", "protected",
-      "static", "return", "if", "else", "elseif", "while", "for", "foreach", "as",
-      "switch", "case", "break", "continue", "try", "catch", "finally", "throw",
-      "new", "namespace", "use", "extends", "implements", "var", "const",
-    ]),
-  },
-  {
     id: "dart",
     name: "Dart",
     extensions: ["dart"],

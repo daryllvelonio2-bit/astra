@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-PROJECT_DIR="/home/janelle/Documents/projects/ai-coder"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOOLS_DIR="/home/janelle/.local/share/android-build-tools"
 JDK_DIR="$TOOLS_DIR/jdk17"
 SDK_DIR="/home/janelle/Android/sdk"
