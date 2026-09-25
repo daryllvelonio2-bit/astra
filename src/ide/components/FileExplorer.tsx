@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView } from "react-native";
+import React, { useCallback } from "react";
+import { View, Text, TextInput, TouchableOpacity, FlatList } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { FileNode } from "../types";
 import { useFileDragDrop } from "./useFileDragDrop";
@@ -8,6 +8,8 @@ import { subscribeIconTheme } from "../services/extensions/iconThemeService";
 import { styles } from "./fileExplorerStyles";
 import { useTheme } from "../../theme/themeContext";
 import { useKeyboardMouseMode } from "../context/KeyboardMouseContext";
+import { FileExplorerRow } from "./FileExplorerRow";
+import { useVisibleExplorerRows, VisibleExplorerRow } from "./useVisibleExplorerRows";
 
 interface FileExplorerProps {
   projectName?: string;
@@ -40,9 +42,9 @@ function FileExplorerInner({
 }: FileExplorerProps) {
   const { theme } = useTheme();
   const { keyboardMouseMode } = useKeyboardMouseMode();
-  const touchCoordsRef = useRef({ x: 50, y: 100 });
+  const touchCoordsRef = React.useRef({ x: 50, y: 100 });
   const [expandedFolders, setExpandedFolders] = React.useState<Record<string, boolean>>({});
-  const expandedFoldersRef = useRef<Record<string, boolean>>({});
+  const expandedFoldersRef = React.useRef<Record<string, boolean>>({});
   expandedFoldersRef.current = expandedFolders;
   const [isCreating, setIsCreating] = React.useState(false);
   const [inlineName, setInlineName] = React.useState("");
@@ -85,20 +87,20 @@ function FileExplorerInner({
   // Skipped while the sidebar is being resized: onLayout fires every
   // frame during a drag and each measure → setState looped back into
   // another layout — the main resize lag. Re-measure once on release.
-  useEffect(() => {
+  React.useEffect(() => {
     if (isDraggingSidebar) return;
     const t = setTimeout(measureAllFolders, 100);
     return () => clearTimeout(t);
   }, [expandedFolders, files, measureAllFolders, isDraggingSidebar]);
 
-  const [, setIconTick] = React.useState(0);
-  useEffect(() => {
+  const [iconTick, setIconTick] = React.useState(0);
+  React.useEffect(() => {
     return subscribeIconTheme(() => {
       setIconTick((t) => t + 1);
     });
   }, []);
 
-  const handleInlineSubmit = () => {
+  const handleInlineSubmit = useCallback(() => {
     const trimmed = inlineName.trim();
     if (!trimmed) {
       setIsCreating(false);
@@ -108,157 +110,79 @@ function FileExplorerInner({
     setInlineName("");
     if (onCreateFile) onCreateFile(trimmed);
     else if (onQuickAddFile) onQuickAddFile();
-  };
+  }, [inlineName, onCreateFile, onQuickAddFile]);
 
   const sortedFiles = React.useMemo(() => sortNodes(files), [files]);
 
-  const toggleFolder = (folderId: string) => {
+  // Visible rows: flat list of expanded-path nodes. Identity stable
+  // unless the tree or expansion changes — rows memo on this.
+  const flatRows = useVisibleExplorerRows(sortedFiles, expandedFolders);
+
+  const toggleFolder = useCallback((folderId: string) => {
     setExpandedFolders((prev) => ({ ...prev, [folderId]: !prev[folderId] }));
-  };
+  }, []);
 
-  const renderNode = (node: FileNode) => {
-    const isActive = node.id === activeFileId;
-    const isBeingDragged = draggingNode?.id === node.id;
-
-    if (node.type === "folder") {
-      const isExpanded = !!expandedFolders[node.id];
-      const isHovered = hoveredTargetId === node.id;
-
+  const renderItem = useCallback(
+    ({ item }: { item: VisibleExplorerRow }) => {
+      const { node, depth } = item;
       return (
-        <View
-          key={node.id}
-          collapsable={false}
-          style={[styles.folderContainer, isBeingDragged && { opacity: 0.35 }]}
-        >
-          <View
-            collapsable={false}
-            ref={(el) => registerFolderHeaderRef(node.id, el, node)}
-            style={[styles.folderHeader, isHovered && { backgroundColor: `${theme.accent}25`, borderColor: theme.accent, borderWidth: 1 }]}
-          >
-            <TouchableOpacity
-              style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
-              onPress={() => toggleFolder(node.id)}
-              onPressIn={(e) => {
-                touchCoordsRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
-              }}
-              onPressOut={handlePressOut}
-              onLongPress={() => {
-                startDrag(node, touchCoordsRef.current.x, touchCoordsRef.current.y);
-              }}
-              {...({
-                onContextMenu: (e: any) => {
-                  e.preventDefault?.();
-                  const pageX = e.nativeEvent?.pageX ?? touchCoordsRef.current.x;
-                  const pageY = e.nativeEvent?.pageY ?? touchCoordsRef.current.y;
-                  onLongPressNode?.(node, { x: pageX, y: pageY });
-                },
-              } as any)}
-              activeOpacity={0.7}
-              delayLongPress={350}
-            >
-              <Ionicons
-                name={isExpanded ? "chevron-down" : "chevron-forward"}
-                size={12}
-                color={isHovered ? theme.accent : theme.textMuted}
-                style={{ marginRight: 4 }}
-              />
-              <View style={{ marginRight: 6 }}>
-                {getFileIcon(node.name, true, isExpanded)}
-              </View>
-              <Text style={[styles.folderName, { color: theme.textPrimary }, isHovered && { color: theme.accent, fontWeight: "700" }]} numberOfLines={1}>
-                {node.name}
-              </Text>
-              {isHovered && <Ionicons name="arrow-down-circle" size={14} color={theme.accent} style={{ marginLeft: 4 }} />}
-            </TouchableOpacity>
-
-            {onLongPressNode && !isHovered && (
-              <TouchableOpacity
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={styles.moreActionBtn}
-                onPress={(e) => {
-                  onLongPressNode(node, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
-                }}
-              >
-                <Ionicons name="ellipsis-vertical" size={12} color={theme.textMuted} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {isExpanded && node.children && (
-            <View collapsable={false} style={styles.childrenContainer}>
-              {node.children.map(renderNode)}
-            </View>
-          )}
-        </View>
+        <FileExplorerRow
+          node={node}
+          depth={depth}
+          isActive={node.id === activeFileId}
+          isExpanded={node.type === "folder" ? !!expandedFolders[node.id] : false}
+          isHovered={hoveredTargetId === node.id}
+          isBeingDragged={draggingNode?.id === node.id}
+          iconTick={iconTick}
+          touchCoordsRef={touchCoordsRef}
+          onToggleFolder={toggleFolder}
+          onSelectFile={onSelectFile}
+          onLongPressNode={onLongPressNode}
+          onPressOut={handlePressOut}
+          onDragStart={startDrag}
+          registerFolderHeaderRef={registerFolderHeaderRef}
+        />
       );
-    }
+    },
+    [
+      activeFileId,
+      expandedFolders,
+      hoveredTargetId,
+      draggingNode,
+      iconTick,
+      touchCoordsRef,
+      toggleFolder,
+      onSelectFile,
+      onLongPressNode,
+      handlePressOut,
+      startDrag,
+      registerFolderHeaderRef,
+    ]
+  );
 
-    // File row
-    return (
-      <View
-        key={node.id}
-        collapsable={false}
-        style={[styles.fileWrapper, isBeingDragged && { opacity: 0.35 }]}
-      >
-        <View
-          style={[
-            styles.fileItem,
-            isActive && {
-              backgroundColor: `${theme.accent}26`,
-              borderColor: theme.accent,
-              borderWidth: 1,
-            },
-          ]}
-        >
-          <TouchableOpacity
-            style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
-            onPress={() => onSelectFile(node)}
-            onPressIn={(e) => {
-              touchCoordsRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
-            }}
-            onPressOut={handlePressOut}
-            onLongPress={() => {
-              startDrag(node, touchCoordsRef.current.x, touchCoordsRef.current.y);
-            }}
-            {...({
-              onContextMenu: (e: any) => {
-                e.preventDefault?.();
-                const pageX = e.nativeEvent?.pageX ?? touchCoordsRef.current.x;
-                const pageY = e.nativeEvent?.pageY ?? touchCoordsRef.current.y;
-                onLongPressNode?.(node, { x: pageX, y: pageY });
-              },
-            } as any)}
-            activeOpacity={0.7}
-            delayLongPress={350}
-          >
-            <View style={styles.fileIconWrapper}>{getFileIcon(node.name)}</View>
-            <Text
-              style={[
-                styles.fileName,
-                { color: theme.textPrimary },
-                isActive && { color: theme.accent, fontWeight: "700" },
-              ]}
-              numberOfLines={1}
-            >
-              {node.name}
-            </Text>
-          </TouchableOpacity>
+  const keyExtractor = useCallback((item: VisibleExplorerRow) => item.node.id, []);
 
-          {onLongPressNode && (
-            <TouchableOpacity
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={styles.moreActionBtn}
-              onPress={(e) => {
-                onLongPressNode(node, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
-              }}
-            >
-              <Ionicons name="ellipsis-vertical" size={12} color={theme.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    );
-  };
+  // FlatList only re-renders rows when these change (rows memo the rest).
+  const listExtraData = React.useMemo(
+    () => ({
+      activeFileId,
+      expandedFolders,
+      hoveredTargetId,
+      draggingId: draggingNode?.id ?? null,
+      iconTick,
+    }),
+    [activeFileId, expandedFolders, hoveredTargetId, draggingNode, iconTick]
+  );
+
+  // Ghost icon cached: dragPos updates every finger move and re-renders
+  // the badge — without this the SVG re-parses per move event.
+  const ghostIcon = React.useMemo(
+    () => (draggingNode && draggingNode.type !== "folder" ? getFileIcon(draggingNode.name) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [draggingNode?.id, draggingNode?.name, iconTick]
+  );
+
+  void cancelDrag;
 
   return (
     <View
@@ -272,26 +196,20 @@ function FileExplorerInner({
       }}
       {...wrapperPanResponder.panHandlers}
     >
-      <View style={styles.headerContainer}>
-        <Text style={[styles.header, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>
-          {projectName ? projectName.toUpperCase() : "EXPLORER"}
-        </Text>
-        {onRefresh && (
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={onRefresh}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityLabel="Refresh Explorer"
-          >
-            <Ionicons name="refresh-outline" size={14} color={theme.textMuted} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <ScrollView
+      <FlatList
         style={styles.scroll}
+        data={flatRows}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        extraData={listExtraData}
         showsVerticalScrollIndicator={true}
         scrollEnabled={!draggingNode}
+        // Virtualization: only visible rows mount, so per-frame layout
+        // during resize touches a handful of views, not the whole tree.
+        initialNumToRender={25}
+        maxToRenderPerBatch={20}
+        windowSize={7}
+        removeClippedSubviews={true}
         {...({
           onContextMenu: (e: any) => {
             e.preventDefault?.();
@@ -299,83 +217,101 @@ function FileExplorerInner({
             setInlineName("");
           },
         } as any)}
-      >
-        {isCreating && (
-          <View style={[styles.inlineCreateRow, { backgroundColor: theme.bgInput, borderColor: theme.accent }]}>
-            <Ionicons
-              name={inlineName.endsWith("/") ? "folder" : "document-text-outline"}
-              size={14}
-              color={inlineName.endsWith("/") ? theme.accentGold : theme.accent}
-              style={{ marginRight: 4 }}
-            />
-            <TextInput
-              style={[styles.inlineInput, { color: theme.textPrimary }]}
-              placeholder="filename (or folder/)..."
-              placeholderTextColor={theme.textMuted}
-              value={inlineName}
-              onChangeText={setInlineName}
-              autoFocus
-              autoCapitalize="none"
-              autoCorrect={false}
-              showSoftInputOnFocus={!keyboardMouseMode}
-              onSubmitEditing={handleInlineSubmit}
-              returnKeyType="done"
-              onKeyPress={(e) => {
-                if (e.nativeEvent.key === "Escape") {
-                  setIsCreating(false);
-                  setInlineName("");
-                }
+        ListHeaderComponent={
+          <>
+            <View style={styles.headerContainer}>
+              <Text style={[styles.header, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>
+                {projectName ? projectName.toUpperCase() : "EXPLORER"}
+              </Text>
+              {onRefresh && (
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPress={onRefresh}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Refresh Explorer"
+                >
+                  <Ionicons name="refresh-outline" size={14} color={theme.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+            {isCreating && (
+              <View style={[styles.inlineCreateRow, { backgroundColor: theme.bgInput, borderColor: theme.accent }]}>
+                <Ionicons
+                  name={inlineName.endsWith("/") ? "folder" : "document-text-outline"}
+                  size={14}
+                  color={inlineName.endsWith("/") ? theme.accentGold : theme.accent}
+                  style={{ marginRight: 4 }}
+                />
+                <TextInput
+                  style={[styles.inlineInput, { color: theme.textPrimary }]}
+                  placeholder="filename (or folder/)..."
+                  placeholderTextColor={theme.textMuted}
+                  value={inlineName}
+                  onChangeText={setInlineName}
+                  autoFocus
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  showSoftInputOnFocus={!keyboardMouseMode}
+                  onSubmitEditing={handleInlineSubmit}
+                  returnKeyType="done"
+                  onKeyPress={(e) => {
+                    if (e.nativeEvent.key === "Escape") {
+                      setIsCreating(false);
+                      setInlineName("");
+                    }
+                  }}
+                />
+                <TouchableOpacity onPress={handleInlineSubmit} style={styles.inlineBtn}>
+                  <Ionicons name="checkmark" size={14} color={theme.accentGreen} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
+        }
+        ListEmptyComponent={
+          !isCreating ? (
+            <TouchableOpacity
+              style={styles.emptyContainer}
+              onPress={() => {
+                setIsCreating(true);
+                setInlineName("");
               }}
-            />
-            <TouchableOpacity onPress={handleInlineSubmit} style={styles.inlineBtn}>
-              <Ionicons name="checkmark" size={14} color={theme.accentGreen} />
+            >
+              <Text style={[styles.emptyText, { color: theme.textMuted }]}>No files</Text>
+              <Text style={[styles.emptySubtext, { color: theme.accent }]}>+ Add file</Text>
             </TouchableOpacity>
-          </View>
-        )}
-        {sortedFiles.length === 0 && !isCreating ? (
-          <TouchableOpacity
-            style={styles.emptyContainer}
-            onPress={() => {
-              setIsCreating(true);
-              setInlineName("");
-            }}
-          >
-            <Text style={[styles.emptyText, { color: theme.textMuted }]}>No files</Text>
-            <Text style={[styles.emptySubtext, { color: theme.accent }]}>+ Add file</Text>
-          </TouchableOpacity>
-        ) : (
-          sortedFiles.map(renderNode)
-        )}
-
-        {/* Drop Zone for moving to root workspace level */}
-        {draggingNode && (
-          <View
-            ref={registerRootDropRef}
-            collapsable={false}
-            onLayout={measureAllFolders}
-            style={[
-              styles.rootDropZone,
-              { backgroundColor: theme.bgTertiary, borderColor: theme.border },
-              hoveredTargetId === "ROOT_WORKSPACE" && { borderColor: theme.accent, backgroundColor: `${theme.accent}25` },
-            ]}
-          >
-            <Ionicons
-              name="home-outline"
-              size={14}
-              color={hoveredTargetId === "ROOT_WORKSPACE" ? theme.accent : theme.textMuted}
-            />
-            <Text
+          ) : null
+        }
+        ListFooterComponent={
+          draggingNode ? (
+            <View
+              ref={registerRootDropRef}
+              collapsable={false}
+              onLayout={measureAllFolders}
               style={[
-                styles.rootDropZoneText,
-                { color: hoveredTargetId === "ROOT_WORKSPACE" ? theme.accent : theme.textMuted },
-                hoveredTargetId === "ROOT_WORKSPACE" && { fontWeight: "700" },
+                styles.rootDropZone,
+                { backgroundColor: theme.bgTertiary, borderColor: theme.border },
+                hoveredTargetId === "ROOT_WORKSPACE" && { borderColor: theme.accent, backgroundColor: `${theme.accent}25` },
               ]}
             >
-              Move to workspace root
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+              <Ionicons
+                name="home-outline"
+                size={14}
+                color={hoveredTargetId === "ROOT_WORKSPACE" ? theme.accent : theme.textMuted}
+              />
+              <Text
+                style={[
+                  styles.rootDropZoneText,
+                  { color: hoveredTargetId === "ROOT_WORKSPACE" ? theme.accent : theme.textMuted },
+                  hoveredTargetId === "ROOT_WORKSPACE" && { fontWeight: "700" },
+                ]}
+              >
+                Move to workspace root
+              </Text>
+            </View>
+          ) : null
+        }
+      />
 
       {/* Floating Ghost Badge: Follows the user's finger in real-time */}
       {draggingNode && (
@@ -394,7 +330,7 @@ function FileExplorerInner({
             {draggingNode.type === "folder" ? (
               <Ionicons name="folder" size={15} color={theme.accentGold} />
             ) : (
-              getFileIcon(draggingNode.name)
+              ghostIcon
             )}
           </View>
           <Text style={[styles.dragGhostText, { color: theme.textPrimary }]} numberOfLines={1}>

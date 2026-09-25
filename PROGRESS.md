@@ -1,5 +1,14 @@
 # Project Progress Tracker
 
+### [2026-09-26] - Explorer tree virtualized (FlatList + memoized rows)
+- **Problem:** full-tree ScrollView mounted every row always; each render re-created all rows and re-parsed every SVG icon, and every resize frame laid out the whole tree.
+- **Fix (explorer-owned files only):**
+  - `useVisibleExplorerRows.ts` (new, 33 lines) — flattens expanded tree to [{node, depth}], stable identity.
+  - `FileExplorerRow.tsx` (new, 190 lines) — React.memo row, theme via hook, SvgXml icon cached per file/folder state.
+  - `FileExplorer.tsx` (417→353 lines) — FlatList with virtualization (25/20/7, clipped subviews), header/inline-create/empty/drop-zone as list parts, ghost SVG cached.
+- **Verify:** `tsc --noEmit` exit 0; all files <500 lines; live on phone (pid 4584, Bundled 355ms, 0 redbox/fatal); screenshots prove tree renders + folder expand with indentation works.
+- **Feel check needed:** drag the resize edge and scroll a big folder — say if lag remains and I'll throttle setValue / attack sortNodes localeCompare next.
+
 ### [2026-09-26] - Explorer resize lag: killed the measure→setState loop
 - **Fix (3 files, explorer/resizer only — coding UI untouched for the other agent):**
   - `useFileDragDrop.ts` — `measureAllFolders` container-offset update is now ref-only unless a drag ghost is active (was unconditional `setContainerOffset` → re-render every frame).
