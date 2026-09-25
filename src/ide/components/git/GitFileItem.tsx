@@ -11,6 +11,7 @@ interface GitFileItemProps {
   isLandscape: boolean;
   onSelectFile: (file: GitFileStatus) => void;
   onToggleStageFile: (file: GitFileStatus) => void;
+  onLongPressFile: (file: GitFileStatus, position: { x: number; y: number }) => void;
 }
 
 export const GitFileItem = React.memo(function GitFileItem({
@@ -19,6 +20,7 @@ export const GitFileItem = React.memo(function GitFileItem({
   isLandscape,
   onSelectFile,
   onToggleStageFile,
+  onLongPressFile,
 }: GitFileItemProps) {
   const { theme } = useTheme();
 
@@ -50,6 +52,7 @@ export const GitFileItem = React.memo(function GitFileItem({
         isSelected && { backgroundColor: `${theme.accent}18` },
       ]}
       onPress={() => onSelectFile(file)}
+      onLongPress={(e) => onLongPressFile(file, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })}
       activeOpacity={0.7}
     >
       <TouchableOpacity

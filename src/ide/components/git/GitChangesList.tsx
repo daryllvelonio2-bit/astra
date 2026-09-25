@@ -32,6 +32,7 @@ interface GitChangesListProps {
   onToggleStageFile: (file: GitFileStatus) => void;
   onToggleStageAll: (stageAll: boolean) => void;
   onCommit: (summary: string, description: string) => void;
+  onLongPressFile: (file: GitFileStatus, position: { x: number; y: number }) => void;
 }
 
 export function GitChangesList({
@@ -46,6 +47,7 @@ export function GitChangesList({
   onToggleStageFile,
   onToggleStageAll,
   onCommit,
+  onLongPressFile,
 }: GitChangesListProps) {
   const { theme } = useTheme();
   const { keyboardMouseMode } = useKeyboardMouseMode();
@@ -91,6 +93,10 @@ export function GitChangesList({
     (file: GitFileStatus) => onToggleStageFile(file),
     [onToggleStageFile]
   );
+  const handleLongPressItem = useCallback(
+    (file: GitFileStatus, position: { x: number; y: number }) => onLongPressFile(file, position),
+    [onLongPressFile]
+  );
   const renderFileItem = useCallback(
     ({ item }: { item: GitFileStatus }) => (
       <GitFileItem
@@ -99,9 +105,10 @@ export function GitChangesList({
         isLandscape={isLandscape}
         onSelectFile={handleSelectItem}
         onToggleStageFile={handleToggleItem}
+        onLongPressFile={handleLongPressItem}
       />
     ),
-    [selectedPath, isLandscape, handleSelectItem, handleToggleItem]
+    [selectedPath, isLandscape, handleSelectItem, handleToggleItem, handleLongPressItem]
   );
   const fileKeyExtractor = useCallback((item: GitFileStatus) => item.path, []);
 
