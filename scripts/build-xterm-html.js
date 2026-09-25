@@ -167,9 +167,14 @@ html, body {
       var cell = cellAt(px, py);
       var btn = lineDelta < 0 ? 64 : 65;
       var count = Math.min(Math.abs(lineDelta), 12);
+      // Batch the wheel ticks into ONE bridge post: per-line posts made a
+      // fast flick fire dozens of RN->PTY writes per second and the scroll
+      // felt choppy/stalled under load.
+      var seq = '';
       for (var i = 0; i < count; i++) {
-        post({ type: 'data', data: '\x1b[<' + btn + ';' + cell.col + ';' + cell.row + 'M' });
+        seq += '\\x1b[<' + btn + ';' + cell.col + ';' + cell.row + 'M';
       }
+      post({ type: 'data', data: seq });
       return;
     }
     if (!isAltScreen()) {
@@ -179,15 +184,18 @@ html, body {
     // terminal behavior — the app owns all input there).
   };
 
+  // CSS-pixel row height: touch deltas are in CSS px, so dividing by the
+  // DEVICE-pixel height (actualCellHeight, ~dpr times larger on phones) made
+  // every drag scroll 2-3x fewer lines than the finger moved.
   var getRowHeight = function () {
     try {
-      if (term._core && term._core._renderService &&
-          term._core._renderService.dimensions &&
-          term._core._renderService.dimensions.actualCellHeight) {
-        return term._core._renderService.dimensions.actualCellHeight;
+      var d = term._core && term._core._renderService && term._core._renderService.dimensions;
+      if (d) {
+        if (d.css && d.css.cell && d.css.cell.height) return d.css.cell.height;
+        if (d.actualCellHeight) return d.actualCellHeight / (window.devicePixelRatio || 1);
       }
     } catch (e) {}
-    return (term.options && term.options.fontSize ? term.options.fontSize * 1.25 : 18);
+    return (term.options && term.options.fontSize ? term.options.fontSize * (term.options.lineHeight || 1.25) : 18);
   };
 
   termEl.addEventListener('touchstart', function (e) {
