@@ -1,8 +1,14 @@
+### [2026-09-25] - CodeMirror fold gutter exact overlap
+- **Summary:** Overlaid the fold gutter markers exactly onto the line numbers.
+- **Details:** Re-enabled the fold gutter but modified the CSS to pull it `-22px` to the left. Created a solid background on the `.cm-foldMarker` tied to a dynamic `--gutter-bg` CSS variable so it completely eclipses the underlying line number *only* when a fold marker is present.
+### [2026-09-25] - CodeMirror editor gutter styling adjustment
+- **Summary:** Reduced the width of the line numbering gutter in the IDE.
+- **Details:** Modified `.cm-lineNumbers .cm-gutterElement` padding (to `0 4px 0 2px`) and `minWidth` (to `16px`) in `scripts/codemirror-entry.js` and hid the fold gutter (`.cm-foldGutter: display: "none"`) to reclaim horizontal screen space on mobile. Rebuilt CodeMirror bundle and triggered a debug APK build.
 # Project Progress Tracker
 
 ## Status
-- **Current Phase:** opencode postinstall repair card installed as v9 - awaiting on-device user verify
-- **Last Updated:** September 23, 2026
+- **Current Phase:** CodeMirror fold gutter exact overlap
+- **Last Updated:** September 25, 2026
 
 ### [2026-09-23] - opencode WORKING on device (1.18.32) via adb-driven fix
 - **Sequence:** repair log proved an orphan dead stub at /usr/local/bin/opencode shadowed the good curl binary. User`s typed rm missed the leading slash (relative path, deleted nothing). Drove the phone over adb: `input text` the absolute `rm -f /usr/local/bin/opencode`, then `hash -r` (bash had cached the dead path), then `opencode --version` -> **1.18.32** on screen.
@@ -2538,7 +2544,7 @@
 
 ## Status (prior)
 - **Previous Phase:** Performance Optimization & Modular Compliance
-- **Last Updated:** September 6, 2026
+- **Last Updated:** September 25, 2026
 
 ### [2026-09-06] - Editor Input Latency & Keystroke Auto-Save Optimization
 - **Problem:**

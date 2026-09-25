@@ -81,6 +81,26 @@ import { oneDark } from "@codemirror/theme-one-dark";
         fontSize: `${Math.max(9, fs - 2)}px`,
         lineHeight: lh,
       },
+      ".cm-lineNumbers .cm-gutterElement": {
+        padding: "0 4px 0 2px",
+        minWidth: "16px",
+      },
+      ".cm-foldGutter": {
+        width: "0px",
+      },
+      ".cm-foldGutter .cm-gutterElement": {
+        position: "relative",
+        left: "-22px",
+        width: "22px",
+        textAlign: "center",
+      },
+      ".cm-foldMarker": {
+        display: "block",
+        width: "100%",
+        height: "100%",
+        backgroundColor: "var(--gutter-bg)",
+        cursor: "pointer",
+      },
       ".cm-gutterElement": {
         lineHeight: lh,
       },
@@ -179,6 +199,7 @@ import { oneDark } from "@codemirror/theme-one-dark";
     state: startState,
     parent: document.getElementById("editor"),
   });
+  document.documentElement.style.setProperty('--gutter-bg', initialIsDark ? '#282c34' : '#f6f8fa');
 
   // Global APIs for React Native
   window.__cmSetContent = function (text, fileName) {
@@ -235,6 +256,7 @@ import { oneDark } from "@codemirror/theme-one-dark";
     view.dispatch({
       effects: themeCompartment.reconfigure(isDark ? oneDark : customLightTheme),
     });
+    document.documentElement.style.setProperty('--gutter-bg', isDark ? '#282c34' : '#f6f8fa');
     if (bg && typeof document !== "undefined" && document.body) {
       document.body.style.background = bg;
     }
