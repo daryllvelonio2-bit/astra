@@ -13,6 +13,7 @@ interface GitHistoryListProps {
   brokenAvatars: Record<string, boolean>;
   onAvatarError: (hash: string) => void;
   onSelectCommit: (commit: GitCommit) => void;
+  onLongPressCommit: (commit: GitCommit, position: { x: number; y: number }) => void;
 }
 
 export function GitHistoryList({
@@ -22,6 +23,7 @@ export function GitHistoryList({
   brokenAvatars,
   onAvatarError,
   onSelectCommit,
+  onLongPressCommit,
 }: GitHistoryListProps) {
   const { theme } = useTheme();
   const { isLandscape } = useOrientation();
@@ -78,6 +80,12 @@ export function GitHistoryList({
               isSelected && { backgroundColor: `${theme.accent}18` },
             ]}
             onPress={() => onSelectCommit(item)}
+            onLongPress={(e) =>
+              onLongPressCommit(item, {
+                x: e.nativeEvent.pageX,
+                y: e.nativeEvent.pageY,
+              })
+            }
             activeOpacity={0.7}
           >
             <View

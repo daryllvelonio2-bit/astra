@@ -15,6 +15,7 @@ import { GitHistoryList } from "./GitHistoryList";
 import { GitCommitFilesList } from "./GitCommitFilesList";
 import { GitDiffViewer } from "./GitDiffViewer";
 import { GitBranchModal } from "./GitBranchModal";
+import { GitCommitActionsModal } from "./GitCommitActionsModal";
 import { GitCredentialsModal } from "./GitCredentialsModal";
 import { GitRemoteModal } from "./GitRemoteModal";
 import { useGitOperations } from "./useGitOperations";
@@ -57,6 +58,22 @@ export function GitHubDesktopView({
     setShowCredentialsModal,
     showRemoteModal,
     setShowRemoteModal,
+    showCommitActions,
+    commitActionTarget,
+    commitActionAnchor,
+    commitActionBusy,
+    amendInitialMessage,
+    openCommitActions,
+    closeCommitActions,
+    handleAmend,
+    handleResetToCommit,
+    handleCheckoutCommit,
+    handleRevertCommit,
+    handleCherryPickCommit,
+    handleCreateBranchFromCommit,
+    handleCreateTag,
+    handleCopyCommitSha,
+    handleViewCommitOnGitHub,
     portraitShowDetail,
     setPortraitShowDetail,
     avatars,
@@ -218,6 +235,7 @@ export function GitHubDesktopView({
                 brokenAvatars={brokenAvatars}
                 onAvatarError={markBroken}
                 onSelectCommit={loadCommitDiff}
+                onLongPressCommit={openCommitActions}
               />
             )}
           </View>
@@ -262,6 +280,31 @@ export function GitHubDesktopView({
         onClose={() => setShowRemoteModal(false)}
         onSaveRemote={handleSaveRemote}
       />
+
+      {/* Commit Actions Modal (long-press on a history row) */}
+      {commitActionTarget && (
+        <GitCommitActionsModal
+          visible={showCommitActions}
+          anchor={commitActionAnchor}
+          commitSummary={commitActionTarget.message}
+          amendInitialMessage={amendInitialMessage || commitActionTarget.message}
+          shortHash={commitActionTarget.shortHash}
+          canViewOnGitHub={!!remoteUrl && remoteUrl.includes("github.com")}
+          busy={commitActionBusy}
+          onClose={closeCommitActions}
+          actions={{
+            amend: handleAmend,
+            reset: handleResetToCommit,
+            checkout: handleCheckoutCommit,
+            revert: handleRevertCommit,
+            createBranch: handleCreateBranchFromCommit,
+            createTag: handleCreateTag,
+            cherryPick: handleCherryPickCommit,
+            copySha: handleCopyCommitSha,
+            viewOnGitHub: handleViewCommitOnGitHub,
+          }}
+        />
+      )}
     </View>
   );
 }

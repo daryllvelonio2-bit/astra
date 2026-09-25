@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { Alert } from "react-native";
+import { Alert, Linking } from "react-native";
 import {
   GitBranch,
   GitCommit,
@@ -28,6 +28,20 @@ import {
   getGitRemoteUrl,
   setGitRemoteUrl,
 } from "../../services/gitService";
+import {
+  amendCommit,
+  resetToCommit,
+  checkoutCommit,
+  revertCommit,
+  cherryPickCommit,
+  createBranchFromCommit,
+  createTag,
+  getCommitMessage,
+  buildCommitWebUrl,
+  ResetMode,
+  GitOpResult,
+} from "../../services/gitCommitActions";
+import { Clipboard } from "../../services/clipboardService";
 import { useCommitAvatars } from "./useCommitAvatars";
 import { isGitAuthError } from "../../services/gitCloneService";
 
@@ -58,6 +72,12 @@ export function useGitOperations(
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [showRemoteModal, setShowRemoteModal] = useState(false);
   const [portraitShowDetail, setPortraitShowDetail] = useState(false);
+
+  // Commit actions (long-press on a history row)
+  const [commitActionTarget, setCommitActionTarget] = useState<GitCommit | null>(null);
+  const [commitActionAnchor, setCommitActionAnchor] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [showCommitActions, setShowCommitActions] = useState(false);
+  const [commitActionBusy, setCommitActionBusy] = useState(false);
 
   // Avatar store lives here (stays mounted) so History never refetches.
   const { avatars, brokenAvatars, markBroken } = useCommitAvatars(remoteUrl);
@@ -264,6 +284,140 @@ export function useGitOperations(
     else Alert.alert("Error", "Could not initialize Git repository.");
   };
 
+  // ----- Commit actions (long-press menu) -----------------------------------
+
+  const openCommitActions = (commit: GitCommit, position: { x: number; y: number }) => {
+    setCommitActionTarget(commit);
+    setCommitActionAnchor(position);
+    setShowCommitActions(true);
+  };
+
+  const closeCommitActions = () => {
+    setShowCommitActions(false);
+    setCommitActionBusy(false);
+  };
+
+  // Destructive resets need a confirm first; everything else runs directly.
+  const runCommitOp = async (
+    commit: GitCommit,
+    op: () => Promise<GitOpResult>,
+    successMsg: string
+  ) => {
+    setCommitActionBusy(true);
+    const res = await op();
+    setCommitActionBusy(false);
+    if (res.success) {
+      closeCommitActions();
+      handleBackToCommits();
+      refreshGitState();
+      if (successMsg) Alert.alert("Success", successMsg);
+    } else {
+      Alert.alert("Git Error", res.error || "The command failed.");
+    }
+  };
+
+  const confirmDangerous = (title: string, body: string, run: () => void) =>
+    Alert.alert(title, body, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Confirm", style: "destructive", onPress: run },
+    ]);
+
+  const handleAmend = (message: string) => {
+    if (!commitActionTarget) return;
+    const commit = commitActionTarget;
+    runCommitOp(commit, () => amendCommit(workspaceId, message), "Commit amended.");
+  };
+
+  const handleResetToCommit = (mode: ResetMode) => {
+    if (!commitActionTarget) return;
+    const commit = commitActionTarget;
+    const run = () =>
+      runCommitOp(commit, () => resetToCommit(workspaceId, commit.hash, mode), "");
+    if (mode === "hard") {
+      confirmDangerous(
+        "Hard Reset",
+        `Discard all commits after ${commit.shortHash} and all uncommitted changes? This cannot be undone.`,
+        run
+      );
+    } else {
+      run();
+    }
+  };
+
+  const handleCheckoutCommit = () => {
+    if (!commitActionTarget) return;
+    const commit = commitActionTarget;
+    runCommitOp(
+      commit,
+      () => checkoutCommit(workspaceId, commit.hash),
+      `Checked out ${commit.shortHash} (detached HEAD).`
+    );
+  };
+
+  const handleRevertCommit = () => {
+    if (!commitActionTarget) return;
+    const commit = commitActionTarget;
+    runCommitOp(
+      commit,
+      () => revertCommit(workspaceId, commit.hash),
+      `Reverted ${commit.shortHash}.`
+    );
+  };
+
+  const handleCherryPickCommit = () => {
+    if (!commitActionTarget) return;
+    const commit = commitActionTarget;
+    runCommitOp(
+      commit,
+      () => cherryPickCommit(workspaceId, commit.hash),
+      `Cherry-picked ${commit.shortHash}.`
+    );
+  };
+
+  const handleCreateBranchFromCommit = (name: string) => {
+    if (!commitActionTarget) return;
+    const commit = commitActionTarget;
+    runCommitOp(
+      commit,
+      () => createBranchFromCommit(workspaceId, name, commit.hash),
+      `Created and switched to ${name}.`
+    );
+  };
+
+  const handleCreateTag = (name: string) => {
+    if (!commitActionTarget) return;
+    const commit = commitActionTarget;
+    runCommitOp(
+      commit,
+      () => createTag(workspaceId, name, commit.hash),
+      `Tagged ${commit.shortHash} as ${name}.`
+    );
+  };
+
+  const handleCopyCommitSha = async () => {
+    if (!commitActionTarget) return;
+    await Clipboard.setStringAsync(commitActionTarget.hash);
+  };
+
+  const handleViewCommitOnGitHub = async () => {
+    if (!commitActionTarget) return;
+    const url = buildCommitWebUrl(remoteUrl, commitActionTarget.hash);
+    if (!url) return Alert.alert("Not on GitHub", "This repository has no GitHub remote.");
+    try {
+      await Linking.openURL(url);
+    } catch (_) {
+      Alert.alert("Error", "Could not open the browser.");
+    }
+  };
+
+  // Amend wants the real multi-line message, not the truncated list title.
+  const [amendInitialMessage, setAmendInitialMessage] = useState("");
+  useEffect(() => {
+    if (showCommitActions && commitActionTarget) {
+      getCommitMessage(workspaceId, commitActionTarget.hash).then(setAmendInitialMessage);
+    }
+  }, [showCommitActions, commitActionTarget, workspaceId]);
+
   return {
     activeTab,
     setActiveTab,
@@ -288,6 +442,22 @@ export function useGitOperations(
     setShowCredentialsModal,
     showRemoteModal,
     setShowRemoteModal,
+    showCommitActions,
+    commitActionTarget,
+    commitActionAnchor,
+    commitActionBusy,
+    amendInitialMessage,
+    openCommitActions,
+    closeCommitActions,
+    handleAmend,
+    handleResetToCommit,
+    handleCheckoutCommit,
+    handleRevertCommit,
+    handleCherryPickCommit,
+    handleCreateBranchFromCommit,
+    handleCreateTag,
+    handleCopyCommitSha,
+    handleViewCommitOnGitHub,
     portraitShowDetail,
     setPortraitShowDetail,
     avatars,
