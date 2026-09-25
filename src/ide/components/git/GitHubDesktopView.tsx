@@ -92,7 +92,8 @@ export function GitHubDesktopView({
     handleCommitAndPush,
     handleSaveRemote,
     handlePush,
-    handleSync,
+    handleFetch,
+    handlePull,
     handleSwitchBranch,
     handleCreateBranch,
     handleInitRepo,
@@ -134,12 +135,12 @@ export function GitHubDesktopView({
       <GitHeaderBar
         repoName={projectName}
         status={status}
-        loading={loadingStatus}
         syncing={syncing}
         remoteUrl={remoteUrl}
         onSelectBranch={() => setShowBranchModal(true)}
-        onSync={handleSync}
-        onRefresh={refreshGitState}
+        onFetch={handleFetch}
+        onPull={handlePull}
+        onPush={handlePush}
         onOpenCredentials={() => setShowCredentialsModal(true)}
         onOpenRemoteModal={() => setShowRemoteModal(true)}
         onInitRepo={handleInitRepo}
@@ -300,6 +301,7 @@ export function GitHubDesktopView({
         anchor={profileAnchor}
         onClose={() => setShowProfile(false)}
         onSignedOut={() => setGhSession(null)}
+        onOpenRemote={() => setShowRemoteModal(true)}
       />
 
       {/* GitHub Remote Manager Modal */}

@@ -9,12 +9,12 @@ import { GitHubSession } from "../../services/gitService";
 interface GitHeaderBarProps {
   repoName: string;
   status: GitRepoStatus | null;
-  loading: boolean;
   syncing: boolean;
   remoteUrl?: string | null;
   onSelectBranch: () => void;
-  onSync: () => void;
-  onRefresh: () => void;
+  onFetch: () => void;
+  onPull: () => void;
+  onPush: () => void;
   onOpenCredentials: () => void;
   onOpenRemoteModal?: () => void;
   onInitRepo?: () => void;
@@ -25,12 +25,12 @@ interface GitHeaderBarProps {
 export function GitHeaderBar({
   repoName,
   status,
-  loading,
   syncing,
   remoteUrl,
   onSelectBranch,
-  onSync,
-  onRefresh,
+  onFetch,
+  onPull,
+  onPush,
   onOpenCredentials,
   onOpenRemoteModal,
   onInitRepo,
@@ -40,22 +40,18 @@ export function GitHeaderBar({
   const { theme } = useTheme();
   const { isLandscape } = useOrientation();
 
-  const getSyncLabel = () => {
-    if (syncing) return "Syncing…";
-    if (!remoteUrl) return isLandscape ? "Publish" : "Publish repo";
-    if (!status) return "Fetch origin";
-    if (status.behind > 0) return `Pull (${status.behind})`;
-    if (status.ahead > 0) return `Push ${status.ahead}`;
-    return isLandscape ? "Fetch" : "Fetch origin";
-  };
+  const isRepo = !!status?.isRepo;
+  const ahead = status?.ahead ?? 0;
+  const behind = status?.behind ?? 0;
+  const iconSize = isLandscape ? 13 : 15;
 
-  const getSyncIcon = () => {
-    if (!remoteUrl) return "upload";
-    if (!status) return "sync";
-    if (status.behind > 0) return "arrow-down";
-    if (status.ahead > 0) return "arrow-up";
-    return "sync";
-  };
+  // One dynamic sync action: pull when behind, push when ahead, else fetch.
+  const op = behind > 0 ? "pull" : ahead > 0 ? "push" : "fetch";
+  const syncGlyph = op === "pull" ? "arrow-down" : op === "push" ? "arrow-up" : "sync";
+  const syncLabel = op === "pull" ? "Pull" : op === "push" ? "Push" : "Fetch";
+  const syncBadge = op === "pull" ? behind : op === "push" ? ahead : 0;
+  const syncActive = op !== "fetch";
+  const syncAction = op === "pull" ? onPull : op === "push" ? onPush : onFetch;
 
   return (
     <View
@@ -65,102 +61,113 @@ export function GitHeaderBar({
         { backgroundColor: theme.bgSecondary, borderBottomColor: theme.border },
       ]}
     >
-      {/* Current Repository Box */}
-      <View style={[styles.repoBox, isLandscape && styles.repoBoxLandscape]}>
-        <Octicons name="repo" size={isLandscape ? 12 : 14} color={theme.textSecondary} />
-        <Text
-          style={[styles.repoName, isLandscape && styles.repoNameLandscape, { color: theme.textPrimary }]}
-          numberOfLines={1}
-        >
-          {repoName}
-        </Text>
-      </View>
-
-      {status?.isRepo ? (
+      {isRepo ? (
         <>
-          {/* Current Branch Selector */}
+          {/* Compact repo | branch chip (tap = branch switcher) */}
           <TouchableOpacity
             style={[
-              styles.branchBtn,
-              isLandscape && styles.branchBtnLandscape,
+              styles.repoBranchChip,
+              isLandscape && styles.repoBranchChipLandscape,
               { backgroundColor: theme.bgTertiary, borderColor: theme.border },
             ]}
             onPress={onSelectBranch}
             activeOpacity={0.7}
           >
-            <Octicons name="git-branch" size={isLandscape ? 11 : 13} color={theme.accent} />
+            <Octicons name="git-branch" size={isLandscape ? 10 : 12} color={theme.accent} />
             <Text
-              style={[styles.branchText, isLandscape && styles.branchTextLandscape, { color: theme.textPrimary }]}
+              style={[styles.chipRepo, isLandscape && styles.chipSmall, { color: theme.textSecondary }]}
               numberOfLines={1}
             >
-              {status.currentBranch}
+              {repoName}
             </Text>
-            <Ionicons name="chevron-down" size={isLandscape ? 10 : 12} color={theme.textMuted} />
+            <Text style={[styles.chipSep, { color: theme.border }]}>|</Text>
+            <Text
+              style={[styles.chipBranch, isLandscape && styles.chipSmall, { color: theme.textPrimary }]}
+              numberOfLines={1}
+            >
+              {status?.currentBranch}
+            </Text>
+            <Ionicons name="chevron-down" size={isLandscape ? 9 : 11} color={theme.textMuted} />
           </TouchableOpacity>
 
-          {/* Sync (Fetch / Push / Pull / Publish) Action Button */}
-          <TouchableOpacity
-            style={[
-              styles.syncBtn,
-              isLandscape && styles.syncBtnLandscape,
-              {
-                backgroundColor: !remoteUrl || status.ahead > 0 || status.behind > 0 ? theme.accent : theme.bgTertiary,
-                borderColor: theme.border,
-              },
-            ]}
-            onPress={!remoteUrl && onOpenRemoteModal ? onOpenRemoteModal : onSync}
-            disabled={syncing}
-            activeOpacity={0.8}
-          >
-            {syncing ? (
-              <ActivityIndicator size="small" color="#fff" />
+          {/* Single dynamic sync button: icon = pending op, badge = count */}
+          <View style={styles.syncGroup}>
+            {remoteUrl ? (
+              <TouchableOpacity
+                style={[
+                  styles.iconAction,
+                  isLandscape && styles.iconActionLandscape,
+                  {
+                    backgroundColor: syncActive ? theme.accent : theme.bgTertiary,
+                    borderColor: theme.border,
+                  },
+                ]}
+                onPress={syncAction}
+                disabled={syncing}
+                activeOpacity={0.7}
+                accessibilityLabel={op}
+              >
+                {syncing ? (
+                  <ActivityIndicator size="small" color={syncActive ? "#fff" : theme.accent} />
+                ) : (
+                  <Octicons
+                    name={syncGlyph as any}
+                    size={iconSize}
+                    color={syncActive ? "#fff" : theme.textSecondary}
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.syncText,
+                    isLandscape && styles.chipSmall,
+                    { color: syncActive ? "#fff" : theme.textSecondary },
+                  ]}
+                >
+                  {syncing ? "..." : syncLabel}
+                </Text>
+                {syncBadge > 0 && !syncing && (
+                  <View style={[styles.badge, { backgroundColor: syncActive ? "#fff" : theme.accent }]}>
+                    <Text style={[styles.badgeText, { color: syncActive ? theme.accent : "#fff" }]}>
+                      {syncBadge > 99 ? "99+" : syncBadge}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             ) : (
-              <Octicons
-                name={getSyncIcon() as any}
-                size={isLandscape ? 10 : 12}
-                color={!remoteUrl || status.ahead > 0 || status.behind > 0 ? "#fff" : theme.textSecondary}
-              />
+              <TouchableOpacity
+                style={[
+                  styles.iconAction,
+                  isLandscape && styles.iconActionLandscape,
+                  { backgroundColor: theme.accent, borderColor: theme.accent },
+                ]}
+                onPress={onOpenRemoteModal || onOpenCredentials}
+                activeOpacity={0.8}
+                accessibilityLabel="Publish repository"
+              >
+                <Octicons name="rocket" size={iconSize} color="#fff" />
+                <Text style={styles.syncText}>Publish</Text>
+              </TouchableOpacity>
             )}
-            <Text
-              style={[
-                styles.syncText,
-                isLandscape && styles.syncTextLandscape,
-                { color: !remoteUrl || status.ahead > 0 || status.behind > 0 ? "#fff" : theme.textSecondary },
-              ]}
-            >
-              {getSyncLabel()}
-            </Text>
-          </TouchableOpacity>
+          </View>
         </>
       ) : (
         onInitRepo && (
           <TouchableOpacity
-            style={[styles.initBtn, isLandscape && styles.initBtnLandscape, { backgroundColor: theme.accent }]}
+            style={[styles.initBtn, { backgroundColor: theme.accent }]}
             onPress={onInitRepo}
             activeOpacity={0.8}
           >
-            <Octicons name="git-commit" size={isLandscape ? 11 : 13} color="#fff" />
-            <Text style={[styles.initBtnText, isLandscape && styles.initBtnTextLandscape]}>Initialize Git</Text>
+            <Octicons name="git-commit" size={isLandscape ? 10 : 12} color="#fff" />
+            <Text style={styles.initBtnText}>Initialize Git</Text>
           </TouchableOpacity>
         )
       )}
 
-      {/* Right Utility Buttons */}
+      {/* Account: signed-in = avatar (opens profile popup), signed-out = key */}
       <View style={styles.rightActions}>
-        {onOpenRemoteModal && (
-          <TouchableOpacity
-            style={[styles.iconBtn, isLandscape && styles.iconBtnLandscape]}
-            onPress={onOpenRemoteModal}
-            accessibilityLabel="Repository Remote"
-          >
-            <Octicons name="globe" size={isLandscape ? 12 : 14} color={remoteUrl ? theme.accent : theme.textSecondary} />
-          </TouchableOpacity>
-        )}
-        {/* GitHub: signed-in shows the avatar (opens the profile popup,
-            anchored to this button); signed-out shows the key (login modal). */}
         {ghSession && onPressProfile ? (
           <TouchableOpacity
-            style={[styles.iconBtn, isLandscape && styles.iconBtnLandscape]}
+            style={styles.iconBtn}
             onPressIn={(e) => onPressProfile({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })}
             accessibilityLabel="GitHub Profile"
           >
@@ -173,26 +180,10 @@ export function GitHeaderBar({
             )}
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity
-            style={[styles.iconBtn, isLandscape && styles.iconBtnLandscape]}
-            onPress={onOpenCredentials}
-            accessibilityLabel="GitHub Credentials"
-          >
-            <Octicons name="key" size={isLandscape ? 12 : 14} color={theme.textSecondary} />
+          <TouchableOpacity style={styles.iconBtn} onPress={onOpenCredentials} accessibilityLabel="GitHub Credentials">
+            <Octicons name="key" size={isLandscape ? 13 : 16} color={theme.textSecondary} />
           </TouchableOpacity>
         )}
-        <TouchableOpacity
-          style={[styles.iconBtn, isLandscape && styles.iconBtnLandscape]}
-          onPress={onRefresh}
-          disabled={loading}
-          accessibilityLabel="Refresh Status"
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color={theme.accent} />
-          ) : (
-            <Ionicons name="refresh-outline" size={isLandscape ? 13 : 16} color={theme.textSecondary} />
-          )}
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -200,136 +191,78 @@ export function GitHeaderBar({
 
 const styles = StyleSheet.create({
   header: {
-    height: 44,
+    height: 40,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
-    gap: 8,
+    gap: 6,
   },
   headerLandscape: {
-    height: 32,
-    paddingHorizontal: 8,
-    gap: 6,
+    height: 30,
+    paddingHorizontal: 6,
+    gap: 4,
   },
-  repoBox: {
+  repoBranchChip: {
     flexDirection: "row",
     alignItems: "center",
     flexShrink: 1,
     minWidth: 0,
-    gap: 6,
-    maxWidth: 130,
-  },
-  repoBoxLandscape: {
-    maxWidth: 100,
-    gap: 4,
-  },
-  repoName: {
-    fontSize: 12,
-    fontWeight: "700",
-    flexShrink: 1,
-  },
-  repoNameLandscape: {
-    fontSize: 11,
-  },
-  branchBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    flexShrink: 1,
-    minWidth: 64,
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1,
-    maxWidth: 200,
-  },
-  branchBtnLandscape: {
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 4,
-    maxWidth: 110,
-    gap: 4,
-  },
-  branchText: {
-    fontSize: 11.5,
-    fontWeight: "600",
-    flex: 1,
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  branchTextLandscape: {
-    fontSize: 10.5,
-  },
-  syncBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexShrink: 0,
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  syncBtnLandscape: {
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 4,
-    gap: 4,
-  },
-  syncText: {
-    fontSize: 11,
-    fontWeight: "600",
-    flexShrink: 0,
-  },
-  syncTextLandscape: {
-    fontSize: 10,
-  },
-  initBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  initBtnLandscape: {
+    gap: 5,
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    maxWidth: 190,
+  },
+  repoBranchChipLandscape: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    maxWidth: 150,
     gap: 4,
   },
-  initBtnText: {
-    color: "#fff",
-    fontSize: 11.5,
-    fontWeight: "700",
-  },
-  initBtnTextLandscape: {
-    fontSize: 10.5,
-  },
-  rightActions: {
+  chipRepo: { fontSize: 11, fontWeight: "600", maxWidth: 72, flexShrink: 1 },
+  chipBranch: { fontSize: 11, fontWeight: "700", flexShrink: 1, minWidth: 0 },
+  chipSep: { fontSize: 11 },
+  chipSmall: { fontSize: 10 },
+  syncGroup: { flexDirection: "row", alignItems: "center", gap: 4, marginLeft: "auto" },
+  iconAction: {
     flexDirection: "row",
     alignItems: "center",
-    flexShrink: 0,
-    marginLeft: "auto",
-    gap: 6,
+    justifyContent: "center",
+    gap: 5,
+    minWidth: 32,
+    height: 28,
+    paddingHorizontal: 9,
+    borderRadius: 6,
+    borderWidth: 1,
   },
-  iconBtn: {
-    padding: 6,
-  },
-  avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#333",
-  },
-  avatarFallback: {
+  iconActionLandscape: { height: 24, paddingHorizontal: 7, gap: 4 },
+  syncText: { fontSize: 11, fontWeight: "700" },
+  badge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    minWidth: 14,
+    height: 14,
+    borderRadius: 7,
+    paddingHorizontal: 3,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarLetter: { color: "#fff", fontSize: 12, fontWeight: "800" },
-  iconBtnLandscape: {
-    padding: 3,
+  badgeText: { fontSize: 8.5, fontWeight: "800" },
+  initBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
+  initBtnText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+  rightActions: { flexDirection: "row", alignItems: "center", flexShrink: 0, marginLeft: 6 },
+  iconBtn: { padding: 4 },
+  avatar: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#333" },
+  avatarFallback: { alignItems: "center", justifyContent: "center" },
+  avatarLetter: { color: "#fff", fontSize: 12, fontWeight: "800" },
 });

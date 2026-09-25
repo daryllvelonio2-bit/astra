@@ -28,6 +28,7 @@ interface GitProfilePopupProps {
   anchor: { x: number; y: number };
   onClose: () => void;
   onSignedOut?: () => void;
+  onOpenRemote?: () => void;
 }
 
 const SHEET_WIDTH = 320;
@@ -39,7 +40,7 @@ type Tab = "profile" | "repos";
  * standing popup rule). Two views: profile facts, and the user's repos.
  * Read-only data from the device-flow token via gitHubProfileService.
  */
-export function GitProfilePopup({ visible, anchor, onClose, onSignedOut }: GitProfilePopupProps) {
+export function GitProfilePopup({ visible, anchor, onClose, onSignedOut, onOpenRemote }: GitProfilePopupProps) {
   const { theme } = useTheme();
   const { width: winW, height: winH } = useWindowDimensions();
   const [tab, setTab] = useState<Tab>("profile");
@@ -121,10 +122,7 @@ export function GitProfilePopup({ visible, anchor, onClose, onSignedOut }: GitPr
               </Text>
             </TouchableOpacity>
             <View style={styles.tabsSpacer} />
-            <TouchableOpacity onPress={load} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Octicons name="sync" size={14} color={theme.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 10 }}>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Octicons name="x" size={15} color={theme.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -195,8 +193,22 @@ export function GitProfilePopup({ visible, anchor, onClose, onSignedOut }: GitPr
                 </TouchableOpacity>
               </ScrollView>
 
+              {onOpenRemote && (
+                <TouchableOpacity
+                  style={[styles.footerRow, { borderTopColor: theme.border }]}
+                  onPress={() => {
+                    onClose();
+                    onOpenRemote();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Octicons name="globe" size={13} color={theme.textSecondary} />
+                  <Text style={[styles.footerText, { color: theme.textPrimary }]}>Repository remote</Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
-                style={[styles.signOutRow, { borderTopColor: theme.border }]}
+                style={[styles.footerRow, { borderTopColor: theme.border }]}
                 onPress={handleSignOut}
                 activeOpacity={0.8}
               >
@@ -335,7 +347,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   linkBtnText: { fontSize: 12.5, fontWeight: "700" },
-  signOutRow: {
+  footerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -343,6 +355,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
+  footerText: { fontSize: 12, fontWeight: "600" },
   signOutText: { fontSize: 12, fontWeight: "700", color: "#f85149" },
   repoList: { maxHeight: 400 },
   repoRow: {

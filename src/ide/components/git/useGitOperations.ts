@@ -245,17 +245,23 @@ export function useGitOperations(
     showSyncResult("Push", res.message);
   };
 
-  const handleSync = async () => {
-    if (!status?.isRepo) return;
-    if (!remoteUrl) return setShowRemoteModal(true);
+  /** Explicit header actions — one button per operation, no smart guess. */
+  const handleFetch = async () => {
+    if (!status?.isRepo || !remoteUrl) return setShowRemoteModal(true);
     setSyncing(true);
-    let res: { message: string };
-    if (status.behind > 0) res = await pullGitRemote(workspaceId, status.currentBranch);
-    else if (status.ahead > 0) res = await pushGitRemote(workspaceId, status.currentBranch);
-    else res = await fetchGitRemote(workspaceId);
+    const res = await fetchGitRemote(workspaceId);
     setSyncing(false);
     refreshGitState();
-    showSyncResult(status.behind > 0 ? "Pull" : status.ahead > 0 ? "Push" : "Fetch", res.message);
+    showSyncResult("Fetch", res.message);
+  };
+
+  const handlePull = async () => {
+    if (!status?.isRepo || !remoteUrl) return setShowRemoteModal(true);
+    setSyncing(true);
+    const res = await pullGitRemote(workspaceId, status.currentBranch);
+    setSyncing(false);
+    refreshGitState();
+    showSyncResult("Pull", res.message);
   };
 
   const handleSwitchBranch = async (branchName: string) => {
@@ -474,7 +480,8 @@ export function useGitOperations(
     handleCommitAndPush,
     handleSaveRemote,
     handlePush,
-    handleSync,
+    handleFetch,
+    handlePull,
     handleSwitchBranch,
     handleCreateBranch,
     handleInitRepo,
