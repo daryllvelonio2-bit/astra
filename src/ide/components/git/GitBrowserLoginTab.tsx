@@ -1,41 +1,44 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
   StyleSheet,
 } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
-import { useKeyboardMouseMode } from "../../context/KeyboardMouseContext";
 import { Clipboard } from "../../services/clipboardService";
 import {
-  GITHUB_REDIRECT_URI,
-  signInWithBrowser,
+  startGitHubDeviceFlow,
+  waitForDeviceFlowApproval,
   completeGitHubLogin,
   loadGitHubSession,
-  loadGitHubAppCredentials,
-  saveGitHubAppCredentials,
-  resolveClientSecret,
   ensureGitHubCredentials,
   logoutGitHub,
   GitHubSession,
+  DeviceFlowSession,
 } from "../../services/gitService";
 
-type Phase = "loading" | "loggedOut" | "busy" | "loggedIn";
+type Phase = "loading" | "loggedOut" | "busy" | "awaitingApproval" | "loggedIn";
 
+/**
+ * GitHub sign-in via device flow (same as gh / VS Code). Astra's public
+ * Client ID is built in — zero configuration. The code is shown FIRST with
+ * a Copy button; the browser only opens when the user taps the link button,
+ * so they always get a chance to read/copy the code before leaving the app.
+ */
 export function GitBrowserLoginTab({ onSessionChange }: { onSessionChange?: (s: GitHubSession | null) => void }) {
   const { theme } = useTheme();
-  const { keyboardMouseMode } = useKeyboardMouseMode();
   const [phase, setPhase] = useState<Phase>("loading");
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
-  const [secretSaved, setSecretSaved] = useState(false);
   const [session, setSession] = useState<GitHubSession | null>(null);
+  const [flow, setFlow] = useState<DeviceFlowSession | null>(null);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cancelledRef = useRef(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const applySession = useCallback(
     (s: GitHubSession | null) => {
@@ -48,10 +51,8 @@ export function GitBrowserLoginTab({ onSessionChange }: { onSessionChange?: (s: 
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [creds, sess] = await Promise.all([loadGitHubAppCredentials(), loadGitHubSession()]);
+      const sess = await loadGitHubSession();
       if (!alive) return;
-      setClientId(creds.clientId);
-      setSecretSaved(creds.hasSecret);
       if (sess) {
         applySession(sess);
         setPhase("loggedIn");
@@ -62,38 +63,66 @@ export function GitBrowserLoginTab({ onSessionChange }: { onSessionChange?: (s: 
     })().catch(() => alive && setPhase("loggedOut"));
     return () => {
       alive = false;
+      cancelledRef.current = true;
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
     };
   }, [applySession]);
 
   const handleSignIn = async () => {
     setError(null);
-    if (!clientId.trim()) {
-      setError("Paste your OAuth App Client ID first (one-time setup, see below).");
-      return;
-    }
-    const secret = await resolveClientSecret(clientSecret);
-    if (!secret) {
-      setError("Paste your OAuth App Client Secret first (one-time setup, see below).");
-      return;
-    }
     setPhase("busy");
+    cancelledRef.current = false;
     try {
-      const token = await signInWithBrowser(clientId, secret);
-      await saveGitHubAppCredentials(clientId, clientSecret);
-      setSecretSaved(true);
-      setClientSecret("");
-      const sess = await completeGitHubLogin(token);
-      applySession(sess);
-      setPhase("loggedIn");
-      Alert.alert("Signed in", `Welcome, ${sess.username}! Push, pull and clone now work with your account.`);
+      const started = await startGitHubDeviceFlow();
+      if (cancelledRef.current) return;
+      setFlow(started);
+      setCopied(false);
+      setPhase("awaitingApproval");
     } catch (e: any) {
       setError(e?.message || "Sign-in failed.");
       setPhase("loggedOut");
     }
   };
 
-  const handleCopyCallback = async () => {
-    await Clipboard.setStringAsync(GITHUB_REDIRECT_URI);
+  /** Polling starts only once the user has sent themselves to the browser. */
+  const handleOpenBrowser = async () => {
+    if (!flow) return;
+    try {
+      await WebBrowser.openBrowserAsync(flow.verificationUri);
+    } catch (_) {
+      // Browser launch failed — still poll; they can open the URL manually.
+    }
+    const id = flow;
+    (async () => {
+      try {
+        const token = await waitForDeviceFlowApproval(id, () => cancelledRef.current);
+        if (token === null) return; // cancelled quietly
+        const sess = await completeGitHubLogin(token);
+        applySession(sess);
+        setPhase("loggedIn");
+        setFlow(null);
+        Alert.alert("Signed in", `Welcome, ${sess.username}! Push, pull and clone now work with your account.`);
+      } catch (e: any) {
+        setError(e?.message || "Sign-in failed.");
+        setFlow(null);
+        setPhase("loggedOut");
+      }
+    })();
+  };
+
+  const handleCopyCode = async () => {
+    if (!flow) return;
+    await Clipboard.setStringAsync(flow.userCode);
+    setCopied(true);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleCancel = () => {
+    cancelledRef.current = true;
+    setFlow(null);
+    setCopied(false);
+    setPhase("loggedOut");
   };
 
   const handleLogout = () => {
@@ -147,77 +176,73 @@ export function GitBrowserLoginTab({ onSessionChange }: { onSessionChange?: (s: 
     );
   }
 
-  const inputProps = {
-    autoCapitalize: "none" as const,
-    autoCorrect: false,
-    showSoftInputOnFocus: !keyboardMouseMode,
-  };
+  if (phase === "busy") {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="small" color={theme.accent} />
+      </View>
+    );
+  }
+
+  if (phase === "awaitingApproval" && flow) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.codeBox, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}>
+          <Text style={[styles.codeHint, { color: theme.textSecondary }]}>
+            Your one-time code from GitHub:
+          </Text>
+          <Text style={[styles.code, { color: theme.textPrimary }]} selectable>
+            {flow.userCode}
+          </Text>
+          <TouchableOpacity
+            style={[styles.copyBtn, { backgroundColor: `${theme.accent}22`, borderColor: theme.accent }]}
+            onPress={handleCopyCode}
+            activeOpacity={0.8}
+          >
+            <Octicons name={copied ? "check" : "copy"} size={14} color={copied ? theme.accent : theme.textPrimary} />
+            <Text style={[styles.copyBtnText, { color: copied ? theme.accent : theme.textPrimary }]}>
+              {copied ? "Copied!" : "Copy code"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={[styles.stepText, { color: theme.textSecondary }]}>
+          Copy the code, then open GitHub and enter it when asked. The app signs
+          you in automatically once you approve.
+        </Text>
+
+        <TouchableOpacity
+          style={[styles.actionBtn, { backgroundColor: theme.accent }]}
+          onPress={handleOpenBrowser}
+          activeOpacity={0.8}
+        >
+          <Octicons name="link-external" size={15} color="#fff" />
+          <Text style={styles.primaryBtnText}>Open github.com/login/device</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionBtn, { backgroundColor: theme.bgTertiary, borderColor: theme.border, borderWidth: 1 }]}
+          onPress={handleCancel}
+          activeOpacity={0.8}
+        >
+          <Octicons name="x" size={14} color={theme.textPrimary} />
+          <Text style={[styles.actionBtnText, { color: theme.textPrimary }]}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <View style={[styles.infoBox, { backgroundColor: `${theme.accent}12`, borderColor: `${theme.accent}33` }]}>
-        <Text style={[styles.infoTitle, { color: theme.accent }]}>One-tap browser login</Text>
-        <Text style={[styles.infoBody, { color: theme.textSecondary }]}>
-          One-time setup: github.com → Settings → Developer settings → OAuth Apps → New OAuth App.
-          Name it Astra, homepage URL can be anything, Authorization callback URL must be exactly:
-        </Text>
-        <TouchableOpacity
-          style={[styles.callbackBox, { backgroundColor: theme.bgTertiary }]}
-          onPress={handleCopyCallback}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.callback, { color: theme.textPrimary }]}>{GITHUB_REDIRECT_URI}</Text>
-          <Text style={[styles.copyHint, { color: theme.textMuted }]}>Tap to copy</Text>
-        </TouchableOpacity>
-        <Text style={[styles.infoBody, { color: theme.textSecondary }]}>
-          Paste the Client ID + Client Secret below once. After that, Sign in is a single tap:
-          browser opens, you approve, and you're back in the app logged in.
-        </Text>
-      </View>
-
-      <View style={styles.field}>
-        <Text style={[styles.label, { color: theme.textSecondary }]}>Client ID (saved)</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: theme.bgTertiary, borderColor: theme.border, color: theme.textPrimary }]}
-          placeholder="e.g. Ov23liXXXXXXXXXXXX"
-          placeholderTextColor={theme.textMuted}
-          value={clientId}
-          onChangeText={setClientId}
-          {...inputProps}
-        />
-      </View>
-
-      <View style={styles.field}>
-        <Text style={[styles.label, { color: theme.textSecondary }]}>
-          Client Secret {secretSaved && !clientSecret ? "(saved)" : "(saved on first sign-in)"}
-        </Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: theme.bgTertiary, borderColor: theme.border, color: theme.textPrimary }]}
-          placeholder={secretSaved ? "Saved — leave empty to reuse" : "Paste secret once"}
-          placeholderTextColor={theme.textMuted}
-          value={clientSecret}
-          onChangeText={setClientSecret}
-          secureTextEntry
-          {...inputProps}
-        />
-      </View>
-
       {!!error && <Text style={styles.error}>{error}</Text>}
 
       <TouchableOpacity
         style={[styles.actionBtn, { backgroundColor: theme.accent }]}
         onPress={handleSignIn}
-        disabled={phase === "busy"}
         activeOpacity={0.8}
       >
-        {phase === "busy" ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <>
-            <Octicons name="mark-github" size={15} color="#fff" />
-            <Text style={styles.primaryBtnText}>Sign in with GitHub</Text>
-          </>
-        )}
+        <Octicons name="mark-github" size={15} color="#fff" />
+        <Text style={styles.primaryBtnText}>Sign in with GitHub</Text>
       </TouchableOpacity>
     </View>
   );
@@ -226,15 +251,15 @@ export function GitBrowserLoginTab({ onSessionChange }: { onSessionChange?: (s: 
 const styles = StyleSheet.create({
   container: { gap: 12 },
   center: { paddingVertical: 28, alignItems: "center" },
-  infoBox: { padding: 10, borderRadius: 8, borderWidth: 1, gap: 6 },
-  infoTitle: { fontSize: 12, fontWeight: "700" },
-  infoBody: { fontSize: 11, lineHeight: 15 },
-  callbackBox: { borderRadius: 6, paddingVertical: 7, paddingHorizontal: 10, gap: 1 },
-  callback: { fontSize: 11.5, fontFamily: "monospace", fontWeight: "700" },
-  copyHint: { fontSize: 10 },
-  field: { gap: 4 },
-  label: { fontSize: 11.5, fontWeight: "600" },
-  input: { height: 36, borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, fontSize: 12 },
+  codeBox: { borderRadius: 8, borderWidth: 1, padding: 14, gap: 10, alignItems: "center" },
+  codeHint: { fontSize: 11.5, lineHeight: 16, textAlign: "center" },
+  code: { fontSize: 30, fontWeight: "800", fontFamily: "monospace", letterSpacing: 4 },
+  copyBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    borderWidth: 1, borderRadius: 6, paddingVertical: 7, paddingHorizontal: 14,
+  },
+  copyBtnText: { fontSize: 12, fontWeight: "700" },
+  stepText: { fontSize: 11.5, lineHeight: 16, textAlign: "center" },
   error: { fontSize: 11.5, lineHeight: 16, color: "#f85149" },
   actionBtn: {
     height: 38, borderRadius: 6, flexDirection: "row",

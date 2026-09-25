@@ -83,8 +83,6 @@ export interface AppConfig {
   keyboardMouseMode?: boolean;
   terminalFontSize?: number;
   editorSettings: EditorSettings;
-  githubClientId?: string;
-  githubClientSecret?: string;
   githubToken?: string;
   githubUsername?: string;
   githubEmail?: string;
@@ -102,8 +100,6 @@ const DEFAULT_CONFIG: AppConfig = {
   keyboardMouseMode: false,
   terminalFontSize: 14,
   editorSettings: { ...DEFAULT_EDITOR_SETTINGS },
-  githubClientId: "",
-  githubClientSecret: "",
   githubToken: "",
   githubUsername: "",
   githubEmail: "",

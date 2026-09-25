@@ -1,26 +1,28 @@
-import * as WebBrowser from "expo-web-browser";
-import * as Crypto from "expo-crypto";
 import { executeCommand } from "../../../modules/linux-runner/src";
 import { loadConfig, saveConfig } from "./configService";
 import { configureGitCredentials } from "./gitRemoteService";
 
 /**
- * GitHub one-tap browser login: OAuth authorization-code flow + PKCE S256
- * (one feature = one file). Tap Sign in -> system browser -> approve ->
- * GitHub redirects to astra://oauth/callback straight back into the app.
- * The user's own OAuth App ID + secret are pasted once and saved; every
- * login after that is a single tap. Token storage follows the existing
- * apiKey convention (app config file); git authenticates through
- * ~/.git-credentials (0600) in the guest.
+ * GitHub sign-in via the OAuth **device flow** — the same method `gh` and
+ * VS Code use. Astra shows an 8-character code, the system browser opens
+ * github.com/login/device, the user approves there, and Astra polls until
+ * GitHub hands back the token. No client secret, no callback redirect, and
+ * no manifest intent-filter required.
+ *
+ * Astra ships with its own public OAuth App Client ID (DEFAULT_CLIENT_ID).
+ * It is a public identifier by design — the device flow's security model
+ * never has a secret in the app, and users configure nothing: tap Sign in,
+ * copy the code, open GitHub, approve.
  */
 
-const AUTHORIZE_URL = "https://github.com/login/oauth/authorize";
+const DEVICE_CODE_URL = "https://github.com/login/device/code";
 const TOKEN_URL = "https://github.com/login/oauth/access_token";
+const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
 const API_BASE = "https://api.github.com";
 const SCOPES = "repo read:user user:email";
 
-/** Must match the intent-filter in AndroidManifest + the OAuth App callback URL. */
-export const GITHUB_REDIRECT_URI = "astra://oauth/callback";
+/** Astra's public OAuth App client ID (device flow — no secret exists). */
+const DEFAULT_CLIENT_ID = "Ov23liKNnfWWBaAsfR4o";
 
 export interface GitHubSession {
   username: string;
@@ -29,12 +31,25 @@ export interface GitHubSession {
   hasToken: boolean;
 }
 
-export interface GitHubAppCredentials {
-  clientId: string;
-  hasSecret: boolean;
+export interface DeviceFlowSession {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  intervalSeconds: number;
+  expiresInSeconds: number;
 }
 
-interface TokenResponse {
+interface DeviceCodeResponse {
+  device_code?: string;
+  user_code?: string;
+  verification_uri?: string;
+  expires_in?: number;
+  interval?: number;
+  error?: string;
+  error_description?: string;
+}
+
+interface DeviceTokenResponse {
   access_token?: string;
   error?: string;
   error_description?: string;
@@ -46,37 +61,18 @@ interface ApiUser {
   avatar_url?: string;
 }
 
-function toBase64Url(b64: string): string {
-  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-async function randomUrlSafe(byteCount: number): Promise<string> {
-  const bytes = await Crypto.getRandomBytesAsync(byteCount);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return toBase64Url(btoa(binary));
-}
-
-/** S256 code challenge for the PKCE verifier. */
-async function codeChallenge(verifier: string): Promise<string> {
-  const digestB64 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, verifier, {
-    encoding: Crypto.CryptoEncoding.BASE64,
+async function postForm(url: string, fields: Record<string, string>): Promise<Response> {
+  const body = Object.entries(fields)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join("&");
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
   });
-  return toBase64Url(digestB64);
-}
-
-function parseQueryParams(url: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  const query = url.split("?")[1]?.split("#")[0];
-  if (!query) return out;
-  for (const pair of query.split("&")) {
-    const eq = pair.indexOf("=");
-    if (eq < 0) continue;
-    try {
-      out[decodeURIComponent(pair.slice(0, eq))] = decodeURIComponent(pair.slice(eq + 1));
-    } catch (_) {}
-  }
-  return out;
 }
 
 async function readJson<T>(response: Response): Promise<T | null> {
@@ -87,83 +83,71 @@ async function readJson<T>(response: Response): Promise<T | null> {
   }
 }
 
-/**
- * One-tap sign in. Opens the system browser; resolves with the access token
- * when GitHub redirects back into the app. Throws a readable error on
- * cancel / mismatch / failure.
- */
-export async function signInWithBrowser(clientId: string, clientSecret: string): Promise<string> {
-  const id = clientId.trim();
-  const secret = clientSecret.trim();
-  if (!id) throw new Error("Paste your OAuth App Client ID first.");
-  if (!secret) throw new Error("Paste your OAuth App Client Secret first (one-time setup).");
-
-  const state = await randomUrlSafe(24);
-  const verifier = await randomUrlSafe(64);
-  const challenge = await codeChallenge(verifier);
-  const authUrl =
-    `${AUTHORIZE_URL}?client_id=${encodeURIComponent(id)}` +
-    `&redirect_uri=${encodeURIComponent(GITHUB_REDIRECT_URI)}` +
-    `&scope=${encodeURIComponent(SCOPES)}` +
-    `&state=${encodeURIComponent(state)}` +
-    `&code_challenge=${encodeURIComponent(challenge)}` +
-    `&code_challenge_method=S256`;
-
-  const result = await WebBrowser.openAuthSessionAsync(authUrl, GITHUB_REDIRECT_URI);
-  if (result.type !== "success" || !result.url) {
-    throw new Error("Sign-in was closed before finishing.");
-  }
-  const params = parseQueryParams(result.url);
-  if (params.error) {
-    throw new Error(
-      params.error === "access_denied"
-        ? "You declined the authorization in the browser."
-        : `GitHub: ${params.error_description || params.error}`
-    );
-  }
-  if (!params.code) throw new Error("GitHub did not return a login code. Try again.");
-  if (!params.state || params.state !== state) {
-    throw new Error("Security check failed (state mismatch). Try again.");
-  }
-
-  const tokenRes = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_id: id,
-      client_secret: secret,
-      code: params.code,
-      redirect_uri: GITHUB_REDIRECT_URI,
-      code_verifier: verifier,
-    }),
-  });
-  const data = await readJson<TokenResponse>(tokenRes);
-  if (!tokenRes.ok || !data?.access_token) {
-    const error = data?.error || "unknown_error";
-    if (error === "incorrect_client_credentials") {
-      throw new Error("Client ID or secret is wrong. Check your OAuth App settings.");
-    }
-    if (error === "redirect_uri_mismatch") {
-      throw new Error(`OAuth App callback URL must be exactly ${GITHUB_REDIRECT_URI}`);
-    }
-    if (error === "bad_verification_code") {
-      throw new Error("The login code expired. Tap Sign in again.");
-    }
-    throw new Error(data?.error_description || `GitHub sign-in failed (HTTP ${tokenRes.status}).`);
-  }
-  return data.access_token;
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function apiGet<T>(path: string, token: string): Promise<T | null> {
-  try {
-    const response = await fetch(`${API_BASE}${path}`, {
-      headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as T;
-  } catch (_) {
-    return null;
+/** Step 1: ask GitHub for a device code to display. */
+export async function startGitHubDeviceFlow(): Promise<DeviceFlowSession> {
+  const response = await postForm(DEVICE_CODE_URL, { client_id: DEFAULT_CLIENT_ID, scope: SCOPES });
+  const data = await readJson<DeviceCodeResponse>(response);
+
+  if (!response.ok || !data?.device_code || !data.user_code) {
+    if (response.status === 404) {
+      throw new Error(
+        "GitHub returned 404 - 'Enable device flow' is not checked in your OAuth App settings."
+      );
+    }
+    if (data?.error === "incorrect_client_credentials" || response.status === 401) {
+      throw new Error("That Client ID was not recognized. Check your OAuth App page.");
+    }
+    throw new Error(data?.error_description || `GitHub sign-in failed (HTTP ${response.status}).`);
   }
+
+  return {
+    deviceCode: data.device_code,
+    userCode: data.user_code,
+    verificationUri: data.verification_uri || "https://github.com/login/device",
+    intervalSeconds: Math.max(1, data.interval || 5),
+    expiresInSeconds: data.expires_in || 900,
+  };
+}
+
+/**
+ * Step 2: poll until the user approves in the browser.
+ * Resolves with the access token, or null if cancelled via isCancelled().
+ */
+export async function waitForDeviceFlowApproval(
+  session: DeviceFlowSession,
+  isCancelled: () => boolean
+): Promise<string | null> {
+  let interval = session.intervalSeconds;
+  const deadline = Date.now() + session.expiresInSeconds * 1000;
+
+  while (Date.now() < deadline) {
+    await sleep(interval * 1000);
+    if (isCancelled()) return null;
+
+    const response = await postForm(TOKEN_URL, {
+      client_id: DEFAULT_CLIENT_ID,
+      device_code: session.deviceCode,
+      grant_type: DEVICE_GRANT,
+    });
+    const data = await readJson<DeviceTokenResponse>(response);
+    const error = data?.error || "";
+
+    if (data?.access_token) return data.access_token;
+
+    if (error === "authorization_pending") continue;
+    if (error === "slow_down") {
+      interval += 5;
+      continue;
+    }
+    if (error === "expired_token") throw new Error("The code expired. Tap Sign in again.");
+    if (error === "access_denied") throw new Error("You cancelled the authorization in the browser.");
+    throw new Error(data?.error_description || "GitHub sign-in failed while waiting for approval.");
+  }
+  throw new Error("The code expired before it was approved. Tap Sign in again.");
 }
 
 /** Fetch profile + primary email, persist session, wire git credentials. */
@@ -188,6 +172,18 @@ export async function completeGitHubLogin(token: string): Promise<GitHubSession>
   return { username, email: finalEmail, avatarUrl: user?.avatar_url || "", hasToken: true };
 }
 
+async function apiGet<T>(path: string, token: string): Promise<T | null> {
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch (_) {
+    return null;
+  }
+}
+
 /** Saved account (token never exposed to callers). */
 export async function loadGitHubSession(): Promise<GitHubSession | null> {
   const config = await loadConfig();
@@ -198,23 +194,6 @@ export async function loadGitHubSession(): Promise<GitHubSession | null> {
     avatarUrl: config.githubAvatarUrl || "",
     hasToken: true,
   };
-}
-
-export async function loadGitHubAppCredentials(): Promise<GitHubAppCredentials> {
-  const config = await loadConfig();
-  return { clientId: config.githubClientId || "", hasSecret: !!config.githubClientSecret };
-}
-
-export async function saveGitHubAppCredentials(clientId: string, clientSecret: string): Promise<void> {
-  const patch: Record<string, string> = { githubClientId: clientId.trim() };
-  if (clientSecret.trim()) patch.githubClientSecret = clientSecret.trim();
-  await saveConfig(patch);
-}
-
-/** Secret for the exchange: freshly typed wins, otherwise the saved one. */
-export async function resolveClientSecret(typed: string): Promise<string> {
-  if (typed.trim()) return typed.trim();
-  return (await loadConfig()).githubClientSecret || "";
 }
 
 /**

@@ -16,17 +16,14 @@ export {
   setGitRemoteUrl,
 } from "./gitRemoteService";
 export {
-  GITHUB_REDIRECT_URI,
-  signInWithBrowser,
+  startGitHubDeviceFlow,
+  waitForDeviceFlowApproval,
   completeGitHubLogin,
   loadGitHubSession,
-  loadGitHubAppCredentials,
-  saveGitHubAppCredentials,
-  resolveClientSecret,
   ensureGitHubCredentials,
   logoutGitHub,
 } from "./gitHubAuthService";
-export type { GitHubSession, GitHubAppCredentials } from "./gitHubAuthService";
+export type { GitHubSession, DeviceFlowSession } from "./gitHubAuthService";
 export { invalidateGitStatusCache };
 
 function formatRelativeTime(epochSeconds: number): string {
