@@ -43,6 +43,14 @@ interface IDELayoutProps {
 const shortLoadPath = (p: string) =>
   (p || "").replace(/^file:\/\//, "").split("/").filter(Boolean).slice(-2).join("/");
 
+// Keystroke isolation: the active file's content lives in IDELayout state, so
+// every character re-renders it. These memo wrappers stop that cascade from
+// reaching sibling tabs (terminal pty view, browser webview, git tree), which
+// only re-render when their OWN props change.
+const MemoTerminalView = React.memo(TerminalView);
+const MemoWebBrowserPreview = React.memo(WebBrowserPreview);
+const MemoGitHubDesktopView = React.memo(GitHubDesktopView);
+
 export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDELayoutProps) {
   const insets = useSafeAreaInsets();
   const { isLandscape } = useOrientation();
@@ -199,7 +207,12 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
     return () => { cancelled = true; };
   }, [workspaceId, loadSeq]);
 
-  const { scheduleSave, flush: flushPendingSave } = useDebouncedFileSave(workspace?.id);
+  const { scheduleSave, flush: flushPendingSave } = useDebouncedFileSave(workspace?.id, (filePath) => {
+    // Recent-files bump moved OFF the keystroke path: record once per typing
+    // pause (when the debounced write lands) instead of per character.
+    const current = activeFileRef.current;
+    if (current && (current.path || current.name) === filePath) recordRecentFile(current, true);
+  });
   const handleBackToPicker = useCallback(() => { flushPendingSave(); onBackToPicker?.(); }, [flushPendingSave, onBackToPicker]);
 
   const refreshWorkspace = useCallback(async () => {
@@ -229,9 +242,13 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
     }
   });
 
-  useEffect(() => {
-    if (bottomTab === "editor") refreshWorkspace();
-  }, [bottomTab, refreshWorkspace]);
+  // Editor tab-switch refresh REMOVED: refreshWorkspace's identity changes on
+  // every workspace update, so this effect re-fired loadWorkspace (full
+  // recursive tree scan) back-to-back for as long as the editor was open —
+  // a runaway that saturated the native FS bridge and stalled the editor.
+  // useWorkspaceAutoRefresh already keeps the tree current (debounced,
+  // fingerprint-gated, change-subscribed) independent of the active tab;
+  // FileExplorer's pull-to-refresh still calls refreshWorkspace directly.
 
   const handleSelectFile = useCallback(async (file: any) => {
     if (!file || file.type === "folder" || !workspace) return;
@@ -262,10 +279,14 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
     if (!current) return;
     const targetPath = current.path || current.name;
     const targetId = current.id;
+    // Content prop MUST update per keystroke: CodeMirror's anti-echo contract
+    // requires RN to converge to the emitted text (stale props would re-inject
+    // after the echo TTL as false "external edits"). recordRecentFile is NOT
+    // called here anymore — it moved to the debounced-save onFlushed callback
+    // (once per typing pause), killing one full-tree render per character.
     setActiveFile((prev) => (prev && prev.id === targetId ? { ...prev, content: newContent } : prev));
     scheduleSave(targetPath, newContent);
-    recordRecentFile(current, true);
-  }, [scheduleSave, recordRecentFile]);
+  }, [scheduleSave]);
 
   const {
     selectedNode, modalMode, setModalMode, modalInput, setModalInput, menuPosition,

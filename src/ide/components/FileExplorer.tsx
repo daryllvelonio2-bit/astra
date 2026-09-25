@@ -81,11 +81,15 @@ function FileExplorerInner({
     isFolderExpanded: (folderId) => !!expandedFoldersRef.current[folderId],
   });
 
-  // Re-measure folder positions when tree structure changes (debounced)
+  // Re-measure folder positions when tree structure changes (debounced).
+  // Skipped while the sidebar is being resized: onLayout fires every
+  // frame during a drag and each measure → setState looped back into
+  // another layout — the main resize lag. Re-measure once on release.
   useEffect(() => {
+    if (isDraggingSidebar) return;
     const t = setTimeout(measureAllFolders, 100);
     return () => clearTimeout(t);
-  }, [expandedFolders, files, measureAllFolders]);
+  }, [expandedFolders, files, measureAllFolders, isDraggingSidebar]);
 
   const [, setIconTick] = React.useState(0);
   useEffect(() => {
@@ -261,7 +265,11 @@ function FileExplorerInner({
       ref={containerRef}
       collapsable={false}
       style={[styles.container, { backgroundColor: theme.bgSecondary, borderRightColor: theme.border }]}
-      onLayout={() => measureAllFolders()}
+      onLayout={() => {
+        // No measuring mid-resize: layout fires per-frame while dragging
+        // and measuring only feeds the next frame's lag (see effect above).
+        if (!isDraggingSidebar) measureAllFolders();
+      }}
       {...wrapperPanResponder.panHandlers}
     >
       <View style={styles.headerContainer}>

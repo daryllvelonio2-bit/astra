@@ -53,12 +53,9 @@ export function useIDELayoutStyles(p: StylesParams) {
       styles.sidebarWrapper,
       {
         backgroundColor: p.bgSecondary || p.bgPrimary,
+        // Width only: the old opacity interpolation re-evaluated every
+        // animation frame and forced extra passes during sidebar resize.
         width: p.sidebarWidthAnim,
-        opacity: p.sidebarWidthAnim.interpolate({
-          inputRange: [0, 30],
-          outputRange: [0, 1],
-          extrapolate: "clamp",
-        }),
       },
     ],
     [p.sidebarWidthAnim, p.bgSecondary, p.bgPrimary]

@@ -8,7 +8,7 @@ import React, {
   useMemo,
   memo,
 } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import { buildCodeMirrorHtml } from "./codemirrorHtml.generated";
 
@@ -121,7 +121,7 @@ export const CodeMirrorEditorView = memo(
     ) {
       const webViewRef = useRef<WebView>(null);
       const isReadyRef = useRef(false);
-      const [, setIsReady] = useState(false);
+      const [isReady, setIsReady] = useState(false);
       const lastEmittedTextRef = useRef(content);
       const lastPropContentRef = useRef(content);
       const currentFileNameRef = useRef(fileName);
@@ -401,6 +401,14 @@ export const CodeMirrorEditorView = memo(
             style={styles.webView}
             containerStyle={{ backgroundColor: theme.bgPrimary }}
           />
+          {/* Boot cover: Chromium surfaces a blank panel while the CM blob
+              parses/evals. The editor's chrome above/below renders instantly;
+              this keeps the center from reading as dead until 'ready'. */}
+          {!isReady && (
+            <View style={[styles.bootCover, { backgroundColor: theme.bgPrimary }]} pointerEvents="none">
+              <ActivityIndicator size="small" color={theme.accent} />
+            </View>
+          )}
         </View>
       );
     }
@@ -415,5 +423,14 @@ const styles = StyleSheet.create({
   webView: {
     flex: 1,
     backgroundColor: "transparent",
+  },
+  bootCover: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

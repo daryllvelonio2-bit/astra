@@ -1,5 +1,13 @@
 # Project Progress Tracker
 
+### [2026-09-26] - Explorer resize lag: killed the measure→setState loop
+- **Fix (3 files, explorer/resizer only — coding UI untouched for the other agent):**
+  - `useFileDragDrop.ts` — `measureAllFolders` container-offset update is now ref-only unless a drag ghost is active (was unconditional `setContainerOffset` → re-render every frame).
+  - `FileExplorer.tsx` — re-measure effect + `onLayout` both skip while `isDraggingSidebar` (layout fires per-frame mid-drag; re-measure once on release).
+  - `useIDELayoutStyles.ts` — dropped the per-frame opacity interpolation on the animated width (width only now).
+- **Verify:** `tsc --noEmit` exit 0; Metro reloaded on device (pid 8895, Bundled 234ms, 0 redbox/fatal). Resize smoothness needs your finger check — drag the explorer edge.
+- **Not yet done:** full-tree ScrollView still re-lays out all rows per width tick + CodeMirror WebView reflows beside it; if still laggy after this, next step is throttling `setValue` to ~60fps and/or virtualizing the tree (say go).
+
 ## Status
 - **Current Phase:** Editor — removed built-in formatter (files no longer auto-dirty on edit-mode exit)
 - **Last Updated:** September 25, 2026

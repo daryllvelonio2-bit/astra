@@ -119,12 +119,23 @@ export function useFileDragDrop({
     }
   }, [measureRef]);
 
-  /** Re-measure all registered folders, container offset, and drop zones */
+  /** Re-measure all registered folders, container offset, and drop zones.
+   * NOTE: container offset is ref-only unless a drag is active — calling
+   * setContainerOffset here re-renders FileExplorer, and during a sidebar
+   * resize onLayout fires every frame, which turned resize into a
+   * measure → setState → re-render → layout loop. */
   const measureAllFolders = useCallback(() => {
     if (containerRef.current) {
       measureRef(containerRef.current, (top, _b, left) => {
-        containerOffsetRef.current = { x: Math.max(0, left), y: Math.max(0, top) };
-        setContainerOffset({ x: Math.max(0, left), y: Math.max(0, top) });
+        const nx = Math.max(0, left);
+        const ny = Math.max(0, top);
+        const prev = containerOffsetRef.current;
+        containerOffsetRef.current = { x: nx, y: ny };
+        // Only re-render for the offset when a drag ghost is actually
+        // positioned from it — otherwise this is a silent ref update.
+        if (draggingNodeRef.current && (Math.abs(prev.x - nx) > 1 || Math.abs(prev.y - ny) > 1)) {
+          setContainerOffset({ x: nx, y: ny });
+        }
       });
     }
 

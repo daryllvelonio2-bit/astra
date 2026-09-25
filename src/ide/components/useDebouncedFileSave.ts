@@ -6,9 +6,23 @@ import { saveFileContent } from "../services/workspaceService";
  * Trailing debounce (default 700ms) eliminates per-keystroke I/O,
  * with immediate flush available on file switch, run, or unmount.
  */
-export function useDebouncedFileSave(workspaceId?: string) {
+export function useDebouncedFileSave(
+  workspaceId?: string,
+  onFlushed?: (filePath: string, content: string) => void
+) {
   const pendingRef = useRef<{ filePath: string; content: string } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Latest callback without re-creating scheduleSave/flush identities.
+  const onFlushedRef = useRef(onFlushed);
+  onFlushedRef.current = onFlushed;
+
+  const settle = useCallback((wsId: string, filePath: string, content: string) => {
+    saveFileContent(wsId, filePath, content)
+      .then(() => {
+        try { onFlushedRef.current?.(filePath, content); } catch (_) {}
+      })
+      .catch(() => {});
+  }, []);
 
   const flush = useCallback(async () => {
     if (!workspaceId || !pendingRef.current) return;
@@ -20,6 +34,7 @@ export function useDebouncedFileSave(workspaceId?: string) {
     }
     try {
       await saveFileContent(workspaceId, filePath, content);
+      try { onFlushedRef.current?.(filePath, content); } catch (_) {}
     } catch (_) {}
   }, [workspaceId]);
 
@@ -30,18 +45,16 @@ export function useDebouncedFileSave(workspaceId?: string) {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }
-      timerRef.current = setTimeout(async () => {
+      timerRef.current = setTimeout(() => {
         timerRef.current = null;
         if (pendingRef.current) {
           const toSave = pendingRef.current;
           pendingRef.current = null;
-          try {
-            await saveFileContent(workspaceId, toSave.filePath, toSave.content);
-          } catch (_) {}
+          settle(workspaceId, toSave.filePath, toSave.content);
         }
       }, delayMs);
     },
-    [workspaceId]
+    [workspaceId, settle]
   );
 
   // Auto-flush on unmount or workspace switch so no pending edits are lost
@@ -54,10 +67,10 @@ export function useDebouncedFileSave(workspaceId?: string) {
       if (pendingRef.current && workspaceId) {
         const { filePath, content } = pendingRef.current;
         pendingRef.current = null;
-        saveFileContent(workspaceId, filePath, content).catch(() => {});
+        settle(workspaceId, filePath, content);
       }
     };
-  }, [workspaceId]);
+  }, [workspaceId, settle]);
 
   return { scheduleSave, flush };
 }
