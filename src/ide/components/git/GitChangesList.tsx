@@ -119,35 +119,34 @@ export function GitChangesList({
 
   return (
     <View style={[styles.container, !isLandscape && isKeyboardVisible && { paddingBottom: keyboardOffset }]}>
-      {/* Changes Header & Select All */}
-      <View
-        style={[
-          styles.subHeader,
-          isLandscape && styles.subHeaderLandscape,
-          { backgroundColor: theme.bgSecondary, borderBottomColor: theme.border },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.selectAllRow}
-          onPress={() => onToggleStageAll(!allStaged)}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name={allStaged ? "checkbox" : stagedCount > 0 ? "remove-circle" : "square-outline"}
-            size={isLandscape ? 15 : 18}
-            color={allStaged || stagedCount > 0 ? theme.accent : theme.textMuted}
-          />
-          <Text
-            style={[
-              styles.countText,
-              isLandscape && styles.countTextLandscape,
-              { color: theme.textSecondary },
-            ]}
+      {/* Select-all strip: no background, hidden when there is nothing to stage */}
+      {files.length > 0 && (
+        <View style={[styles.subHeader, isLandscape && styles.subHeaderLandscape]}>
+          <TouchableOpacity
+            style={styles.selectAllRow}
+            onPress={() => onToggleStageAll(!allStaged)}
+            activeOpacity={0.7}
           >
+            <Ionicons
+              name={allStaged ? "checkbox" : stagedCount > 0 ? "remove-circle" : "square-outline"}
+              size={isLandscape ? 13 : 15}
+              color={allStaged || stagedCount > 0 ? theme.accent : theme.textMuted}
+            />
+            <Text
+              style={[
+                styles.countText,
+                isLandscape && styles.countTextLandscape,
+                { color: theme.textMuted },
+              ]}
+            >
+              {allStaged ? "Unselect all" : "Select all"}
+            </Text>
+          </TouchableOpacity>
+          <Text style={[styles.countText, isLandscape && styles.countTextLandscape, { color: theme.textMuted }]}>
             {files.length} changed file{files.length !== 1 ? "s" : ""}
           </Text>
-        </TouchableOpacity>
-      </View>
+        </View>
+      )}
 
       {/* Changed Files List (Working Directory) */}
       <FlatList

@@ -172,75 +172,57 @@ export function GitHubDesktopView({
         {/* Left Sidebar (or full view in portrait when detail is false) */}
         {(!portraitShowDetail || isLandscape) && (
           <View style={[styles.sidebar, isLandscape && styles.sidebarLandscape, { borderRightColor: theme.border, backgroundColor: theme.bgSecondary }]}>
-            {/* Segmented control: Changes vs History */}
-            <View style={[styles.segmentWrap, { backgroundColor: theme.bgPrimary }]}>
-              <View
-                style={[
-                  styles.segment,
-                  { backgroundColor: theme.bgTertiary, borderColor: theme.border },
-                ]}
-                accessibilityRole="tablist"
+            {/* Tabs: Changes vs History (underline style, no boxes) */}
+            <View style={[styles.tabBar, { borderBottomColor: theme.border }]} accessibilityRole="tablist">
+              <TouchableOpacity
+                style={styles.tabBtn}
+                onPress={() => setActiveTab("changes")}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeTab === "changes" }}
               >
-                <TouchableOpacity
+                <Octicons
+                  name="diff-modified"
+                  size={isLandscape ? 10 : 12}
+                  color={activeTab === "changes" ? theme.accent : theme.textMuted}
+                />
+                <Text
                   style={[
-                    styles.segmentBtn,
-                    activeTab === "changes" && {
-                      backgroundColor: theme.bgElevated,
-                      borderColor: theme.border,
-                    },
+                    styles.tabBtnText,
+                    isLandscape && styles.tabBtnTextLandscape,
+                    { color: activeTab === "changes" ? theme.textPrimary : theme.textSecondary },
+                    activeTab === "changes" && { fontWeight: "700" },
                   ]}
-                  onPress={() => setActiveTab("changes")}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: activeTab === "changes" }}
+                  numberOfLines={1}
                 >
-                  <Octicons
-                    name="diff-modified"
-                    size={isLandscape ? 11 : 13}
-                    color={activeTab === "changes" ? theme.accent : theme.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.tabBtnText,
-                      isLandscape && styles.tabBtnTextLandscape,
-                      { color: activeTab === "changes" ? theme.textPrimary : theme.textSecondary },
-                      activeTab === "changes" && { fontWeight: "700" },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    Changes {files.length > 0 ? `(${files.length})` : ""}
-                  </Text>
-                </TouchableOpacity>
+                  Changes{files.length > 0 ? ` (${files.length})` : ""}
+                </Text>
+                <View style={[styles.tabUnderline, { backgroundColor: activeTab === "changes" ? theme.accent : "transparent" }]} />
+              </TouchableOpacity>
 
-                <TouchableOpacity
+              <TouchableOpacity
+                style={styles.tabBtn}
+                onPress={() => setActiveTab("history")}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeTab === "history" }}
+              >
+                <Octicons
+                  name="history"
+                  size={isLandscape ? 10 : 12}
+                  color={activeTab === "history" ? theme.accent : theme.textMuted}
+                />
+                <Text
                   style={[
-                    styles.segmentBtn,
-                    activeTab === "history" && {
-                      backgroundColor: theme.bgElevated,
-                      borderColor: theme.border,
-                    },
+                    styles.tabBtnText,
+                    isLandscape && styles.tabBtnTextLandscape,
+                    { color: activeTab === "history" ? theme.textPrimary : theme.textSecondary },
+                    activeTab === "history" && { fontWeight: "700" },
                   ]}
-                  onPress={() => setActiveTab("history")}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: activeTab === "history" }}
+                  numberOfLines={1}
                 >
-                  <Octicons
-                    name="history"
-                    size={isLandscape ? 11 : 13}
-                    color={activeTab === "history" ? theme.accent : theme.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.tabBtnText,
-                      isLandscape && styles.tabBtnTextLandscape,
-                      { color: activeTab === "history" ? theme.textPrimary : theme.textSecondary },
-                      activeTab === "history" && { fontWeight: "700" },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    History
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  History
+                </Text>
+                <View style={[styles.tabUnderline, { backgroundColor: activeTab === "history" ? theme.accent : "transparent" }]} />
+              </TouchableOpacity>
             </View>
 
             {activeTab === "changes" ? (
@@ -388,31 +370,30 @@ const styles = StyleSheet.create({
     maxWidth: "25%",
     borderRightWidth: 1,
   },
-  segmentWrap: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-  },
-  segment: {
+  tabBar: {
     flexDirection: "row",
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 3,
-    gap: 3,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 6,
   },
-  segmentBtn: {
+  tabBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "transparent",
+    gap: 5,
+    paddingVertical: 10,
+  },
+  tabUnderline: {
+    position: "absolute",
+    bottom: 0,
+    left: "22%",
+    right: "22%",
+    height: 2,
+    borderRadius: 1,
   },
   tabBtnText: {
     fontSize: 12,
+    fontWeight: "600",
   },
   tabBtnTextLandscape: {
     fontSize: 10.5,

@@ -8,13 +8,12 @@ export const gitChangesListStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   subHeaderLandscape: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
   selectAllRow: {
     flexDirection: "row",
