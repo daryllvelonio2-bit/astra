@@ -1,16 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  FlatList,
-  StyleSheet,
-  TextInput,
-  Alert,
-  ScrollView,
-  Platform,
-} from 'react-native';
+import { Modal, View, Text, TouchableOpacity, FlatList, StyleSheet, TextInput, ScrollView, Platform } from 'react-native';
+import { showAppDialog } from "../services/appDialog";
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/themeContext';
 import { useAccurateKeyboard } from '../../theme/useAccurateKeyboard';
@@ -98,7 +88,7 @@ export function DirectoryPickerModal({
       setIsCreatingFolder(false);
       await loadDirectory(currentPath);
     } catch (e: any) {
-      Alert.alert('Error', `Could not create folder: ${e.message}`);
+      showAppDialog({ title: 'Error', message: `Could not create folder: ${e.message}` });
     }
   };
 

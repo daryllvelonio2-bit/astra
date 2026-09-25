@@ -1,15 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  ActivityIndicator,
-  Alert,
-  Keyboard,
-  Platform,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Keyboard, Platform } from "react-native";
+import { showAppDialog } from "../../services/appDialog";
 import { Ionicons, Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { useOrientation } from "../../../theme/useOrientation";
@@ -71,7 +62,7 @@ export function GitChangesList({
       setSummary(result.summary);
       if (result.description) setDescription(result.description);
     } catch (e: any) {
-      Alert.alert("Generate Summary", e?.message || "Could not generate a summary.");
+      showAppDialog({ title: "Generate Summary", message: e?.message || "Could not generate a summary." });
     } finally {
       setGenerating(false);
     }

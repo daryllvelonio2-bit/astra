@@ -1,5 +1,13 @@
-import React from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import React, { useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+  Easing,
+} from "react-native";
 import { Ionicons, Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { useOrientation } from "../../../theme/useOrientation";
@@ -52,6 +60,30 @@ export function GitHeaderBar({
   const syncBadge = op === "pull" ? behind : op === "push" ? ahead : 0;
   const syncActive = op !== "fetch";
   const syncAction = op === "pull" ? onPull : op === "push" ? onPush : onFetch;
+
+  // While syncing, the icon itself spins (fetch/pull/push all "rotate" the
+  // repo state) instead of being replaced by a spinner.
+  const spin = useRef(new Animated.Value(0)).current;
+  const spinning = useRef<Animated.CompositeAnimation | null>(null);
+  useEffect(() => {
+    if (syncing) {
+      spin.setValue(0);
+      spinning.current = Animated.loop(
+        Animated.timing(spin, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      );
+      spinning.current?.start();
+    }
+    return () => {
+      spinning.current?.stop();
+      spinning.current = null;
+    };
+  }, [syncing, spin]);
+  const spinRotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 
   return (
     <View
@@ -107,15 +139,13 @@ export function GitHeaderBar({
                 activeOpacity={0.7}
                 accessibilityLabel={op}
               >
-                {syncing ? (
-                  <ActivityIndicator size="small" color={syncActive ? "#fff" : theme.accent} />
-                ) : (
+                <Animated.View style={{ transform: [{ rotate: spinRotate }] }}>
                   <Octicons
-                    name={syncGlyph as any}
+                    name={syncing ? "sync" : (syncGlyph as any)}
                     size={iconSize}
                     color={syncActive ? "#fff" : theme.textSecondary}
                   />
-                )}
+                </Animated.View>
                 <Text
                   style={[
                     styles.syncText,
@@ -123,7 +153,7 @@ export function GitHeaderBar({
                     { color: syncActive ? "#fff" : theme.textSecondary },
                   ]}
                 >
-                  {syncing ? "..." : syncLabel}
+                  {syncLabel}
                 </Text>
                 {syncBadge > 0 && !syncing && (
                   <View style={[styles.badge, { backgroundColor: syncActive ? "#fff" : theme.accent }]}>

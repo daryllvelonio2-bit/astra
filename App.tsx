@@ -11,6 +11,7 @@ import { ideActionService } from "./src/ide/services/ideActionService";
 import { StartupWizard } from "./src/onboarding/StartupWizard";
 import { AppBootScreen } from "./src/onboarding/AppBootScreen";
 import { loadHasCompletedStartup, subscribeConfigChanges } from "./src/ide/services/configService";
+import { AppDialogHost } from "./src/ide/services/appDialog";
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -148,6 +149,7 @@ export default function App() {
               </>
             )}
           </KeyboardMouseProvider>
+          <AppDialogHost />
         </ThemeProvider>
       </ErrorBoundary>
     </SafeAreaProvider>

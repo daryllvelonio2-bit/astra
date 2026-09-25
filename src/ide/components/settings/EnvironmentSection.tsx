@@ -1,13 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  Switch,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch } from "react-native";
+import { showAppDialog } from "../../services/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { AstraLogo } from "../AstraLogo";
 import { ThemeColors } from "../../../theme/themeContext";
@@ -73,10 +66,7 @@ export function EnvironmentSection({ theme }: EnvironmentSectionProps) {
   }, []);
 
   const handleCancel = () => {
-    Alert.alert(
-      "Cancel Provisioning",
-      "Stop background toolchain downloads? Any active compile process tree will be terminated.",
-      [
+    showAppDialog({ title: "Cancel Provisioning", message: "Stop background toolchain downloads? Any active compile process tree will be terminated.", buttons: [
         { text: "Keep Running", style: "cancel" },
         {
           text: "Stop Now",
@@ -91,8 +81,7 @@ export function EnvironmentSection({ theme }: EnvironmentSectionProps) {
             }
           },
         },
-      ]
-    );
+      ] });
   };
 
   const handleStartRestart = async () => {
@@ -111,10 +100,7 @@ export function EnvironmentSection({ theme }: EnvironmentSectionProps) {
       setAutoProvisionEnabled(value);
     } catch (_) {}
     if (!value) {
-      Alert.alert(
-        "Auto-download Off",
-        "The base toolchain will no longer download by itself. Install what you need from the Required list below — every download stays your choice."
-      );
+      showAppDialog({ title: "Auto-download Off", message: "The base toolchain will no longer download by itself. Install what you need from the Required list below — every download stays your choice." });
     }
   };
 

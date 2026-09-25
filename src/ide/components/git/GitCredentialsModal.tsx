@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Modal,
-  StyleSheet,
-  Alert,
-  ScrollView,
-} from "react-native";
+import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from "react-native";
+import { showAppDialog } from "../../services/appDialog";
 import { Ionicons, Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { useAccurateKeyboard } from "../../../theme/useAccurateKeyboard";
@@ -62,12 +55,9 @@ export function GitCredentialsModal({ visible, onClose }: GitCredentialsModalPro
     setLoadingSsh(false);
     if (res.success && res.publicKey) {
       setSshKey(res.publicKey);
-      Alert.alert(
-        "SSH Key Generated",
-        "Your ed25519 SSH key has been created. Copy the public key below and add it to GitHub."
-      );
+      showAppDialog({ title: "SSH Key Generated", message: "Your ed25519 SSH key has been created. Copy the public key below and add it to GitHub." });
     } else {
-      Alert.alert("Error", res.error || "Failed to generate SSH key");
+      showAppDialog({ title: "Error", message: res.error || "Failed to generate SSH key" });
     }
   };
 
@@ -76,18 +66,12 @@ export function GitCredentialsModal({ visible, onClose }: GitCredentialsModalPro
     await Clipboard.setStringAsync(sshKey);
     setCopiedKey(true);
     setTimeout(() => setCopiedKey(false), 3000);
-    Alert.alert(
-      "Copied!",
-      "SSH public key copied to clipboard. Go to GitHub -> Settings -> SSH and GPG keys -> New SSH key, and paste it."
-    );
+    showAppDialog({ title: "Copied!", message: "SSH public key copied to clipboard. Go to GitHub -> Settings -> SSH and GPG keys -> New SSH key, and paste it." });
   };
 
   const handleSaveToken = async () => {
     if (!token.trim() || !username.trim()) {
-      Alert.alert(
-        "Missing information",
-        "Please provide at least your GitHub username and token."
-      );
+      showAppDialog({ title: "Missing information", message: "Please provide at least your GitHub username and token." });
       return;
     }
     setSavingToken(true);
@@ -98,13 +82,10 @@ export function GitCredentialsModal({ visible, onClose }: GitCredentialsModalPro
     );
     setSavingToken(false);
     if (ok) {
-      Alert.alert(
-        "Saved",
-        "GitHub credentials configured successfully. Push and pull will now authenticate automatically."
-      );
+      showAppDialog({ title: "Saved", message: "GitHub credentials configured successfully. Push and pull will now authenticate automatically." });
       onClose();
     } else {
-      Alert.alert("Error", "Could not configure git credentials.");
+      showAppDialog({ title: "Error", message: "Could not configure git credentials." });
     }
   };
 

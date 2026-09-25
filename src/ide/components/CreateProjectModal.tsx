@@ -1,16 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ScrollView,
-  Keyboard,
-  Platform,
-} from 'react-native';
+import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Keyboard, Platform } from 'react-native';
+import { showAppDialog } from "../services/appDialog";
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/themeContext';
 import { useAccurateKeyboard } from '../../theme/useAccurateKeyboard';
@@ -50,11 +40,11 @@ export function CreateProjectModal({ visible, onClose, onCreateProject }: Create
 
   const handleSubmit = () => {
     if (!projectName.trim()) {
-      Alert.alert('Validation Error', 'Please enter a project name.');
+      showAppDialog({ title: 'Validation Error', message: 'Please enter a project name.' });
       return;
     }
     if (useCustomDirectory && !customDirectoryPath.trim()) {
-      Alert.alert('Validation Error', 'Please select or enter a custom directory path.');
+      showAppDialog({ title: 'Validation Error', message: 'Please select or enter a custom directory path.' });
       return;
     }
 

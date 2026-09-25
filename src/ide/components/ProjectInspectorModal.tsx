@@ -1,12 +1,6 @@
 import React from "react";
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-} from "react-native";
+import { Modal, View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { showAppDialog } from "../services/appDialog";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { ProjectItem } from "./ProjectCard";
 import { useTheme } from "../../theme/themeContext";
@@ -30,13 +24,10 @@ export function ProjectInspectorModal({
   if (!project) return null;
 
   const handleDelete = () => {
-    Alert.alert(
-      "⚠️ Delete Workspace & All Contents?",
-      `Are you sure you want to delete "${project.name}"?\n\n` +
+    showAppDialog({ title: "⚠️ Delete Workspace & All Contents?", message: `Are you sure you want to delete "${project.name}"?\n\n` +
       `⚠️ CRITICAL WARNING: All files, subdirectories, code, and assets located inside:\n\n` +
       `${project.path}\n\n` +
-      `will be PERMANENTLY REMOVED from your storage. This action cannot be undone.`,
-      [
+      `will be PERMANENTLY REMOVED from your storage. This action cannot be undone.`, buttons: [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete Permanently",
@@ -46,8 +37,7 @@ export function ProjectInspectorModal({
             if (onDeleteProject) onDeleteProject(project);
           },
         },
-      ]
-    );
+      ] });
   };
 
   return (

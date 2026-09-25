@@ -1,17 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  ActivityIndicator,
-  StyleSheet,
-  Image,
-  Alert,
-  Platform,
-} from "react-native";
+import { Modal, View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator, StyleSheet, Image, Platform } from "react-native";
+import { showAppDialog } from "../../services/appDialog";
 import { Ionicons, Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { useAccurateKeyboard } from "../../../theme/useAccurateKeyboard";
@@ -98,7 +87,7 @@ export function ExtensionMarketplaceModal({ visible, onClose }: ExtensionMarketp
   };
 
   const handleUninstall = (id: string, name: string) => {
-    Alert.alert("Uninstall Extension", `Are you sure you want to remove ${name}?`, [
+    showAppDialog({ title: "Uninstall Extension", message: `Are you sure you want to remove ${name}?`, buttons: [
       { text: "Cancel", style: "cancel" },
       {
         text: "Uninstall",
@@ -108,7 +97,7 @@ export function ExtensionMarketplaceModal({ visible, onClose }: ExtensionMarketp
           await refreshRegistry();
         },
       },
-    ]);
+    ] });
   };
 
   const handleToggle = async (id: string) => {

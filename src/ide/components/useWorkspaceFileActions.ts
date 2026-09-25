@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { Alert } from "react-native";
+import { showAppDialog } from "../services/appDialog";
 import { FileNode } from "../types";
 import { moveNodeInTree } from "./fileExplorerUtils";
 import {
@@ -61,7 +61,7 @@ export function useWorkspaceFileActions({
     const sel = selectedNodeRef.current;
     if (!ws || !sel) return;
     const targetPath = sel.path || sel.name;
-    Alert.alert("Confirm Delete", `Delete "${sel.name}"?`, [
+    showAppDialog({ title: "Confirm Delete", message: `Delete "${sel.name}"?`, buttons: [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -76,11 +76,11 @@ export function useWorkspaceFileActions({
             }
             setModalMode("none");
           } catch (e) {
-            Alert.alert("Error", "Failed to delete item");
+            showAppDialog({ title: "Error", message: "Failed to delete item" });
           }
         },
       },
-    ]);
+    ] });
   }, [refreshWorkspace, setActiveFile]);
 
   const handleRenameSubmit = useCallback(async () => {
@@ -95,7 +95,7 @@ export function useWorkspaceFileActions({
       setModalMode("none");
       setModalInput("");
     } catch (e) {
-      Alert.alert("Error", "Failed to rename item");
+      showAppDialog({ title: "Error", message: "Failed to rename item" });
     }
   }, [refreshWorkspace]);
 
@@ -146,7 +146,7 @@ export function useWorkspaceFileActions({
       await moveNodeInWorkspace(ws.id, sourcePath, targetPath);
     } catch (e: any) {
       console.error("Move Error:", e);
-      Alert.alert("Move Error", e.message || "Failed to move file");
+      showAppDialog({ title: "Move Error", message: e.message || "Failed to move file" });
     }
   }, [setWorkspace, setActiveFile]);
 
@@ -168,7 +168,7 @@ export function useWorkspaceFileActions({
         onOpenBrowser: (url) => onOpenPreview?.(url),
       });
     } catch (err: any) {
-      Alert.alert("Run Error", err?.message || String(err));
+      showAppDialog({ title: "Run Error", message: err?.message || String(err) });
     } finally {
       setIsRunning(false);
     }

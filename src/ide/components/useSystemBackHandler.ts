@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, BackHandler } from "react-native";
+import { BackHandler } from "react-native";
+import { showAppDialog } from "../services/appDialog";
 
 interface SystemBackHandlerOptions {
   /** Original edit-mode handler (sidebar parking etc.). */
@@ -35,10 +36,10 @@ export function useSystemBackHandler({ onEditModeChange, onCloseProject, ideVisi
         setExitEditSignal((s) => s + 1);
         return true;
       }
-      Alert.alert("Close project?", "Leave the editor and go back to your projects?", [
+      showAppDialog({ title: "Close project?", message: "Leave the editor and go back to your projects?", buttons: [
         { text: "Stay", style: "cancel" },
         { text: "Close project", style: "destructive", onPress: () => onCloseProjectRef.current() },
-      ]);
+      ] });
       return true;
     });
     return () => sub.remove();

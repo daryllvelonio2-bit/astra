@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { Alert, Linking } from "react-native";
+import { Linking } from "react-native";
 import {
   GitBranch,
   GitCommit,
@@ -44,6 +44,8 @@ import {
 import { Clipboard } from "../../services/clipboardService";
 import { useCommitAvatars } from "./useCommitAvatars";
 import { isGitAuthError } from "../../services/gitCloneService";
+import { showAppDialog } from "../../services/appDialog";
+import { parseSyncOutput, hasSyncContent, showSyncReportDialog } from "../../services/gitSyncReport";
 
 export function useGitOperations(
   workspaceId: string | undefined,
@@ -174,7 +176,7 @@ export function useGitOperations(
       if (!isLandscape) setPortraitShowDetail(false);
       refreshGitState();
     } else {
-      Alert.alert("Commit Failed", res.error || "Could not commit changes.");
+      showAppDialog({ title: "Commit Failed", message: res.error || "Could not commit changes." });
     }
   };
 
@@ -183,7 +185,7 @@ export function useGitOperations(
     const res = await commitGitChanges(workspaceId, summary, description);
     if (!res.success) {
       setCommitting(false);
-      Alert.alert("Commit Failed", res.error || "Could not commit changes.");
+      showAppDialog({ title: "Commit Failed", message: res.error || "Could not commit changes." });
       return;
     }
     setSelectedFile(null);
@@ -193,21 +195,17 @@ export function useGitOperations(
     if (!remoteUrl) {
       setCommitting(false);
       refreshGitState();
-      Alert.alert(
-        "Committed Locally",
-        "Your commit was created, but no remote repository is configured. Would you like to publish this repository now?",
-        [
+      showAppDialog({ title: "Committed Locally", message: "Your commit was created, but no remote repository is configured. Would you like to publish this repository now?", buttons: [
           { text: "Later", style: "cancel" },
           { text: "Publish to GitHub", onPress: () => setShowRemoteModal(true) },
-        ]
-      );
+        ] });
       return;
     }
 
     const pushRes = await pushGitRemote(workspaceId, status?.currentBranch);
     setCommitting(false);
     refreshGitState();
-    Alert.alert(pushRes.success ? "Success" : "Pushed with notice", pushRes.success ? "Committed and pushed changes to remote!" : pushRes.message);
+    showAppDialog({ title: pushRes.success ? "Success" : "Pushed with notice", message: pushRes.success ? "Committed and pushed changes to remote!" : pushRes.message });
   };
 
   const handleSaveRemote = async (url: string): Promise<{ success: boolean; error?: string }> => {
@@ -219,30 +217,42 @@ export function useGitOperations(
     return res;
   };
 
-  // Auth failures route to the credentials modal instead of a dead-end alert.
-  const showSyncResult = (title: string, message: string) => {
-    if (!isGitAuthError(message)) return Alert.alert(title, message);
-    Alert.alert(
-      `${title} Needs Authentication`,
-      `${message}\n\nAdd your GitHub credentials to continue.`,
-      [
-        { text: "Later", style: "cancel" },
-        { text: "Add Credentials", onPress: () => setShowCredentialsModal(true) },
-      ]
-    );
+  // Successes render as a structured report card (refs / commits / files /
+  // stat); failures and auth issues stay as themed dialogs.
+  const reportSyncResult = (
+    kind: "fetch" | "pull" | "push",
+    res: { success: boolean; message: string }
+  ) => {
+    const title = kind === "fetch" ? "Fetch" : kind === "pull" ? "Pull" : "Push";
+    if (isGitAuthError(res.message)) {
+      return showAppDialog({
+        title: `${title} Needs Authentication`,
+        message: `${res.message}\n\nAdd your GitHub credentials to continue.`,
+        buttons: [
+          { text: "Later", style: "cancel" },
+          { text: "Add Credentials", onPress: () => setShowCredentialsModal(true) },
+        ],
+      });
+    }
+    if (!res.success) return showAppDialog({ title: `${title} failed`, message: res.message });
+    const rep = parseSyncOutput(kind, res.message, status?.currentBranch || null);
+    if (!hasSyncContent(rep)) {
+      return showAppDialog({ title, message: kind === "push" ? "Everything up to date." : "Already up to date." });
+    }
+    showSyncReportDialog(rep, kind === "pull" || kind === "fetch" ? () => setActiveTab("history") : undefined);
   };
 
   const handlePush = async () => {
     if (!status?.isRepo) return;
     if (!remoteUrl) return setShowRemoteModal(true);
     if (status.detached) {
-      return Alert.alert("Detached HEAD", "Switch to a local branch before pushing.");
+      return showAppDialog({ title: "Detached HEAD", message: "Switch to a local branch before pushing." });
     }
     setSyncing(true);
     const res = await pushGitRemote(workspaceId, status.currentBranch);
     setSyncing(false);
     refreshGitState();
-    showSyncResult("Push", res.message);
+    reportSyncResult("push", res);
   };
 
   /** Explicit header actions — one button per operation, no smart guess. */
@@ -252,7 +262,7 @@ export function useGitOperations(
     const res = await fetchGitRemote(workspaceId);
     setSyncing(false);
     refreshGitState();
-    showSyncResult("Fetch", res.message);
+    reportSyncResult("fetch", res);
   };
 
   const handlePull = async () => {
@@ -261,13 +271,13 @@ export function useGitOperations(
     const res = await pullGitRemote(workspaceId, status.currentBranch);
     setSyncing(false);
     refreshGitState();
-    showSyncResult("Pull", res.message);
+    reportSyncResult("pull", res);
   };
 
   const handleSwitchBranch = async (branchName: string) => {
     const res = await switchGitBranch(workspaceId, branchName);
     if (!res.success) {
-      Alert.alert("Error", res.error || "Could not switch branch.");
+      showAppDialog({ title: "Error", message: res.error || "Could not switch branch." });
       return;
     }
     refreshGitState();
@@ -281,13 +291,13 @@ export function useGitOperations(
   const handleCreateBranch = async (branchName: string) => {
     const res = await createGitBranch(workspaceId, branchName);
     if (res.success) refreshGitState();
-    else Alert.alert("Error", res.error || "Could not create branch.");
+    else showAppDialog({ title: "Error", message: res.error || "Could not create branch." });
   };
 
   const handleInitRepo = async () => {
     const ok = await initGitRepo(workspaceId);
     if (ok) refreshGitState();
-    else Alert.alert("Error", "Could not initialize Git repository.");
+    else showAppDialog({ title: "Error", message: "Could not initialize Git repository." });
   };
 
   // ----- Commit actions (long-press menu) -----------------------------------
@@ -316,17 +326,17 @@ export function useGitOperations(
       closeCommitActions();
       handleBackToCommits();
       refreshGitState();
-      if (successMsg) Alert.alert("Success", successMsg);
+      if (successMsg) showAppDialog({ title: "Success", message: successMsg });
     } else {
-      Alert.alert("Git Error", res.error || "The command failed.");
+      showAppDialog({ title: "Git Error", message: res.error || "The command failed." });
     }
   };
 
   const confirmDangerous = (title: string, body: string, run: () => void) =>
-    Alert.alert(title, body, [
+    showAppDialog({ title: title, message: body, buttons: [
       { text: "Cancel", style: "cancel" },
       { text: "Confirm", style: "destructive", onPress: run },
-    ]);
+    ] });
 
   const handleAmend = (message: string) => {
     if (!commitActionTarget) return;
@@ -408,11 +418,11 @@ export function useGitOperations(
   const handleViewCommitOnGitHub = async () => {
     if (!commitActionTarget) return;
     const url = buildCommitWebUrl(remoteUrl, commitActionTarget.hash);
-    if (!url) return Alert.alert("Not on GitHub", "This repository has no GitHub remote.");
+    if (!url) return showAppDialog({ title: "Not on GitHub", message: "This repository has no GitHub remote." });
     try {
       await Linking.openURL(url);
     } catch (_) {
-      Alert.alert("Error", "Could not open the browser.");
+      showAppDialog({ title: "Error", message: "Could not open the browser." });
     }
   };
 

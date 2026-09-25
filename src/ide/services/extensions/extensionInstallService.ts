@@ -1,5 +1,5 @@
-import { Alert } from "react-native";
 import { ExtensionMarketplaceItem } from "./types";
+import { showAppDialog } from "../appDialog";
 import { installExtension, loadExtensionRegistry } from "./extensionRegistry";
 import {
   resolveRuntimeForExtension,
@@ -108,12 +108,9 @@ export async function startExtensionInstall(
       notify();
     }, 2500);
 
-    Alert.alert(
-      runtime ? "Toolchain & Extension Ready" : "Extension Installed",
-      runtime
+    showAppDialog({ title: runtime ? "Toolchain & Extension Ready" : "Extension Installed", message: runtime
         ? `${job.displayName} and ${runtime.name} are ready! The '${runtime.binary}' toolchain is now globally available in the terminal and editor runner.`
-        : `${job.displayName} is installed! Its themes, snippets, and tools are now active in Astra.`
-    );
+        : `${job.displayName} is installed! Its themes, snippets, and tools are now active in Astra.` });
 
     onComplete?.(true);
     return true;
@@ -122,7 +119,7 @@ export async function startExtensionInstall(
     job.status = "Installation failed";
     notify();
 
-    Alert.alert("Installation Failed", err?.message || `Could not install ${job.displayName}.`);
+    showAppDialog({ title: "Installation Failed", message: err?.message || `Could not install ${job.displayName}.` });
     setTimeout(() => {
       activeJobs.delete(item.id);
       notify();

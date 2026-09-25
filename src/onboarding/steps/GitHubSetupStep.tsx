@@ -1,12 +1,6 @@
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  Alert,
-} from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { showAppDialog } from "../../ide/services/appDialog";
 import { Ionicons, Octicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../theme/themeContext";
 import {
@@ -58,7 +52,7 @@ export function GitHubSetupStep({
 
   const handleSaveToken = async () => {
     if (!token.trim()) {
-      Alert.alert("Token Required", "Please enter your GitHub Personal Access Token.");
+      showAppDialog({ title: "Token Required", message: "Please enter your GitHub Personal Access Token." });
       return;
     }
     const cleanUsername = username.trim() || "git";
@@ -71,9 +65,9 @@ export function GitHubSetupStep({
     if (ok) {
       setTokenSaved(true);
       onConfigured();
-      Alert.alert("Success", "GitHub credentials configured successfully!");
+      showAppDialog({ title: "Success", message: "GitHub credentials configured successfully!" });
     } else {
-      Alert.alert("Error", "Failed to save Git credentials.");
+      showAppDialog({ title: "Error", message: "Failed to save Git credentials." });
     }
   };
 
@@ -84,12 +78,9 @@ export function GitHubSetupStep({
     if (res.success && res.publicKey) {
       setSshKey(res.publicKey);
       onConfigured();
-      Alert.alert(
-        "SSH Key Created",
-        "Your ed25519 key was generated. Tap 'Copy Public Key' and add it to your GitHub account under Settings → SSH keys."
-      );
+      showAppDialog({ title: "SSH Key Created", message: "Your ed25519 key was generated. Tap 'Copy Public Key' and add it to your GitHub account under Settings → SSH keys." });
     } else {
-      Alert.alert("Error", res.error || "Failed to generate SSH key.");
+      showAppDialog({ title: "Error", message: res.error || "Failed to generate SSH key." });
     }
   };
 

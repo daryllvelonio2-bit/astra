@@ -1,15 +1,6 @@
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Switch,
-  Alert,
-  DevSettings,
-  NativeModules,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Switch, DevSettings, NativeModules } from "react-native";
+import { showAppDialog } from "../../services/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { AppTheme, BottomTabVisibility, ToggleableBottomTab } from "../../services/configService";
 import { ThemeColors, THEMES } from "../../../theme/themeContext";
@@ -99,10 +90,7 @@ export function GeneralSection({
   };
 
   const handleRemoveKey = (indexToRemove: number) => {
-    Alert.alert(
-      "Remove API Key",
-      `Remove Key #${indexToRemove + 1} (${maskApiKey(apiKeys[indexToRemove])})?`,
-      [
+    showAppDialog({ title: "Remove API Key", message: `Remove Key #${indexToRemove + 1} (${maskApiKey(apiKeys[indexToRemove])})?`, buttons: [
         { text: "Cancel", style: "cancel" },
         {
           text: "Remove",
@@ -119,8 +107,7 @@ export function GeneralSection({
             });
           },
         },
-      ]
-    );
+      ] });
   };
 
   const toggleReveal = (idx: number) => {

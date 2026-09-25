@@ -1,12 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-} from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
+import { showAppDialog } from "../../services/appDialog";
 import * as WebBrowser from "expo-web-browser";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
@@ -101,7 +95,7 @@ export function GitBrowserLoginTab({ onSessionChange }: { onSessionChange?: (s: 
         applySession(sess);
         setPhase("loggedIn");
         setFlow(null);
-        Alert.alert("Signed in", `Welcome, ${sess.username}! Push, pull and clone now work with your account.`);
+        showAppDialog({ title: "Signed in", message: `Welcome, ${sess.username}! Push, pull and clone now work with your account.` });
       } catch (e: any) {
         setError(e?.message || "Sign-in failed.");
         setFlow(null);
@@ -126,7 +120,7 @@ export function GitBrowserLoginTab({ onSessionChange }: { onSessionChange?: (s: 
   };
 
   const handleLogout = () => {
-    Alert.alert("Log out of GitHub?", "Your saved token is deleted and git will stop authenticating as you.", [
+    showAppDialog({ title: "Log out of GitHub?", message: "Your saved token is deleted and git will stop authenticating as you.", buttons: [
       { text: "Cancel", style: "cancel" },
       {
         text: "Log out",
@@ -137,7 +131,7 @@ export function GitBrowserLoginTab({ onSessionChange }: { onSessionChange?: (s: 
           setPhase("loggedOut");
         },
       },
-    ]);
+    ] });
   };
 
   if (phase === "loading") {

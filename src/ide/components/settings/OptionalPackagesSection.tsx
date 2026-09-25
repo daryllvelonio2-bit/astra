@@ -1,12 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import { showAppDialog } from "../../services/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
 import {
@@ -264,10 +258,7 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
 
   const guardProvisioning = (): boolean => {
     if (provisioningActive) {
-      Alert.alert(
-        "Provisioning Running",
-        "Wait for the background download to finish before installing packages (they share the apt lock)."
-      );
+      showAppDialog({ title: "Provisioning Running", message: "Wait for the background download to finish before installing packages (they share the apt lock)." });
       return true;
     }
     return false;
@@ -282,21 +273,14 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
         if (res.exitCode === 0) {
           await refresh([pkg]);
         } else {
-          Alert.alert(
-            `Failed to install ${pkg.name}`,
-            (res.stdout || "Unknown error").slice(-400)
-          );
+          showAppDialog({ title: `Failed to install ${pkg.name}`, message: (res.stdout || "Unknown error").slice(-400) });
         }
       } finally {
         setBusy((prev) => ({ ...prev, [pkg.id]: false }));
       }
     };
     if (pkg.heavy) {
-      Alert.alert(
-        `Install ${pkg.name}?`,
-        "This is a large download (hundreds of MB). Make sure you have free storage and a stable connection.",
-        [{ text: "Cancel", style: "cancel" }, { text: "Install", onPress: run }]
-      );
+      showAppDialog({ title: `Install ${pkg.name}?`, message: "This is a large download (hundreds of MB). Make sure you have free storage and a stable connection.", buttons: [{ text: "Cancel", style: "cancel" }, { text: "Install", onPress: run }] });
     } else {
       run();
     }
@@ -315,20 +299,13 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
         if (res.exitCode === 0) {
           await refresh(missing);
         } else {
-          Alert.alert(
-            `Failed to install ${group.title}`,
-            (res.stdout || "Unknown error").slice(-400)
-          );
+          showAppDialog({ title: `Failed to install ${group.title}`, message: (res.stdout || "Unknown error").slice(-400) });
         }
       } finally {
         setGroupBusy((prev) => ({ ...prev, [group.id]: false }));
       }
     };
-    Alert.alert(
-      `Install ${missing.length} missing package${missing.length > 1 ? "s" : ""}?`,
-      `${missing.map((p) => p.name).join(", ")}${heavyOnes.length > 0 ? "\n\nIncludes large download(s): " + heavyOnes.map((p) => p.name).join(", ") + ". Check free storage first." : ""}`,
-      [{ text: "Cancel", style: "cancel" }, { text: "Install All", onPress: run }]
-    );
+    showAppDialog({ title: `Install ${missing.length} missing package${missing.length > 1 ? "s" : ""}?`, message: `${missing.map((p) => p.name).join(", ")}${heavyOnes.length > 0 ? "\n\nIncludes large download(s): " + heavyOnes.map((p) => p.name).join(", ") + ". Check free storage first." : ""}`, buttons: [{ text: "Cancel", style: "cancel" }, { text: "Install All", onPress: run }] });
   };
 
   const renderGroup = (group: OptionalGroup) => (

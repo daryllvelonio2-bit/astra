@@ -1,14 +1,6 @@
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Modal,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Modal, StyleSheet, ActivityIndicator } from "react-native";
+import { showAppDialog } from "../../services/appDialog";
 import { Ionicons, Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { useAccurateKeyboard } from "../../../theme/useAccurateKeyboard";
@@ -88,7 +80,7 @@ export function GitRemoteModal({
   const handleSave = async () => {
     const finalUrl = normalizeUrl(remoteInput);
     if (!finalUrl) {
-      Alert.alert("Missing URL", "Please provide a GitHub repository name or remote URL.");
+      showAppDialog({ title: "Missing URL", message: "Please provide a GitHub repository name or remote URL." });
       return;
     }
 
@@ -96,10 +88,10 @@ export function GitRemoteModal({
     const res = await onSaveRemote(finalUrl);
     setSaving(false);
     if (res.success) {
-      Alert.alert("Remote Saved", `Origin set to ${finalUrl}. You can now push and pull.`);
+      showAppDialog({ title: "Remote Saved", message: `Origin set to ${finalUrl}. You can now push and pull.` });
       onClose();
     } else {
-      Alert.alert("Error", res.error || "Could not set remote URL.");
+      showAppDialog({ title: "Error", message: res.error || "Could not set remote URL." });
     }
   };
 

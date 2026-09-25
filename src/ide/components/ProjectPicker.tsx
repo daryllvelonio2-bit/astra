@@ -1,15 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  StatusBar,
-  Alert,
-  Platform,
-} from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, StatusBar, Platform } from 'react-native';
+import { showAppDialog } from "../services/appDialog";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AstraLogo } from './AstraLogo';
@@ -80,7 +71,7 @@ export function ProjectPicker({ onOpenWorkspace, onRerunStartup }: ProjectPicker
       await loadProjects();
       onOpenWorkspace(ws.id);
     } catch (e) {
-      Alert.alert('Error', 'Failed to create project workspace');
+      showAppDialog({ title: 'Error', message: 'Failed to create project workspace' });
     }
   };
 
@@ -90,7 +81,7 @@ export function ProjectPicker({ onOpenWorkspace, onRerunStartup }: ProjectPicker
       await loadProjects();
       onOpenWorkspace(ws.id);
     } catch (e) {
-      Alert.alert('Error', 'Failed to open project workspace');
+      showAppDialog({ title: 'Error', message: 'Failed to open project workspace' });
     }
   };
 
@@ -100,7 +91,7 @@ export function ProjectPicker({ onOpenWorkspace, onRerunStartup }: ProjectPicker
       await loadProjects();
       onOpenWorkspace(ws.id);
     } catch (e) {
-      Alert.alert('Error', 'Repo cloned, but it could not be opened as a workspace');
+      showAppDialog({ title: 'Error', message: 'Repo cloned, but it could not be opened as a workspace' });
       await loadProjects();
     }
   };
@@ -113,7 +104,7 @@ export function ProjectPicker({ onOpenWorkspace, onRerunStartup }: ProjectPicker
     try {
       await deleteWorkspace(project.id);
     } catch (e) {
-      Alert.alert('Error', 'Failed to delete workspace');
+      showAppDialog({ title: 'Error', message: 'Failed to delete workspace' });
     } finally {
       await loadProjects();
     }

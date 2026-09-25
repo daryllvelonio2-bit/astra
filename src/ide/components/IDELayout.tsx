@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { View, StyleSheet, StatusBar, Alert, Animated, Keyboard, Platform } from "react-native";
+import { View, StyleSheet, StatusBar, Animated, Keyboard, Platform } from "react-native";
+import { showAppDialog } from "../services/appDialog";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FileExplorer } from "./FileExplorer";
 import { EditorView } from "./EditorView";
@@ -144,9 +145,9 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
       setActiveFile(fileNode);
       recordRecentFile(fileNode, false);
       safeSetBottomTab("editor");
-      if (!content) Alert.alert("File opened", `${fileName} is empty or could not be read at:\n${relative}`);
+      if (!content) showAppDialog({ title: "File opened", message: `${fileName} is empty or could not be read at:\n${relative}` });
     } catch (e: any) {
-      Alert.alert("Could not open file", e?.message || relative);
+      showAppDialog({ title: "Could not open file", message: e?.message || relative });
     }
   }, [safeSetBottomTab, recordRecentFile]);
 

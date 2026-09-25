@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
-import { Alert, Linking } from "react-native";
+import { Linking } from "react-native";
+import { showAppDialog } from "../../services/appDialog";
 import {
   discardFile,
   ignoreFile,
@@ -47,7 +48,7 @@ export function useFileActions({
       setFileActionsBusy(true);
       try {
         const res = await fn();
-        if (!res.success) Alert.alert(label, res.message);
+        if (!res.success) showAppDialog({ title: label, message: res.message });
         await refreshGitState();
       } finally {
         setFileActionsBusy(false);

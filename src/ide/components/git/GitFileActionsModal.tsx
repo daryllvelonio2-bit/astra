@@ -1,13 +1,6 @@
 import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Modal,
-  StyleSheet,
-  Alert,
-  useWindowDimensions,
-} from "react-native";
+import { View, Text, TouchableOpacity, Modal, StyleSheet, useWindowDimensions } from "react-native";
+import { showAppDialog } from "../../services/appDialog";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import type { GitFileStatus } from "./types";
@@ -55,14 +48,10 @@ export function GitFileActionsModal({
   const left = Math.max(Math.min(anchor.x - MENU_WIDTH + 10, winW - MENU_WIDTH - 12), 12);
 
   const confirmDiscard = () => {
-    Alert.alert(
-      "Discard changes?",
-      `${file.filename} will be reverted. This cannot be undone.`,
-      [
+    showAppDialog({ title: "Discard changes?", message: `${file.filename} will be reverted. This cannot be undone.`, buttons: [
         { text: "Cancel", style: "cancel" },
         { text: "Discard", style: "destructive", onPress: () => actions.discard() },
-      ]
-    );
+      ] });
   };
 
   return (
