@@ -12,6 +12,45 @@ import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { buildCodeMirrorHtml } from "./codemirrorHtml.generated";
 
+// Module-level cache: avoids replaceAll over the 500+ KB blob on every mount.
+// Key = bgPrimary + "|" + isDark.  The blob string itself is already cached
+// inside codemirrorHtml.generated (cachedBlob), so we only cache the result
+// of the two .replaceAll() calls on top of it.
+const _htmlCache = new Map<string, string>();
+
+/** Serialize the RN ThemeColors into the shape __cmSetTheme expects. */
+function buildCmThemeObj(theme: any): string {
+  const obj = {
+    isDark: theme.isDark !== false,
+    bgPrimary: theme.bgPrimary || "",
+    bgSecondary: theme.bgSecondary || "",
+    textPrimary: theme.textPrimary || "",
+    textMuted: theme.textMuted || "",
+    accent: theme.accent || "",
+    accentCyan: theme.accentCyan || "",
+    accentPurple: theme.accentPurple || "",
+    accentGold: theme.accentGold || "",
+    accentGreen: theme.accentGreen || "",
+    accentRed: theme.accentRed || "",
+    tokens: theme.tokenColors
+      ? {
+          keyword:  theme.tokenColors.keyword  || "",
+          comment:  theme.tokenColors.comment  || "",
+          string:   theme.tokenColors.string   || "",
+          number:   theme.tokenColors.number   || "",
+          type:     theme.tokenColors.jsx_tag  || "",
+          function: theme.tokenColors.function || "",
+          operator: theme.tokenColors.operator || "",
+          jsx_tag:  theme.tokenColors.jsx_tag  || "",
+          property: theme.tokenColors.property || "",
+          boolean:  theme.tokenColors.boolean  || "",
+          plain:    theme.tokenColors.plain    || "",
+        }
+      : undefined,
+  };
+  return JSON.stringify(obj);
+}
+
 export interface CodeMirrorEditorHandle {
   jumpToLine: (line: number) => void;
   undo: () => void;
@@ -133,12 +172,17 @@ export const CodeMirrorEditorView = memo(
         echoQueueRef.current = [];
       };
 
-      const html = useRef(
-        buildCodeMirrorHtml({
-          background: theme.bgPrimary || "#1e1e1e",
-          isDark: theme.isDark !== false,
-        })
-      ).current;
+      const html = useRef((() => {
+        const bg = theme.bgPrimary || "#1e1e1e";
+        const dark = theme.isDark !== false;
+        const cacheKey = bg + "|" + dark;
+        let cached = _htmlCache.get(cacheKey);
+        if (!cached) {
+          cached = buildCodeMirrorHtml({ background: bg, isDark: dark });
+          _htmlCache.set(cacheKey, cached);
+        }
+        return cached;
+      })()).current;
       const source = useMemo(() => ({ html }), [html]);
 
       const inject = useCallback((js: string) => {
@@ -195,7 +239,7 @@ export const CodeMirrorEditorView = memo(
               const safeName = JSON.stringify(currentFileNameRef.current || "");
               inject(`window.__cmSetContent && window.__cmSetContent(${safeText}, ${safeName})`);
               inject(`window.__cmSetFontSize && window.__cmSetFontSize(${fontSize}, ${lineHeight})`);
-              inject(`window.__cmSetTheme && window.__cmSetTheme(${theme.isDark !== false}, ${JSON.stringify(theme.bgPrimary || "")})`);
+              inject(`window.__cmSetTheme && window.__cmSetTheme(${buildCmThemeObj(theme)})`);
               inject(`window.__cmSetKeyboardMouseMode && window.__cmSetKeyboardMouseMode(${!!keyboardMouseMode})`);
               inject(`window.__cmSetReadOnly && window.__cmSetReadOnly(${!isEditing})`);
             } else if (data.type === "change" && typeof data.text === "string") {
@@ -229,6 +273,16 @@ export const CodeMirrorEditorView = memo(
           lineHeight,
           theme.isDark,
           theme.bgPrimary,
+          theme.bgSecondary,
+          theme.textPrimary,
+          theme.textMuted,
+          theme.accent,
+          theme.accentCyan,
+          theme.accentPurple,
+          theme.accentGold,
+          theme.accentGreen,
+          theme.accentRed,
+          theme.tokenColors,
           isEditing,
           keyboardMouseMode,
           onChangeContent,
@@ -298,8 +352,22 @@ export const CodeMirrorEditorView = memo(
       // Sync dark / light theme
       useEffect(() => {
         if (!isReadyRef.current) return;
-        inject(`window.__cmSetTheme && window.__cmSetTheme(${theme.isDark !== false}, ${JSON.stringify(theme.bgPrimary || "")})`);
-      }, [theme.isDark, theme.bgPrimary, inject]);
+        inject(`window.__cmSetTheme && window.__cmSetTheme(${buildCmThemeObj(theme)})`);
+      }, [
+        theme.isDark,
+        theme.bgPrimary,
+        theme.bgSecondary,
+        theme.textPrimary,
+        theme.textMuted,
+        theme.accent,
+        theme.accentCyan,
+        theme.accentPurple,
+        theme.accentGold,
+        theme.accentGreen,
+        theme.accentRed,
+        theme.tokenColors,
+        inject,
+      ]);
 
       // Sync read-only / lock mode
       useEffect(() => {

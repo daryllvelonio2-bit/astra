@@ -1,13 +1,32 @@
-import { EditorView, basicSetup } from "codemirror";
+import {
+  EditorView,
+  lineNumbers,
+  drawSelection,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  highlightSpecialChars,
+} from "@codemirror/view";
 import { EditorState, Compartment } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
-import { indentWithTab } from "@codemirror/commands";
+import {
+  defaultKeymap,
+  historyKeymap,
+  history,
+  indentWithTab,
+} from "@codemirror/commands";
+import {
+  syntaxHighlighting,
+  defaultHighlightStyle,
+  HighlightStyle,
+  foldKeymap,
+  foldGutter,
+} from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import { python } from "@codemirror/lang-python";
 import { javascript } from "@codemirror/lang-javascript";
 import { html as htmlLang } from "@codemirror/lang-html";
 import { css as cssLang } from "@codemirror/lang-css";
 import { json as jsonLang } from "@codemirror/lang-json";
-import { oneDark } from "@codemirror/theme-one-dark";
 
 (function () {
   const languageCompartment = new Compartment();
@@ -107,46 +126,177 @@ import { oneDark } from "@codemirror/theme-one-dark";
     });
   }
 
-  const customLightTheme = EditorView.theme({
-    "&": {
-      color: "#24292e",
-      backgroundColor: "#ffffff",
-    },
-    ".cm-content": {
-      caretColor: "#0969da",
-    },
-    "&.cm-focused .cm-cursor": {
-      borderLeftColor: "#0969da",
-    },
-    "&.cm-focused .cm-selectionBackground, ::selection": {
-      backgroundColor: "#b4d5fe",
-    },
-    ".cm-gutters": {
-      backgroundColor: "#f6f8fa",
-      color: "#6e7781",
-      borderRight: "1px solid #d0d7de",
-    },
-    ".cm-activeLine": {
-      backgroundColor: "rgba(0, 0, 0, 0.04)",
-    },
-    ".cm-activeLineGutter": {
-      backgroundColor: "rgba(0, 0, 0, 0.06)",
-      color: "#24292e",
-    },
-  }, { dark: false });
+  // ---------------------------------------------------------------------------
+  // Build a fully dynamic CodeMirror theme from the RN theme object.
+  // themeObj shape:
+  //   { isDark, bgPrimary, bgSecondary, textPrimary, textMuted, accent,
+  //     accentCyan, accentPurple, accentGold, accentGreen, accentRed,
+  //     tokens: { keyword, comment, string, number, type, function, operator,
+  //               jsx_tag, property, boolean, plain } }
+  // ---------------------------------------------------------------------------
+  function buildEditorTheme(themeObj) {
+    const isDark = !!themeObj.isDark;
+    const bg = themeObj.bgPrimary || (isDark ? "#131314" : "#ffffff");
+    const bgSecondary = themeObj.bgSecondary || (isDark ? "#16171b" : "#f6f8fa");
+    const textPrimary = themeObj.textPrimary || (isDark ? "#f1f3f4" : "#24292e");
+    const textMuted = themeObj.textMuted || (isDark ? "#6b7280" : "#6e7781");
+    const accent = themeObj.accent || (isDark ? "#8ab4f8" : "#2563eb");
+
+    // Cursor color: use accent for dark, a strong blue for light
+    const cursorColor = accent;
+    // Selection background
+    const selBg = isDark ? "rgba(138, 180, 248, 0.2)" : "rgba(37, 99, 235, 0.15)";
+    // Active line
+    const activeLineBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)";
+    const activeLineGutterBg = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)";
+    // Gutter border
+    const gutterBorder = isDark ? "1px solid #282c35" : "1px solid #d0d7de";
+
+    const editorTheme = EditorView.theme(
+      {
+        "&": {
+          backgroundColor: bg,
+          color: textPrimary,
+        },
+        ".cm-content": {
+          caretColor: cursorColor,
+        },
+        "&.cm-focused .cm-cursor": {
+          borderLeftColor: cursorColor,
+        },
+        "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
+          backgroundColor: selBg,
+        },
+        ".cm-gutters": {
+          backgroundColor: bgSecondary,
+          color: textMuted,
+          borderRight: gutterBorder,
+        },
+        ".cm-activeLine": {
+          backgroundColor: activeLineBg,
+        },
+        ".cm-activeLineGutter": {
+          backgroundColor: activeLineGutterBg,
+          color: textPrimary,
+        },
+      },
+      { dark: isDark }
+    );
+
+    // Token colors from themeObj.tokens, with sensible fallbacks
+    const tok = themeObj.tokens || {};
+    const kwColor    = tok.keyword  || (isDark ? "#c678dd" : "#a626a4");
+    const cmtColor   = tok.comment  || (isDark ? "#7f848e" : "#a0a1a7");
+    const strColor   = tok.string   || (isDark ? "#98c379" : "#50a14f");
+    const numColor   = tok.number   || (isDark ? "#d19a66" : "#986801");
+    const typeColor  = tok.type     || tok.jsx_tag || (isDark ? "#e5c07b" : "#b76b01");
+    const fnColor    = tok.function || (isDark ? "#61afef" : "#4078f2");
+    const opColor    = tok.operator || (isDark ? "#56b6c2" : "#0184bc");
+    const propColor  = tok.property || (isDark ? "#e5c07b" : "#b76b01");
+    const tagColor   = tok.jsx_tag  || tok.type || (isDark ? "#e06c75" : "#e45649");
+    const boolColor  = tok.boolean  || numColor;
+    const regexpColor = tok.regexp  || strColor;
+    const plainColor = tok.plain    || textPrimary;
+
+    const highlightExt = syntaxHighlighting(
+      HighlightStyle.define([
+        // Keywords
+        { tag: tags.keyword,            color: kwColor, fontWeight: "bold" },
+        { tag: tags.controlKeyword,     color: kwColor, fontWeight: "bold" },
+        { tag: tags.moduleKeyword,      color: kwColor, fontWeight: "bold" },
+        { tag: tags.operatorKeyword,    color: opColor },
+        { tag: tags.definitionKeyword,  color: kwColor, fontWeight: "bold" },
+        // Comments
+        { tag: tags.comment,            color: cmtColor, fontStyle: "italic" },
+        { tag: tags.lineComment,        color: cmtColor, fontStyle: "italic" },
+        { tag: tags.blockComment,       color: cmtColor, fontStyle: "italic" },
+        { tag: tags.docComment,         color: cmtColor, fontStyle: "italic" },
+        // Strings & literals
+        { tag: tags.string,             color: strColor },
+        { tag: tags.docString,          color: strColor },
+        { tag: tags.character,          color: strColor },
+        { tag: tags.attributeValue,     color: strColor },
+        { tag: tags.regexp,             color: regexpColor },
+        // Numbers & booleans
+        { tag: tags.number,             color: numColor },
+        { tag: tags.integer,            color: numColor },
+        { tag: tags.float,              color: numColor },
+        { tag: tags.bool,               color: boolColor },
+        { tag: tags.atom,               color: boolColor },
+        { tag: tags.null,               color: boolColor },
+        // Types & class names
+        { tag: tags.typeName,           color: typeColor },
+        { tag: tags.className,          color: typeColor },
+        { tag: tags.definition(tags.typeName), color: typeColor },
+        // Functions
+        { tag: tags.function(tags.name),         color: fnColor },
+        { tag: tags.function(tags.variableName), color: fnColor },
+        { tag: tags.function(tags.propertyName), color: fnColor },
+        { tag: tags.function(tags.definition(tags.variableName)), color: fnColor },
+        // Properties & names
+        { tag: tags.propertyName,       color: propColor },
+        { tag: tags.attributeName,      color: propColor },
+        { tag: tags.labelName,          color: propColor },
+        // Tags (HTML/JSX)
+        { tag: tags.tagName,            color: tagColor },
+        // Operators & punctuation
+        { tag: tags.operator,           color: opColor },
+        { tag: tags.arithmeticOperator, color: opColor },
+        { tag: tags.bitwiseOperator,    color: opColor },
+        { tag: tags.compareOperator,    color: opColor },
+        { tag: tags.logicOperator,      color: opColor },
+        { tag: tags.updateOperator,     color: opColor },
+        { tag: tags.punctuation,        color: plainColor },
+        { tag: tags.separator,          color: plainColor },
+        { tag: tags.bracket,            color: plainColor },
+        // Misc
+        { tag: tags.url,                color: strColor },
+        { tag: tags.escape,             color: strColor },
+        { tag: tags.color,              color: strColor },
+        { tag: tags.invalid,            color: isDark ? "#ff5555" : "#cc0000", textDecoration: "underline" },
+        { tag: tags.self,               color: kwColor },
+        { tag: tags.namespace,          color: typeColor },
+        { tag: tags.macroName,          color: fnColor },
+        // Fallback: variableName and name get plain text color
+        { tag: tags.variableName,       color: plainColor },
+        { tag: tags.name,               color: plainColor },
+      ])
+    );
+
+    return [editorTheme, highlightExt];
+  }
 
   const initialIsDark =
     typeof window !== "undefined" && typeof window.__INITIAL_IS_DARK__ === "boolean"
       ? window.__INITIAL_IS_DARK__
       : true;
 
+  // Build default initial theme object from __INITIAL_IS_DARK__
+  const initialThemeObj = { isDark: initialIsDark };
+
+  const minimalExtensions = [
+    lineNumbers(),
+    foldGutter(),
+    drawSelection(),
+    highlightActiveLine(),
+    highlightActiveLineGutter(),
+    highlightSpecialChars(),
+    history(),
+    keymap.of([
+      ...defaultKeymap,
+      ...historyKeymap,
+      ...foldKeymap,
+      indentWithTab,
+    ]),
+    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  ];
+
   const startState = EditorState.create({
     doc: "",
     extensions: [
-      basicSetup,
-      keymap.of([indentWithTab]),
+      ...minimalExtensions,
       languageCompartment.of([]),
-      themeCompartment.of(initialIsDark ? oneDark : customLightTheme),
+      themeCompartment.of(buildEditorTheme(initialThemeObj)),
       fontSizeCompartment.of(createFontTheme(14, 20)),
       readOnlyCompartment.of(EditorState.readOnly.of(true)),
       editableCompartment.of(EditorView.editable.of(false)),
@@ -199,7 +349,10 @@ import { oneDark } from "@codemirror/theme-one-dark";
     state: startState,
     parent: document.getElementById("editor"),
   });
-  document.documentElement.style.setProperty('--gutter-bg', initialIsDark ? '#282c34' : '#f6f8fa');
+
+  // Set initial CSS variable for fold gutter background
+  const initialGutterBg = initialThemeObj.bgSecondary || (initialIsDark ? "#16171b" : "#f6f8fa");
+  document.documentElement.style.setProperty("--gutter-bg", initialGutterBg);
 
   // Global APIs for React Native
   window.__cmSetContent = function (text, fileName) {
@@ -252,13 +405,40 @@ import { oneDark } from "@codemirror/theme-one-dark";
     });
   };
 
-  window.__cmSetTheme = function (isDark, bg) {
+  // __cmSetTheme accepts either:
+  //   (themeObj)         — new API: full theme object
+  //   (isDark, bgString) — legacy two-scalar call (mid-reload backward compat)
+  window.__cmSetTheme = function (themeObjOrIsDark, legacyBg) {
+    let themeObj;
+    if (
+      typeof themeObjOrIsDark === "object" &&
+      themeObjOrIsDark !== null
+    ) {
+      // New API: full theme object passed from RN
+      themeObj = themeObjOrIsDark;
+    } else if (
+      typeof themeObjOrIsDark === "boolean" &&
+      typeof legacyBg === "string" &&
+      legacyBg.startsWith("#")
+    ) {
+      // Legacy two-scalar call: coerce into minimal theme object
+      themeObj = { isDark: themeObjOrIsDark, bgPrimary: legacyBg };
+    } else {
+      // Fallback: treat first arg as isDark boolean
+      themeObj = { isDark: !!themeObjOrIsDark };
+    }
+
     view.dispatch({
-      effects: themeCompartment.reconfigure(isDark ? oneDark : customLightTheme),
+      effects: themeCompartment.reconfigure(buildEditorTheme(themeObj)),
     });
-    document.documentElement.style.setProperty('--gutter-bg', isDark ? '#282c34' : '#f6f8fa');
-    if (bg && typeof document !== "undefined" && document.body) {
-      document.body.style.background = bg;
+
+    // Update CSS variable for fold gutter background
+    const gutterBg = themeObj.bgSecondary || (themeObj.isDark ? "#16171b" : "#f6f8fa");
+    document.documentElement.style.setProperty("--gutter-bg", gutterBg);
+
+    // Update body background
+    if (themeObj.bgPrimary && typeof document !== "undefined" && document.body) {
+      document.body.style.background = themeObj.bgPrimary;
     }
   };
 

@@ -6,7 +6,6 @@ import { FileExplorer } from "./FileExplorer";
 import { EditorView } from "./EditorView";
 import { FileActionModal } from "./FileActionModal";
 import { TerminalView } from "./TerminalView";
-import { MonacoEngineHost } from "./editor/MonacoEngineHost";
 import { WebBrowserPreview } from "./WebBrowserPreview";
 import { GitHubDesktopView } from "./git/GitHubDesktopView";
 import { IDEBottomBar } from "./IDEBottomBar";
@@ -29,7 +28,6 @@ import { useRecentFiles } from "./editor/useRecentFiles";
 import { useIDELayoutCallbacks, addVisitedTab } from "./useIDELayoutCallbacks";
 import { useSystemBackHandler } from "./useSystemBackHandler";
 import { useIDELayoutStyles } from "./useIDELayoutStyles";
-import { monacoLangForFile } from "../services/monaco/monacoLanguageMap";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import {
   BottomTabVisibility, DEFAULT_BOTTOM_TABS, firstVisibleTab,
@@ -375,9 +373,6 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
                 onCloseRecentFile={removeRecentFile}
                 visible={bottomTab === "editor"}
               />
-              {/* Lazy engine: plaintext never uses Monaco (service returns null),
-                  so skip the 3.9M WebView until a highlightable file opens. */}
-              {monacoLangForFile(activeFile?.name) !== "plaintext" && <MonacoEngineHost />}
             </View>
           )}
 
