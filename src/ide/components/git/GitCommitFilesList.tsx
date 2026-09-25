@@ -12,6 +12,7 @@ import { Ionicons, Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { useOrientation } from "../../../theme/useOrientation";
 import { GitCommit, GitCommitFile } from "./types";
+import { GitFileIcon } from "./GitFileIcon";
 
 interface GitCommitFilesListProps {
   commit: GitCommit;
@@ -169,18 +170,7 @@ export function GitCommitFilesList({
                 activeOpacity={0.7}
               >
                 <View style={styles.fileRowLeft}>
-                  <Octicons
-                    name={
-                      item.status === "deleted"
-                        ? "diff-removed"
-                        : item.status === "added"
-                        ? "diff-added"
-                        : "file"
-                    }
-                    size={isLandscape ? 12 : 14}
-                    color={statusColor}
-                    style={styles.fileIcon}
-                  />
+                  <GitFileIcon filename={item.filename} size={isLandscape ? 12 : 14} />
                   <View style={styles.fileTextCol}>
                     <Text
                       style={[

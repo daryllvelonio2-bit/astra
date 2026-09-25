@@ -32,8 +32,6 @@ interface GitChangesListProps {
   onToggleStageFile: (file: GitFileStatus) => void;
   onToggleStageAll: (stageAll: boolean) => void;
   onCommit: (summary: string, description: string) => void;
-  onCommitAndPush?: (summary: string, description: string) => void;
-  onPush?: () => void;
 }
 
 export function GitChangesList({
@@ -48,8 +46,6 @@ export function GitChangesList({
   onToggleStageFile,
   onToggleStageAll,
   onCommit,
-  onCommitAndPush,
-  onPush,
 }: GitChangesListProps) {
   const { theme } = useTheme();
   const { keyboardMouseMode } = useKeyboardMouseMode();
@@ -61,7 +57,7 @@ export function GitChangesList({
   const [inputFocused, setInputFocused] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [descHeight, setDescHeight] = useState(48);
-  const [pushAfterCommit, setPushAfterCommit] = useState(true);
+
   const descriptionRef = useRef<TextInput>(null);
   const fileListRef = useRef<FlatList>(null);
 
@@ -118,13 +114,7 @@ export function GitChangesList({
     if (stagedCount === 0) {
       onToggleStageAll(true);
     }
-    // Single commit bar: the push toggle decides whether the commit
-    // also pushes (GitHub Desktop-style), no separate commit button.
-    if (pushAfterCommit && onCommitAndPush) {
-      onCommitAndPush(summary.trim(), description.trim());
-    } else {
-      onCommit(summary.trim(), description.trim());
-    }
+    onCommit(summary.trim(), description.trim());
     setSummary("");
     setDescription("");
   };
@@ -196,16 +186,6 @@ export function GitChangesList({
                 <Text style={[styles.emptySubtitle, isLandscape && styles.emptySubtitleLandscape, { color: theme.textSecondary }]}>
                   Your local commits are ready to push to GitHub.
                 </Text>
-                {onPush && !detached && (
-                  <TouchableOpacity
-                    style={[styles.pushNowBtn, { backgroundColor: theme.accent }]}
-                    onPress={onPush}
-                    activeOpacity={0.8}
-                  >
-                    <Octicons name="upload" size={13} color="#fff" />
-                    <Text style={styles.pushNowBtnText}>Push origin</Text>
-                  </TouchableOpacity>
-                )}
               </>
             ) : (
               <>
@@ -316,29 +296,14 @@ export function GitChangesList({
           />
         )}
 
-        {/* Single commit bar with push toggle (GitHub Desktop-style) */}
+        {/* Commit bar — push lives in the header sync button */}
         <View style={styles.commitBtnRow}>
-          {files.length === 0 && ahead > 0 && !detached ? (
-            onPush && (
-              <TouchableOpacity
-                style={[styles.commitBtn, isLandscape && styles.commitBtnLandscape, { backgroundColor: theme.accent, borderColor: theme.accent, flexDirection: "row", gap: 6 }]}
-                onPress={onPush}
-                activeOpacity={0.8}
-              >
-                <Octicons name="upload" size={isLandscape ? 12 : 14} color="#fff" />
-                <Text style={[styles.commitBtnText, isLandscape && styles.commitBtnTextLandscape, { color: "#fff", fontWeight: "700" }]} numberOfLines={1}>
-                  Push {ahead} {ahead === 1 ? "commit" : "commits"} to origin
-                </Text>
-              </TouchableOpacity>
-            )
-          ) : (
-            <>
-              <TouchableOpacity
+            <TouchableOpacity
                 style={[styles.commitBtn, isLandscape && styles.commitBtnLandscape, { backgroundColor: canCommit ? theme.accent : theme.bgTertiary, borderColor: theme.border }]}
                 onPress={handleCommitPress}
                 disabled={!canCommit}
                 activeOpacity={0.8}
-                accessibilityLabel={pushAfterCommit && onCommitAndPush ? "Commit and push" : `Commit to ${currentBranch}`}
+                accessibilityLabel={`Commit to ${currentBranch}`}
               >
                 {committing ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -348,50 +313,6 @@ export function GitChangesList({
                   </Text>
                 )}
               </TouchableOpacity>
-
-              {onCommitAndPush && (
-                <TouchableOpacity
-                  style={[
-                    styles.pushToggle,
-                    isLandscape && styles.pushToggleLandscape,
-                    {
-                      backgroundColor: pushAfterCommit ? `${theme.accent}20` : theme.bgTertiary,
-                      borderColor: pushAfterCommit ? theme.accent : theme.border,
-                    },
-                  ]}
-                  onPress={() => setPushAfterCommit((v) => !v)}
-                  activeOpacity={0.8}
-                  accessibilityRole="switch"
-                  accessibilityState={{ checked: pushAfterCommit }}
-                  accessibilityLabel="Push after commit"
-                >
-                  <Octicons
-                    name="upload"
-                    size={isLandscape ? 12 : 14}
-                    color={pushAfterCommit ? theme.accent : theme.textMuted}
-                  />
-                  <View
-                    style={[
-                      styles.toggleTrack,
-                      { backgroundColor: pushAfterCommit ? theme.accent : theme.border },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.toggleThumb,
-                        pushAfterCommit ? styles.toggleThumbOn : styles.toggleThumbOff,
-                      ]}
-                    />
-                  </View>
-                  {!isLandscape && (
-                    <Text style={[styles.commitPushText, { color: pushAfterCommit ? theme.accent : theme.textMuted }]} numberOfLines={1}>
-                      Push
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              )}
-            </>
-          )}
         </View>
       </View>
     </View>

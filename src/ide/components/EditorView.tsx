@@ -101,19 +101,17 @@ function EditorViewInner({
 
   const assists = useEditorAssists(content, fileName, 0, editorSettings);
 
-  const { isFormatting, formatToast, format, onDoneEditing: onDoneWithFormat } =
-    useEditorFormatting({
-      contentRef,
-      fileName,
-      tabSize: editorSettings.tabSize,
-      formatOnSave: editorSettings.formatOnSave,
-      onChangeContent,
-    });
+  const { isFormatting, formatToast, format } = useEditorFormatting({
+    contentRef,
+    fileName,
+    tabSize: editorSettings.tabSize,
+    onChangeContent,
+  });
 
   const handleDoneEditing = useCallback(() => {
     setIsEditing(false);
-    onDoneWithFormat(() => Keyboard.dismiss());
-  }, [onDoneWithFormat]);
+    Keyboard.dismiss();
+  }, []);
 
   const handleToggleEdit = useCallback(() => {
     setIsEditing((prev) => !prev);

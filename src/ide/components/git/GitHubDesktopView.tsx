@@ -89,7 +89,7 @@ export function GitHubDesktopView({
     handleToggleStageFile,
     handleToggleStageAll,
     handleCommit,
-    handleCommitAndPush,
+
     handleSaveRemote,
     handlePush,
     handleFetch,
@@ -237,8 +237,6 @@ export function GitHubDesktopView({
                 onToggleStageFile={handleToggleStageFile}
                 onToggleStageAll={handleToggleStageAll}
                 onCommit={handleCommit}
-                onCommitAndPush={handleCommitAndPush}
-                onPush={handlePush}
               />
             ) : selectedCommit ? (
               <GitCommitFilesList

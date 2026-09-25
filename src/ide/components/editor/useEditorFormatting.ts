@@ -1,24 +1,24 @@
-import { useState, useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { formatDocument, FormatResult } from "../../services/formatService";
 
 interface UseEditorFormattingOptions {
   contentRef: React.MutableRefObject<string>;
   fileName?: string;
   tabSize?: number;
-  formatOnSave?: boolean;
   onChangeContent: (text: string) => void;
 }
 
 /**
- * Hook to manage document formatting in the native editor.
- * Handles on-demand format actions, format-on-save/done triggers,
- * and user-facing status feedback.
+ * Manual-only document formatting for the native editor.
+ * Formatting NEVER runs automatically: an implicit rewrite-on-exit would
+ * dirty files in git without the user asking. Only the explicit
+ * "Format file" menu action calls format(), and only an installed
+ * extension engine (Prettier, Black, Clang-Format) can change text.
  */
 export function useEditorFormatting({
   contentRef,
   fileName,
   tabSize = 2,
-  formatOnSave = true,
   onChangeContent,
 }: UseEditorFormattingOptions) {
   const [isFormatting, setIsFormatting] = useState(false);
@@ -54,20 +54,9 @@ export function useEditorFormatting({
     }
   }, [contentRef, fileName, tabSize, onChangeContent, showToast]);
 
-  const onDoneEditing = useCallback(
-    (dismissKeyboard: () => void) => {
-      dismissKeyboard();
-      if (formatOnSave) {
-        format();
-      }
-    },
-    [formatOnSave, format]
-  );
-
   return {
     isFormatting,
     formatToast,
     format,
-    onDoneEditing,
   };
 }

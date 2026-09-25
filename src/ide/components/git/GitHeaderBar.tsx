@@ -43,7 +43,7 @@ export function GitHeaderBar({
   const isRepo = !!status?.isRepo;
   const ahead = status?.ahead ?? 0;
   const behind = status?.behind ?? 0;
-  const iconSize = isLandscape ? 13 : 15;
+  const iconSize = isLandscape ? 10 : 12;
 
   // One dynamic sync action: pull when behind, push when ahead, else fetch.
   const op = behind > 0 ? "pull" : ahead > 0 ? "push" : "fetch";
@@ -230,15 +230,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
-    minWidth: 32,
-    height: 28,
-    paddingHorizontal: 9,
-    borderRadius: 6,
+    gap: 4,
+    minWidth: 26,
+    height: 24,
+    paddingHorizontal: 7,
+    borderRadius: 5,
     borderWidth: 1,
   },
-  iconActionLandscape: { height: 24, paddingHorizontal: 7, gap: 4 },
-  syncText: { fontSize: 11, fontWeight: "700" },
+  iconActionLandscape: { height: 21, paddingHorizontal: 5, gap: 3 },
+  syncText: { fontSize: 10, fontWeight: "700" },
   badge: {
     position: "absolute",
     top: -5,

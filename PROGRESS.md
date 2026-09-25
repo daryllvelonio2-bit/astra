@@ -1,8 +1,20 @@
 # Project Progress Tracker
 
 ## Status
-- **Current Phase:** Repo cleanup — dead code, dead modules, stale docs
+- **Current Phase:** Editor — removed built-in formatter (files no longer auto-dirty on edit-mode exit)
 - **Last Updated:** September 25, 2026
+
+### [2026-09-25] - Built-in code formatter removed (fixes phantom "modified" files)
+- **User Report:** opening a file and triggering edit mode marks it modified in Git, suspected formatter.
+- **Root cause (traced):** exiting edit mode always ran `handleDoneEditing` → `onDoneWithFormat` → `format()` (formatOnSave defaults true; saved on-device config confirmed). With no formatter extension installed, `formatDocument` fell through to `formatUniversal` (the built-in bracket-counting indenter), which rewrites nearly any hand-written file (re-indents all lines, collapses blank lines, forces trailing newline). The rewrite flowed through `onChangeContent` → IDELayout `handleContentChange` → `scheduleSave` → real disk write → Git shows the file modified without any user edit.
+- **Removed (user directive: "remove the built in code formatter"):**
+  1. `formatService.ts` (370→286 lines): deleted `formatUniversal` + `formatJson` entirely; `formatDocument` no longer fabricates a default engine — with no installed extension engine (Prettier/Black/Clang-Format) it returns the document byte-identical, `changed: false`, engine "None", message "No formatter installed for this file". Only explicit, real tools may ever rewrite code.
+  2. `useEditorFormatting.ts` (73→62 lines): dropped `formatOnSave` option and the `onDoneEditing` auto-format wrapper; hook is now manual-format only (`format`).
+  3. `EditorView.tsx`: `handleDoneEditing` just leaves edit mode + dismisses keyboard — no format call.
+  4. `configService.ts`: `formatOnSave` removed from `EditorSettings` interface + defaults (a stale `formatOnSave` key in an existing config.json is simply ignored).
+  5. `EditorSection.tsx`: removed the "Format on Save" toggle row; Code Formatter badge now reads Active/None and the no-formatter description is "No formatter installed — formatting is off".
+  Kept: the manual "Format file" action (⋯ menu) — now a safe no-op toast without an installed engine, real formatting with one.
+- **Verify:** `tsc --noEmit` exit 0; all touched files < 500 lines; zero `formatOnSave`/`formatUniversal`/`formatJson` references left in src (only unrelated "Built-in" strings remain); Metro reloaded on the Huawei device (bundled 277ms, pid 8354, redbox/fatal count 0).
 
 ### [2026-09-25] - Repo cleanup: removed dead PHP/voice/agent-code paths, fixed broken scripts, rewrote stale docs
 - **User Directive:** "fix all anomalies and remove unnecessary things" + "also remove that built in php please" (all PHP support, not just the stub).

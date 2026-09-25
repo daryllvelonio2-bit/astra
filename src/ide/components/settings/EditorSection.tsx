@@ -32,7 +32,7 @@ export function EditorSection({
   const hasFormatters = formatters.length > 0;
   const formatterNames = hasFormatters
     ? formatters.map((f) => f.displayName).join(", ")
-    : "Built-in intelligent formatter";
+    : "No formatter installed — formatting is off";
 
   const tabSize = editorSettings.tabSize || 2;
 
@@ -101,7 +101,7 @@ export function EditorSection({
                     { color: hasFormatters ? theme.accentGreen : theme.accent },
                   ]}
                 >
-                  {hasFormatters ? "Active" : "Default"}
+                  {hasFormatters ? "Active" : "None"}
                 </Text>
               </View>
             </View>
@@ -117,27 +117,6 @@ export function EditorSection({
               <Text style={[styles.smallBtnText, { color: theme.accent }]}>Browse</Text>
             </TouchableOpacity>
           )}
-        </View>
-
-        <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-        {/* Format on Save */}
-        <View style={styles.groupRow}>
-          <View style={[styles.iconBox, { backgroundColor: `${theme.accent}15` }]}>
-            <Ionicons name="save-outline" size={18} color={theme.accent} />
-          </View>
-          <View style={styles.textCol}>
-            <Text style={[styles.title, { color: theme.textPrimary }]}>Format on Save</Text>
-            <Text style={[styles.description, { color: theme.textMuted }]}>
-              Automatically format code when exiting edit mode
-            </Text>
-          </View>
-          <Switch
-            value={editorSettings.formatOnSave !== false}
-            onValueChange={(val) => onChangeEditorSettings({ ...editorSettings, formatOnSave: val })}
-            trackColor={{ false: theme.border, true: `${theme.accentGreen}80` }}
-            thumbColor={editorSettings.formatOnSave !== false ? theme.accentGreen : theme.textMuted}
-          />
         </View>
 
         <View style={[styles.divider, { backgroundColor: theme.border }]} />

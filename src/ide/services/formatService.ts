@@ -7,7 +7,7 @@ export interface FormatResult {
   success: boolean;
   formatted: string;
   changed: boolean;
-  engine: string; // e.g. "Prettier", "Black", "Clang-Format", "Built-in Formatter"
+  engine: string; // e.g. "Prettier", "Black", "Clang-Format", or "None"
   message: string;
 }
 
@@ -54,95 +54,6 @@ export async function isExtensionFormatterActive(idOrKeyword: string): Promise<b
   const active = await getActiveFormatters();
   const lower = idOrKeyword.toLowerCase();
   return active.some((ext) => ext.id.toLowerCase().includes(lower) || ext.displayName.toLowerCase().includes(lower));
-}
-
-/**
- * Formats JSON with specified indentation.
- */
-function formatJson(code: string, tabSize: number): string | null {
-  try {
-    const parsed = JSON.parse(code);
-    return JSON.stringify(parsed, null, tabSize) + "\n";
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Universal multi-language indenter and line cleaner.
- * Works instantaneously with zero native process overhead.
- */
-function formatUniversal(code: string, fileName?: string, tabSize: number = 2): string {
-  const ext = (fileName || "").split(".").pop()?.toLowerCase() || "";
-  if (ext === "json" || ext === "jsonc") {
-    const jsonFormatted = formatJson(code, tabSize);
-    if (jsonFormatted !== null) return jsonFormatted;
-  }
-
-  const lines = code.split("\n");
-  const indentStr = " ".repeat(tabSize);
-  let indentLevel = 0;
-  const result: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i];
-    const trimmed = rawLine.trim();
-
-    if (!trimmed) {
-      if (result.length > 0 && result[result.length - 1] === "") {
-        continue;
-      }
-      result.push("");
-      continue;
-    }
-
-    // Python indent handling is block-based (ends with :)
-    if (ext === "py") {
-      if (trimmed.startsWith("elif ") || trimmed.startsWith("else:") || trimmed.startsWith("except") || trimmed.startsWith("finally:")) {
-        indentLevel = Math.max(0, indentLevel - 1);
-      }
-      const currentIndent = indentStr.repeat(Math.max(0, indentLevel));
-      result.push(`${currentIndent}${trimmed}`);
-      if (trimmed.endsWith(":")) {
-        indentLevel++;
-      }
-      continue;
-    }
-
-    // Bracketed languages (JS, TS, C, C++, Java, Rust, Go, CSS, etc.)
-    const startsClosing = /^[)\]}]/.test(trimmed) || trimmed.startsWith("</");
-    if (startsClosing && indentLevel > 0) {
-      indentLevel--;
-    }
-
-    const currentIndent = indentStr.repeat(Math.max(0, indentLevel));
-    result.push(`${currentIndent}${trimmed}`);
-
-    // Count open vs close tokens outside of string literals
-    const sanitized = trimmed.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`[\s\S]*?`/g, "");
-    const opens = (sanitized.match(/[{\[(]/g) || []).length;
-    const closes = (sanitized.match(/[}\])]/g) || []).length;
-    const net = opens - closes;
-
-    if (startsClosing) {
-      indentLevel += Math.max(0, net + 1);
-    } else {
-      indentLevel += net;
-    }
-
-    // HTML / XML tag opening
-    if (ext === "html" || ext === "xml" || ext === "svg") {
-      const isOpeningTag = /^<[a-zA-Z0-9_-]+(?:\s+[^>]*?)?(?<!\/)>$/.test(trimmed);
-      const isVoid = /^<(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)/i.test(trimmed);
-      if (isOpeningTag && !isVoid) {
-        indentLevel++;
-      }
-    }
-
-    indentLevel = Math.max(0, indentLevel);
-  }
-
-  return result.join("\n").replace(/\n*$/, "\n");
 }
 
 /**
@@ -277,8 +188,11 @@ async function runClangFormatInPRoot(code: string, fileName: string): Promise<st
 }
 
 /**
- * Primary document formatter: automatically checks active extensions and executes
- * the best matching formatter (Prettier, Black, Clang-Format, Beautify, or universal indenter).
+ * Primary document formatter: runs the best matching formatter engine
+ * installed via extensions (Prettier, Black, Clang-Format). There is NO
+ * built-in formatter: with no engine for this language the document is
+ * returned unchanged ("no engine" message) — only explicit, real tools
+ * may ever rewrite code.
  */
 export async function formatDocument(
   content: string,
@@ -290,7 +204,7 @@ export async function formatDocument(
       success: true,
       formatted: content,
       changed: false,
-      engine: "Built-in Formatter",
+      engine: "None",
       message: "File is empty",
     };
   }
@@ -347,24 +261,26 @@ export async function formatDocument(
     }
   }
 
-  // 4. Any other active formatter name or fallback
+  // 4. Any other active formatter whose language covers this extension
   const matchingExt = activeFormatters.find((f) => {
     return f.languages.some((l) => (l.extensions || []).some((e) => e.replace(/^\./, "").toLowerCase() === ext));
   });
+  if (matchingExt) {
+    return {
+      success: true,
+      formatted: content,
+      changed: false,
+      engine: matchingExt.displayName,
+      message: `${matchingExt.displayName} does not support on-device formatting`,
+    };
+  }
 
-  const builtinFormatted = formatUniversal(content, fileName, tabSize);
-  const changed = builtinFormatted !== content;
-  const engineName = matchingExt
-    ? matchingExt.displayName
-    : hasPrettier
-    ? "Prettier Engine"
-    : "Built-in Formatter";
-
+  // No built-in formatter: leave the document byte-identical.
   return {
     success: true,
-    formatted: builtinFormatted,
-    changed,
-    engine: engineName,
-    message: changed ? `Formatted with ${engineName} ✨` : "Code is already formatted",
+    formatted: content,
+    changed: false,
+    engine: "None",
+    message: "No formatter installed for this file",
   };
 }

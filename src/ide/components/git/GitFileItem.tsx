@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { GitFileStatus } from "./types";
+import { GitFileIcon } from "./GitFileIcon";
 
 interface GitFileItemProps {
   file: GitFileStatus;
@@ -61,6 +62,7 @@ export const GitFileItem = React.memo(function GitFileItem({
           color={file.staged ? theme.accent : theme.textMuted}
         />
       </TouchableOpacity>
+      <GitFileIcon filename={file.filename} size={isLandscape ? 13 : 15} />
       <View style={styles.filePathCol}>
         <Text
           style={[

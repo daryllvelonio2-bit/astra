@@ -55,7 +55,6 @@ export interface EditorSettings {
   autoCloseQuotes: boolean;
   autoIndentOnEnter: boolean;
   enableCompletions: boolean;
-  formatOnSave: boolean;
   showIndentGuides?: boolean;
   fontSize?: number;
 }
@@ -66,7 +65,6 @@ export const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
   autoCloseQuotes: true,
   autoIndentOnEnter: true,
   enableCompletions: true,
-  formatOnSave: true,
   showIndentGuides: true,
   fontSize: 14,
 };
