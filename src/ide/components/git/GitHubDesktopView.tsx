@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -17,8 +17,10 @@ import { GitDiffViewer } from "./GitDiffViewer";
 import { GitBranchModal } from "./GitBranchModal";
 import { GitCommitActionsModal } from "./GitCommitActionsModal";
 import { GitCredentialsModal } from "./GitCredentialsModal";
+import { GitProfilePopup } from "./GitProfilePopup";
 import { GitRemoteModal } from "./GitRemoteModal";
 import { useGitOperations } from "./useGitOperations";
+import { loadGitHubSession, GitHubSession } from "../../services/gitService";
 
 interface GitHubDesktopViewProps {
   workspaceId?: string;
@@ -96,6 +98,23 @@ export function GitHubDesktopView({
     handleInitRepo,
   } = useGitOperations(workspaceId, visible, isLandscape);
 
+  // GitHub account (device-flow session). Drives the header avatar and the
+  // anchored profile popup; the popup owns sign-out itself.
+  const [ghSession, setGhSession] = useState<GitHubSession | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileAnchor, setProfileAnchor] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (visible) {
+      loadGitHubSession().then(setGhSession).catch(() => setGhSession(null));
+    }
+  }, [visible, showCredentialsModal]);
+
+  const openProfile = useCallback((anchor: { x: number; y: number }) => {
+    setProfileAnchor(anchor);
+    setShowProfile(true);
+  }, []);
+
   const files = status?.files || [];
 
   // System back button (Android) in portrait master/detail navigation:
@@ -124,6 +143,8 @@ export function GitHubDesktopView({
         onOpenCredentials={() => setShowCredentialsModal(true)}
         onOpenRemoteModal={() => setShowRemoteModal(true)}
         onInitRepo={handleInitRepo}
+        ghSession={ghSession}
+        onPressProfile={openProfile}
       />
 
       {/* Main Workspace Area */}
@@ -271,6 +292,14 @@ export function GitHubDesktopView({
       <GitCredentialsModal
         visible={showCredentialsModal}
         onClose={() => setShowCredentialsModal(false)}
+      />
+
+      {/* GitHub Profile Popup (anchored to the header avatar) */}
+      <GitProfilePopup
+        visible={showProfile}
+        anchor={profileAnchor}
+        onClose={() => setShowProfile(false)}
+        onSignedOut={() => setGhSession(null)}
       />
 
       {/* GitHub Remote Manager Modal */}

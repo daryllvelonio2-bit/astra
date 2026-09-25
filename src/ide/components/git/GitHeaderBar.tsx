@@ -1,9 +1,10 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { Ionicons, Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { useOrientation } from "../../../theme/useOrientation";
 import { GitRepoStatus } from "./types";
+import { GitHubSession } from "../../services/gitService";
 
 interface GitHeaderBarProps {
   repoName: string;
@@ -17,6 +18,8 @@ interface GitHeaderBarProps {
   onOpenCredentials: () => void;
   onOpenRemoteModal?: () => void;
   onInitRepo?: () => void;
+  ghSession?: GitHubSession | null;
+  onPressProfile?: (anchor: { x: number; y: number }) => void;
 }
 
 export function GitHeaderBar({
@@ -31,6 +34,8 @@ export function GitHeaderBar({
   onOpenCredentials,
   onOpenRemoteModal,
   onInitRepo,
+  ghSession,
+  onPressProfile,
 }: GitHeaderBarProps) {
   const { theme } = useTheme();
   const { isLandscape } = useOrientation();
@@ -151,13 +156,31 @@ export function GitHeaderBar({
             <Octicons name="globe" size={isLandscape ? 12 : 14} color={remoteUrl ? theme.accent : theme.textSecondary} />
           </TouchableOpacity>
         )}
-        <TouchableOpacity
-          style={[styles.iconBtn, isLandscape && styles.iconBtnLandscape]}
-          onPress={onOpenCredentials}
-          accessibilityLabel="GitHub Credentials"
-        >
-          <Octicons name="key" size={isLandscape ? 12 : 14} color={theme.textSecondary} />
-        </TouchableOpacity>
+        {/* GitHub: signed-in shows the avatar (opens the profile popup,
+            anchored to this button); signed-out shows the key (login modal). */}
+        {ghSession && onPressProfile ? (
+          <TouchableOpacity
+            style={[styles.iconBtn, isLandscape && styles.iconBtnLandscape]}
+            onPressIn={(e) => onPressProfile({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })}
+            accessibilityLabel="GitHub Profile"
+          >
+            {ghSession.avatarUrl ? (
+              <Image source={{ uri: ghSession.avatarUrl }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: theme.accent }]}>
+                <Text style={styles.avatarLetter}>{ghSession.username.slice(0, 1).toUpperCase()}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.iconBtn, isLandscape && styles.iconBtnLandscape]}
+            onPress={onOpenCredentials}
+            accessibilityLabel="GitHub Credentials"
+          >
+            <Octicons name="key" size={isLandscape ? 12 : 14} color={theme.textSecondary} />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[styles.iconBtn, isLandscape && styles.iconBtnLandscape]}
           onPress={onRefresh}
@@ -295,6 +318,17 @@ const styles = StyleSheet.create({
   iconBtn: {
     padding: 6,
   },
+  avatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#333",
+  },
+  avatarFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarLetter: { color: "#fff", fontSize: 12, fontWeight: "800" },
   iconBtnLandscape: {
     padding: 3,
   },
