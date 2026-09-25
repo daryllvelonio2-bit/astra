@@ -389,7 +389,13 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
             background={theme.background}
             foreground={theme.foreground}
             cursor={theme.cursor}
-            banner={getBannerTitle(workspaceId, theme.id !== "light")}
+            // Landscape panes are short: full card eats a third of the
+            // screen — paint the dim one-line path header instead.
+            banner={
+              isLandscape
+                ? getBannerCompact(workspaceId)
+                : getBannerTitle(workspaceId, theme.id !== "light")
+            }
             onRequestKeyboard={handleFocusTerminal}
             visible={visible}
             isKeyboardVisible={isKeyboardVisible}

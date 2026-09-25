@@ -25,9 +25,13 @@ export function useIDELayoutStyles(p: StylesParams) {
       styles.container,
       {
         backgroundColor: p.bgPrimary,
+        // Top: the status bar is force-hidden in landscape, so never pad it
+        // there (a leftover inset shows as a dead band). Sides/bottom: live
+        // system insets, which are 0 under gesture nav (true fullscreen) and
+        // equal the bar size on 3-button navigation.
         paddingTop: p.isLandscape ? 0 : p.insetTop,
-        paddingLeft: p.isLandscape ? 0 : p.insetLeft,
-        paddingRight: p.isLandscape ? 0 : p.insetRight,
+        paddingLeft: p.insetLeft,
+        paddingRight: p.insetRight,
       },
     ],
     [p.bgPrimary, p.isLandscape, p.insetTop, p.insetLeft, p.insetRight]

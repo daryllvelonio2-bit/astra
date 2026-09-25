@@ -1,5 +1,6 @@
 import React from "react";
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAppDialog } from "../services/appDialog";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { ProjectItem } from "./ProjectCard";
@@ -21,6 +22,8 @@ export function ProjectInspectorModal({
   onDeleteProject,
 }: ProjectInspectorModalProps) {
   const { theme } = useTheme();
+  // Bottom sheet content must clear the system navigation bar.
+  const insets = useSafeAreaInsets();
   if (!project) return null;
 
   const handleDelete = () => {
@@ -44,7 +47,7 @@ export function ProjectInspectorModal({
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <TouchableOpacity style={[styles.modalBackdrop, { backgroundColor: theme.overlay }]} activeOpacity={1} onPress={onClose} />
-        <View style={[styles.bottomSheet, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
+        <View style={[styles.bottomSheet, { backgroundColor: theme.bgSecondary, borderColor: theme.border }, { paddingBottom: Math.max(20, insets.bottom + 10) }]}>
           <View style={styles.inspectorHeader}>
             <View style={styles.headerTitleRow}>
               <MaterialCommunityIcons name="folder-outline" size={20} color={theme.accent} />

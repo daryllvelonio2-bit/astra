@@ -41,7 +41,7 @@ function IDEBottomBarInner({
   const canOfferHide = (compact || keyboardMouseMode) && !!onHideNavbar;
   if (canOfferHide && isHidden) {
     return (
-      <View style={styles.collapsedBarContainer} pointerEvents="box-none">
+      <View style={[styles.collapsedBarContainer, { paddingBottom: Math.max(insets.bottom, 0) }]} pointerEvents="box-none">
         <TouchableOpacity
           style={styles.showNavbarBtn}
           onPress={onShowNavbar}
@@ -54,7 +54,10 @@ function IDEBottomBarInner({
     );
   }
 
-  const bottomPad = compact ? 0 : (bottomInset !== undefined ? bottomInset : Math.max(insets.bottom, 0));
+  // Always respect the live system bottom/side insets: 0 with gesture nav
+  // (true fullscreen), the bar height with 3-button navigation — landscape
+  // included. Never hard-zero per orientation.
+  const bottomPad = bottomInset !== undefined ? bottomInset : Math.max(insets.bottom, 0);
 
   return (
     <View
@@ -64,8 +67,8 @@ function IDEBottomBarInner({
           backgroundColor: theme.bgSecondary,
           borderTopColor: theme.border,
           paddingBottom: bottomPad,
-          paddingLeft: compact ? 0 : insets.left || 0,
-          paddingRight: compact ? 0 : insets.right || 0,
+          paddingLeft: insets.left || 0,
+          paddingRight: insets.right || 0,
         },
       ]}
     >

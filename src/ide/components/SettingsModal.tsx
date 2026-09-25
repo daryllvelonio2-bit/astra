@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ScrollView,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
   loadConfig,
@@ -37,6 +38,9 @@ const AUTOSAVE_DEBOUNCE_MS = 800;
 
 export function SettingsModal({ visible, onClose, onSyncWorkspace, onRerunStartup }: SettingsModalProps) {
   const { theme, themeMode, setTheme } = useTheme();
+  // The sheet's last rows must clear the system navigation bar — respect
+  // the live bottom inset (3-button nav paints over a fixed 16 padding).
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
   const [apiKeys, setApiKeys] = useState<string[]>([]);
   const [activeTheme, setActiveTheme] = useState<AppTheme>(themeMode);
@@ -122,6 +126,7 @@ export function SettingsModal({ visible, onClose, onSyncWorkspace, onRerunStartu
         <View style={[
           styles.bottomSheet,
           { backgroundColor: theme.bgElevated, borderColor: theme.border },
+          { paddingBottom: Math.max(16, insets.bottom + 8) },
           isKeyboardVisible && { height: '92%', maxHeight: '92%' }
         ]}>
           <View style={styles.sheetHandleContainer}>

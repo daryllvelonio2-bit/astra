@@ -4,6 +4,25 @@
 - **Current Phase:** Editor — removed built-in formatter (files no longer auto-dirty on edit-mode exit)
 - **Last Updated:** September 25, 2026
 
+### [2026-09-25] - Editor ⋯ menu: removed format/split/zoom buttons
+- **User Directive:** remove "Format file", "Split view", "Zoom In/Out/Reset" from the ⋯ overflow sheet (buttons only — the features work and stay reachable elsewhere).
+- **Fix:** `EditorTabBar.tsx` menuActions now contains only Settings + Exit Project. Handler props left intact (inline landscape split button at EditorTabBar:176 still uses onToggleSplitScreen; format/zoom plumbing untouched).
+- **Verify:** `tsc --noEmit` exit 0; Metro reloaded on device (pid 19497, redbox/fatal 0).
+
+### [2026-09-25] - Bottom sheets/popups now respect the system navigation bar
+- **User Report:** "there are still parts that do not respect those" — Settings sheet and the editor ⋯ popup draw under the phone's navigation bar.
+- **Fix (useSafeAreaInsets, same live-inset rule as IDEBottomBar):**
+  - `SettingsModal.tsx` — bottom sheet paddingBottom = max(16, insets.bottom + 8).
+  - `EditorActionMenu.tsx` (⋯ popup) — sheet bottom offset = max(24, insets.bottom + 12).
+  - `ProjectInspectorModal.tsx` — bottom sheet paddingBottom = max(20, insets.bottom + 10) (same pattern).
+  - Audit: GitCommitActionsModal/GitProfilePopup/TerminalActionMenuModal/CompletionBar are anchored or centered — no conflict, untouched.
+- **Verify:** `tsc --noEmit` exit 0; Metro reloaded on device (pid 17508, redbox/fatal 0).
+
+### [2026-09-25] - Terminal landscape: banner card replaced by path-only header
+- **User Directive:** in landscape the single-screen terminal shows the full ASTRA card and wastes space; show only the path.
+- **Fix:** `TerminalView.tsx` single-screen XtermView banner prop is now orientation-aware: landscape paints `getBannerCompact` (dim one-line workspace path, same as split panes), portrait keeps the full `getBannerTitle` card (decoration only costs space in landscape).
+- **Verify:** `tsc --noEmit` exit 0; Metro reloaded on device (bundled 296ms, pid 1420, redbox/fatal 0).
+
 ### [2026-09-25] - Built-in code formatter removed (fixes phantom "modified" files)
 - **User Report:** opening a file and triggering edit mode marks it modified in Git, suspected formatter.
 - **Root cause (traced):** exiting edit mode always ran `handleDoneEditing` → `onDoneWithFormat` → `format()` (formatOnSave defaults true; saved on-device config confirmed). With no formatter extension installed, `formatDocument` fell through to `formatUniversal` (the built-in bracket-counting indenter), which rewrites nearly any hand-written file (re-indents all lines, collapses blank lines, forces trailing newline). The rewrite flowed through `onChangeContent` → IDELayout `handleContentChange` → `scheduleSave` → real disk write → Git shows the file modified without any user edit.

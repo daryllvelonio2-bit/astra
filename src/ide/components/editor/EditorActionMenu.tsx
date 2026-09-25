@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Pressable,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
 
@@ -41,6 +42,9 @@ export function EditorActionMenu({
   actions,
   accessibilityLabel = "More editor actions",
 }: EditorActionMenuProps) {
+  // The sheet floats above the nav bar — a fixed bottom lets 3-button
+  // navigation paint over the last action row.
+  const insets = useSafeAreaInsets();
   if (actions.length === 0) return null;
 
   return (
@@ -58,6 +62,7 @@ export function EditorActionMenu({
           style={[
             styles.sheet,
             { backgroundColor: theme.bgElevated, borderColor: theme.border },
+            { bottom: Math.max(24, insets.bottom + 12) },
           ]}
         >
           <View style={[styles.handle, { backgroundColor: theme.border }]} />

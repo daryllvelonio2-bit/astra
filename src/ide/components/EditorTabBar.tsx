@@ -82,28 +82,11 @@ function EditorTabBarInner({
   }, []);
 
   // Overflow sheet actions: everything beyond the 3 inline slots
-  // (Edit toggle, Run, ⋯).
+  // (Edit toggle, Run, ⋯). Format / split / zoom controls are removed
+  // from the sheet — those features are working and stay reachable via
+  // their own surfaces (handlers still wired, just no menu buttons).
   const menuActions: EditorMenuAction[] = useMemo(() => {
     const items: EditorMenuAction[] = [];
-    if (onFormat) {
-      items.push({
-        key: "format",
-        label: isFormatting ? "Formatting…" : "Format file",
-        icon: "sparkles-outline",
-        run: onFormat,
-      });
-    }
-    if (onToggleSplitScreen) {
-      items.push({
-        key: "split",
-        label: isSplitScreen ? "Exit split view" : "Split view",
-        icon: "tablet-landscape-outline",
-        run: onToggleSplitScreen,
-      });
-    }
-    if (onZoomIn) items.push({ key: "zoom-in", label: "Zoom In", icon: "add-circle-outline", run: onZoomIn });
-    if (onZoomOut) items.push({ key: "zoom-out", label: "Zoom Out", icon: "remove-circle-outline", run: onZoomOut });
-    if (onResetZoom) items.push({ key: "zoom-reset", label: "Reset Zoom", icon: "refresh-outline", run: onResetZoom });
     if (onOpenSettings) {
       items.push({ key: "settings", label: "Settings", icon: "settings-outline", run: onOpenSettings });
     }
@@ -111,7 +94,7 @@ function EditorTabBarInner({
       items.push({ key: "exit", label: "Exit Project", icon: "exit-outline", destructive: true, run: onExitProject });
     }
     return items;
-  }, [onFormat, isFormatting, onToggleSplitScreen, isSplitScreen, onZoomIn, onZoomOut, onResetZoom, onOpenSettings, onExitProject]);
+  }, [onOpenSettings, onExitProject]);
 
   return (
     <>
