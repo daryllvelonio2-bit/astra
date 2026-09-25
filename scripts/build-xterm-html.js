@@ -161,20 +161,31 @@ html, body {
   };
   // Negative lines = finger dragged down = show older = wheel-up (64);
   // positive = wheel-down (65). SGR format: bubbletea-class apps enable it.
+  // Mouse-reporting TUIs (opencode, claude code, htop...) own the wheel:
+  // every scroll tick must round-trip WebView->RN->PTY->app redraw. Firing
+  // one post per touch event (60-120/s, and per LINE before) saturated the
+  // bridge and made scrolling choppy/unresponsive. Coalesce all ticks within
+  // one animation frame into a single post — ~60 bridge writes/s max, in
+  // order, so the TUI sees a smooth wheel stream instead of a storm.
+  var pendingWheel = '';
+  var wheelRaf = null;
+  var flushWheel = function () {
+    wheelRaf = null;
+    if (!pendingWheel) return;
+    var seq = pendingWheel;
+    pendingWheel = '';
+    post({ type: 'data', data: seq });
+  };
   var scrollByLines = function (lineDelta, px, py) {
     if (lineDelta === 0) return;
     if (appMouseMode() !== 'none') {
       var cell = cellAt(px, py);
       var btn = lineDelta < 0 ? 64 : 65;
-      var count = Math.min(Math.abs(lineDelta), 12);
-      // Batch the wheel ticks into ONE bridge post: per-line posts made a
-      // fast flick fire dozens of RN->PTY writes per second and the scroll
-      // felt choppy/stalled under load.
-      var seq = '';
+      var count = Math.min(Math.abs(lineDelta), 24);
       for (var i = 0; i < count; i++) {
-        seq += '\\x1b[<' + btn + ';' + cell.col + ';' + cell.row + 'M';
+        pendingWheel += '\\x1b[<' + btn + ';' + cell.col + ';' + cell.row + 'M';
       }
-      post({ type: 'data', data: seq });
+      if (!wheelRaf) wheelRaf = requestAnimationFrame(flushWheel);
       return;
     }
     if (!isAltScreen()) {
@@ -239,7 +250,10 @@ html, body {
         if (e.cancelable) e.preventDefault();
         var now = Date.now();
         var dt = Math.max(1, now - lastTouchTime);
-        touchVelocityY = deltaY / dt;
+        // EMA velocity: the raw last-event delta collapses to ~0 when the
+        // finger decelerates before lift-off (a normal drag-release), which
+        // killed momentum on every flick that ended in a slowdown.
+        touchVelocityY = touchVelocityY * 0.6 + (deltaY / dt) * 0.4;
         lastTouchTime = now;
         lastTouchY = touchY;
         lastTouchX = touchX;
