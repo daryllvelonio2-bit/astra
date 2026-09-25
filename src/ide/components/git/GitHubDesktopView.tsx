@@ -101,6 +101,23 @@ export function GitHubDesktopView({
     handleInitRepo,
   } = useGitOperations(workspaceId, visible, isLandscape);
 
+  // Long-press file menu in the Changes tab (discard / ignore / copy / GitHub).
+  const {
+    showFileActions,
+    fileActionTarget,
+    fileActionAnchor,
+    fileActionsBusy,
+    githubUrl: fileGithubUrl,
+    openFileActions,
+    closeFileActions,
+    fileActionHandlers,
+  } = useFileActions({
+    workspaceId,
+    remoteUrl,
+    currentBranch: status?.currentBranch,
+    refreshGitState,
+  });
+
   // GitHub account (device-flow session). Drives the header avatar and the
   // anchored profile popup; the popup owns sign-out itself.
   const [ghSession, setGhSession] = useState<GitHubSession | null>(null);
@@ -239,6 +256,7 @@ export function GitHubDesktopView({
                 onToggleStageFile={handleToggleStageFile}
                 onToggleStageAll={handleToggleStageAll}
                 onCommit={handleCommit}
+                onLongPressFile={openFileActions}
               />
             ) : selectedCommit ? (
               <GitCommitFilesList
@@ -311,6 +329,19 @@ export function GitHubDesktopView({
         onClose={() => setShowRemoteModal(false)}
         onSaveRemote={handleSaveRemote}
       />
+
+      {/* File Actions Modal (long-press on a changes row) */}
+      {fileActionTarget && (
+        <GitFileActionsModal
+          visible={showFileActions}
+          anchor={fileActionAnchor}
+          file={fileActionTarget}
+          canOpenOnGitHub={!!fileGithubUrl}
+          busy={fileActionsBusy}
+          onClose={closeFileActions}
+          actions={fileActionHandlers}
+        />
+      )}
 
       {/* Commit Actions Modal (long-press on a history row) */}
       {commitActionTarget && (
