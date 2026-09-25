@@ -15,7 +15,7 @@ import { AnsiRenderer } from "./terminal/AnsiRenderer";
 import { TerminalHeader } from "./terminal/TerminalHeader";
 import { ExtraKeysBar, EXTRA_KEYS_BAR_HEIGHT } from "./terminal/ExtraKeysBar";
 import { XtermView, XtermViewHandle } from "./terminal/XtermView";
-import { getBannerTitle } from "./terminal/terminalBuffer";
+import { getBannerTitle, getBannerCompact } from "./terminal/terminalBuffer";
 import { PTY_XTERM_ENABLED } from "./terminal/ptyConfig";
 import { useTerminalInput } from "./terminal/useTerminalInput";
 import { useSplitTerminal } from "./terminal/useSplitTerminal";
@@ -300,7 +300,7 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
                 background={theme.background}
                 foreground={theme.foreground}
                 cursor={theme.cursor}
-                banner={getBannerTitle(workspaceId, theme.id !== "light")}
+                banner={getBannerCompact(workspaceId)}
                 onRequestKeyboard={() => {
                   setFocusedPane("primary");
                   xtermRef.current?.focusTerminal();
@@ -359,7 +359,7 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
                 background={theme.background}
                 foreground={theme.foreground}
                 cursor={theme.cursor}
-                banner={getBannerTitle(workspaceId, theme.id !== "light")}
+                banner={getBannerCompact(workspaceId)}
                 onRequestKeyboard={() => {
                   setFocusedPane("secondary");
                   xtermRefSecondary.current?.focusTerminal();

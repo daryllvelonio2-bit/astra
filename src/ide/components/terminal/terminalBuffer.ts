@@ -24,8 +24,6 @@ const ASTRA_ART = [
   "/_/   \\_\\____/ |_| |_| \\_\\/_/   \\_\\",
 ];
 
-const SEP = "-----------------------------------";
-
 export function getBannerTitle(workspaceId?: string, isDark: boolean = true): string {
   const dir = workspaceId ? `/workspaces/${workspaceId}` : "/workspace";
   const R = "\u001b[0m";
@@ -66,6 +64,12 @@ export function getBannerTitle(workspaceId?: string, isDark: boolean = true): st
     `  \u001b[31m● \u001b[32m● \u001b[33m● \u001b[34m● \u001b[35m● \u001b[36m● \u001b[37m● \u001b[90m●${R}`,
   ];
   return lines.join("\r\n") + "\r\n";
+}
+
+/** Split-view banner: panes are too short for the full card — directory only. */
+export function getBannerCompact(workspaceId?: string): string {
+  const dir = workspaceId ? `/workspaces/${workspaceId}` : "/workspace";
+  return `\u001b[90m${dir}\u001b[0m\r\n`;
 }
 export function appendCapped(current: string, chunk: string): string {
   if (!chunk) return current;
