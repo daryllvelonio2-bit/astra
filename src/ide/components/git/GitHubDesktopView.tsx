@@ -16,10 +16,12 @@ import { GitCommitFilesList } from "./GitCommitFilesList";
 import { GitDiffViewer } from "./GitDiffViewer";
 import { GitBranchModal } from "./GitBranchModal";
 import { GitCommitActionsModal } from "./GitCommitActionsModal";
+import { GitFileActionsModal } from "./GitFileActionsModal";
 import { GitCredentialsModal } from "./GitCredentialsModal";
 import { GitProfilePopup } from "./GitProfilePopup";
 import { GitRemoteModal } from "./GitRemoteModal";
 import { useGitOperations } from "./useGitOperations";
+import { useFileActions } from "./useFileActions";
 import { loadGitHubSession, GitHubSession } from "../../services/gitService";
 
 interface GitHubDesktopViewProps {
