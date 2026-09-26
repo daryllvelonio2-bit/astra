@@ -1,5 +1,21 @@
 # Project Progress Tracker
 
+### [2026-09-27] - Gap 4 Phase 3: stash + rebase UI wired into the Git tab
+- **New:** `useStashRebase.ts` (160 lines, mirrors `useMergeConflicts` refresh ownership so `useGitOperations` at 499 stays untouched) + `GitRebaseBanner.tsx` (68 lines, reuses merge-banner shared styles, gold variant, Abort/Skip/Continue with Continue disabled while files stay conflicted) + `GitStashModal.tsx` (247 lines: message + untracked toggle + save row, entries with Apply/Pop/Drop, drop confirmed).
+- **Wiring (`GitHubDesktopView` 423→481):** banner above Changes, Stash (n) entry in the select-all strip (`GitChangesList` 364→381), Rebase action on non-current branch rows (`GitBranchModal` 286→300), rebase-conflicted paths unioned into the merge set so badges + long-press ours/theirs + open-in-editor all work mid-rebase. `gap-analysis.md` item 4 checked off.
+- **Verify:** `tsc --noEmit` exit 0; every file <500 (view 481 — next Git-tab change must split it first); single-caller grep confirms no other `GitBranchModal`/`GitChangesList` consumers; theme tokens only.
+- **Feel check needed:** open the Git tab on the phone — stash a dirty tree, pop it, start a rebase onto another branch from the branch modal, resolve one conflicted file and Continue. Say if the banner or modal crowds the tab bar.
+
+### [2026-09-27] - Gap 4 Phase 2: stash + rebase services (no UI yet)
+- **Services:** new `gitStashService.ts` (168 lines: list/save/apply/pop/drop/show-files, `%x1f`-separated list format so `|`/`:` in messages survive, `stash@{N}`-validated refs, clean-tree guidance, pop-conflict guidance) + new `gitRebaseService.ts` (158 lines: rebase-merge/rebase-apply dir detection, branch from head-name, start/continue/skip/abort, `GIT_EDITOR=true` on continue/skip so the bridge never hangs, conflict guidance naming the Changes tab). `gitService.ts` untouched at 497 lines (at cap — new files instead of appending).
+- **Verify:** `tsc --noEmit` exit 0; 27/27 node contract checks on the REAL files (functions regex-extracted, never hand-copied: sq adversarial roundtrip literal with no side effects, stash push/list/parse/apply/pop/drop + empty-list path, clean + conflicting + abort rebase lifecycles in scratch repos under /tmp, rm -rf after); temp probe deleted after green.
+- **Feel check needed:** none — services only, no UI wired yet. Next: Phase 3 UI (stash section + rebase banner + Rebase-onto entry).
+### [2026-09-27] - GitHub suite: full client replacing the profile popup
+- **User directive:** "make the github popup integration look properly structured and redone ui, make it have all of the features of the github website... and proper workflows".
+- **What was built:** the anchored popup is gone; the header avatar now opens `GitHubSuiteView` — a full-screen GitHub client with a route stack + back button + bottom tabs (Home / Search / Inbox / You). Services layer rewritten as 8 focused modules: `gitHubApi` (typed result errors: 401/403-rate-limit/403-scope/404/422, paginated `ghListAll`, raw-text GETs, token cache + invalidation), `gitHubTypes`, `gitHubRepoService` (repos/branches/contents/commits/releases/contributors/languages/readme), `gitHubAccountService` (profile/followers/orgs/events/notifications/gists/star-watch-fork-follow), `gitHubIssueService` + `gitHubPullService` (full CRUD: create/comment/close/reopen/lock, PR merge/draft/ready/update-branch/request-reviewers/files/reviews), `gitHubSearchApi` (repo/code/user/issue search with GitHub qualifiers), `gitHubRepoWriteService` (create/edit/delete/transfer repos, branches, releases, Actions runs, collaborators). Views: home dashboard, unified search (4 scopes), repo hub (Code/Issues/PRs/Actions tabs + star/fork/watch/follow + branch picker + language bar), file tree + raw file view + on-device commit editor, issue/PR detail (timeline, comment composer, close/reopen/merge/ready, files-changed diff), notifications inbox (mark-read), releases list/detail + create, commits + commit diff, branches, contributors, starred/my repos, user/org profile (repos/followers/following/activity tabs), gists list, orgs list, new repo form, new issue/PR/release forms, repo settings (save/archive/collaborators/delete with confirm). Clone stays one-tap anywhere → global text indicator → lands in the current workspace (carried over from previous entries). Device-flow now requests `notifications gist workflow` scopes; token cache invalidated on login/logout. `gitHubProfileService` shrunk to pure date/number formatters; old `GitProfilePopup`/`GitReposTab`/`gitHubSearchService` deleted, zero dangling references (grep-verified).
+- **Verify:** `tsc --noEmit` exit 0; `expo export --platform android --dev` bundles successfully (18.9 MB dev JS, all new modules resolve); 24 github components + 8 services, every file <500 lines (largest: GitHubSuiteView 358, GitHubRepoService 317); theme tokens only, no hardcoded colors in new UI.
+- **Not in this surface (deliberate, documented):** gist/repo-issue label+assignee pickers, review-comment inline threads, reactions UI, Discussions/Projects//wiki. Workflows that need them degrade to "open on GitHub".
+
 ### [2026-09-27] - Clone lands INSIDE the current workspace, not a new one
 - **User directive:** cloning from the profile popup must place the repo in the currently open project directory — no new top-level workspace, no workspace switch.
 - **Change:** `repoCloneCoordinator.ts` — `startRepoClone(repo, workspaceId?)` resolves the parent via `getWorkspaceDirPath(workspaceId)` (fallback: workspaces root); success is now a "Clone complete" dialog (the watcher picks the folder up in the Explorer), no more `openExistingDirectoryAsProject`/`switchWorkspace`. `workspaceId` threaded `GitHubDesktopView` → `GitProfilePopup` → clone handler.
@@ -14,6 +30,33 @@
 - **User directive:** clone status must show anywhere in the app (IDE, terminal, any tab) — not inside the profile popup — as plain text at the top-left, no background boxes.
 - **Change:** `repoCloneCoordinator.ts` (new service: module-level clone state + pub/sub, owns clone lifecycle, workspace registration, error dialogs) + `RepoCloneIndicator.tsx` (new app-level overlay, `position:absolute` top-left under the status bar, `pointerEvents:"box-none"`, text only, Cancel link). Mounted once in `App.tsx` above all screens. Popup now just fires `startRepoClone` + closes; the local `useRepoClone` hook was deleted (zero references kept).
 - **Verify:** `tsc --noEmit` exit 0; App.tsx 168 / indicator 52 / coordinator 98 / popup 324 lines; no `useRepoClone` references remain. On-device feel check: clone from the popup, switch to the terminal tab — text stays top-left over everything until done.
+
+### [2026-09-27] - Avatar opens your profile, not Home
+- **Cause:** the header avatar opened the GitHub suite at its default Home route — the profile only appeared via deeper taps.
+- **Fix:** suite takes an `initialRoute` applied fresh on every open; avatar passes `{profile, your-login}` (signed-out falls back to Home's sign-in). `tsc` clean.
+
+### [2026-09-27] - GitHub suite respects the status bar
+- **Cause:** `GitHubSuiteView` modal is `statusBarTranslucent` with the top bar at y=0 — content rendered under the notification bar. Same class of overlap on the bottom tabs (gesture nav) and the editor sheet offset.
+- **Fix:** `useSafeAreaInsets` (app's established pattern): `paddingTop: insets.top` on the screen, `paddingBottom: max(7, insets.bottom)` on tabs, editor sheet shifted to `44 + insets.top`. `tsc` clean.
+
+### [2026-09-27] - Build + install over WiFi ADB (all explorer fixes on device)
+- **Build:** `assembleDebug` BUILD SUCCESSFUL in 5m 4s; 106 MB APK streamed-install to JNY-LX1 (`Success`), app launched. Includes: lazy tree, render-path + stable sort, resize/reopen smoothness, icons-on-open, deletion fix.
+
+### [2026-09-27] - Themed icons resolve on open (no resize needed)
+- **Cause:** theme SVGs load lazily per file (null → default icon until each read lands); nothing reliably re-read the cache once warm on open.
+- **Fix:** new `primeIconThemeSvgs` + `isIconThemeLoaded` — opening a project fires all theme SVG reads up front (each completion bumps rows via the existing subscription), with one delayed safety re-read only when cold reads actually started (warm opens: zero extra renders). Split lazy-tree logic into `useLazyExplorerTree.ts` to hold the cap — FileExplorer 513→419. `tsc` clean.
+
+### [2026-09-27] - Killed the VirtualizedList slow-update stall
+- **Cause:** `sortNodes` spread every node, so each refresh gave the list all-new objects — every row re-rendered + re-parsed its icon (your 9s `dt`).
+- **Fix:** new `sortNodesStable` (identical order to legacy sort, verified) — unchanged nodes keep identity across refreshes/adds/removes, so memo'd rows skip. Contract 4/4, `tsc` clean.
+
+### [2026-09-27] - Sidebar resize + reopen smoothness
+- **Reopen:** explorer no longer unmounts on minimize — it stays mounted at width 0 (`pointerEvents none`), so reopening is a pure width animation instead of mount (25 rows + icon parses + measure) inside the 180ms animation. Collapse benefits the same way.
+- **Resize:** drag start now aborts an in-flight watcher walk at the next yield (generation token) instead of letting its bridge chunks interleave with animation frames; new walks were already paused during drag. `tsc` clean, IDELayout still 500/500.
+
+### [2026-09-27] - Explorer render-path optimization (large codebases)
+- **Node identity:** new `reuseUnchangedNodes` — refreshes reuse previous objects for unchanged nodes, so only truly changed rows re-render (verified 8/8 contract checks: identical→same ref, reorder/append/type-flip handled). Overlay merges now clone only branches containing loaded folders (path-prefix check).
+- **Polling:** watcher interval is cost-proportional (4x last check cost, 2.5s floor / 60s ceiling) — small projects stay snappy, huge ones stop hammering the bridge. `tsc` clean.
 
 ### [2026-09-27] - Explorer lazy tree (huge projects no longer freeze)
 - **Cause:** open + every refresh ran a depth-6 full scan (thousands of sync native listings, tens of thousands of nodes) before first paint.

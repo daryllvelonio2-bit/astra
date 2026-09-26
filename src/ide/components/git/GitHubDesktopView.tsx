@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -18,11 +18,14 @@ import { GitBranchModal } from "./GitBranchModal";
 import { GitCommitActionsModal } from "./GitCommitActionsModal";
 import { GitFileActionsModal } from "./GitFileActionsModal";
 import { GitCredentialsModal } from "./GitCredentialsModal";
-import { GitProfilePopup } from "./GitProfilePopup";
+import { GitHubSuiteView } from "../github/GitHubSuiteView";
 import { GitRemoteModal } from "./GitRemoteModal";
 import { useGitOperations } from "./useGitOperations";
 import { useFileActions } from "./useFileActions";
 import { useMergeConflicts } from "./useMergeConflicts";
+import { useStashRebase } from "./useStashRebase";
+import { GitRebaseBanner } from "./GitRebaseBanner";
+import { GitStashModal } from "./GitStashModal";
 import { loadGitHubSession, GitHubSession } from "../../services/gitService";
 
 interface GitHubDesktopViewProps {
@@ -120,10 +123,9 @@ export function GitHubDesktopView({
   });
 
   // GitHub account (device-flow session). Drives the header avatar and the
-  // anchored profile popup; the popup owns sign-out itself.
+  // full GitHub suite; the suite owns sign-out itself.
   const [ghSession, setGhSession] = useState<GitHubSession | null>(null);
   const [showProfile, setShowProfile] = useState(false);
-  const [profileAnchor, setProfileAnchor] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     if (visible) {
@@ -131,8 +133,7 @@ export function GitHubDesktopView({
     }
   }, [visible, showCredentialsModal]);
 
-  const openProfile = useCallback((anchor: { x: number; y: number }) => {
-    setProfileAnchor(anchor);
+  const openProfile = useCallback((_anchor?: { x: number; y: number }) => {
     setShowProfile(true);
   }, []);
 
@@ -148,6 +149,37 @@ export function GitHubDesktopView({
     completeMergeOp,
     openInEditor,
   } = useMergeConflicts({ workspaceId, files, refreshGitState });
+
+  // Stash + rebase: same refresh ownership, separate hook (caps untouched).
+  const [showStashModal, setShowStashModal] = useState(false);
+  const {
+    stashes,
+    rebase,
+    rebaseConflictedSet,
+    stashRebaseBusy,
+    saveStashOp,
+    applyStashOp,
+    popStashOp,
+    dropStashOp,
+    startRebaseOp,
+    continueRebaseOp,
+    skipRebaseOp,
+    abortRebaseOp,
+  } = useStashRebase({ workspaceId, files, refreshGitState });
+
+  // Badges + long-press resolve rows cover merge AND rebase conflicts.
+  const allConflicted = useMemo(
+    () => new Set<string>([...conflictedSet, ...rebaseConflictedSet]),
+    [conflictedSet, rebaseConflictedSet]
+  );
+
+  const handleRebaseOnto = useCallback(
+    (branchName: string) => {
+      setShowBranchModal(false);
+      startRebaseOp(branchName);
+    },
+    [startRebaseOp, setShowBranchModal]
+  );
 
   // System back button (Android) in portrait master/detail navigation:
   // detail -> back goes to the master list instead of leaving the screen.
@@ -238,25 +270,36 @@ export function GitHubDesktopView({
             </View>
 
             {activeTab === "changes" ? (
-              <GitChangesList
-                files={files}
-                workspaceId={workspaceId}
-                selectedFile={selectedFile}
-                currentBranch={status?.currentBranch || "main"}
-                ahead={status?.ahead || 0}
-                detached={status?.detached || false}
-                committing={committing || syncing}
-                onSelectFile={loadFileDiff}
-                onToggleStageFile={handleToggleStageFile}
-                onToggleStageAll={handleToggleStageAll}
-                onCommit={handleCommit}
-                onLongPressFile={openFileActions}
-                mergeState={mergeState}
-                conflictedPaths={conflictedSet}
-                mergeBusy={mergeBusy}
-                onAbortMerge={abortMergeOp}
-                onCompleteMerge={completeMergeOp}
-              />
+              <>
+                <GitRebaseBanner
+                  state={rebase}
+                  busy={stashRebaseBusy}
+                  onContinue={continueRebaseOp}
+                  onSkip={skipRebaseOp}
+                  onAbort={abortRebaseOp}
+                />
+                <GitChangesList
+                  files={files}
+                  workspaceId={workspaceId}
+                  selectedFile={selectedFile}
+                  currentBranch={status?.currentBranch || "main"}
+                  ahead={status?.ahead || 0}
+                  detached={status?.detached || false}
+                  committing={committing || syncing}
+                  onSelectFile={loadFileDiff}
+                  onToggleStageFile={handleToggleStageFile}
+                  onToggleStageAll={handleToggleStageAll}
+                  onCommit={handleCommit}
+                  onLongPressFile={openFileActions}
+                  mergeState={mergeState}
+                  conflictedPaths={allConflicted}
+                  mergeBusy={mergeBusy}
+                  onAbortMerge={abortMergeOp}
+                  onCompleteMerge={completeMergeOp}
+                  stashCount={stashes.length}
+                  onOpenStash={() => setShowStashModal(true)}
+                />
+              </>
             ) : selectedCommit ? (
               <GitCommitFilesList
                 commit={selectedCommit}
@@ -304,6 +347,19 @@ export function GitHubDesktopView({
         onClose={() => setShowBranchModal(false)}
         onSwitchBranch={handleSwitchBranch}
         onCreateBranch={handleCreateBranch}
+        onRebaseOnto={handleRebaseOnto}
+      />
+
+      {/* Stash shelf */}
+      <GitStashModal
+        visible={showStashModal}
+        stashes={stashes}
+        busy={stashRebaseBusy}
+        onClose={() => setShowStashModal(false)}
+        onSave={saveStashOp}
+        onApply={applyStashOp}
+        onPop={popStashOp}
+        onDrop={dropStashOp}
       />
 
       {/* GitHub Credentials Modal */}
@@ -312,14 +368,14 @@ export function GitHubDesktopView({
         onClose={() => setShowCredentialsModal(false)}
       />
 
-      {/* GitHub Profile Popup (anchored to the header avatar) */}
-      <GitProfilePopup
+      {/* GitHub client (full surface: repos, code, issues, PRs, actions) */}
+      <GitHubSuiteView
         visible={showProfile}
-        anchor={profileAnchor}
+        session={ghSession}
         workspaceId={workspaceId}
+        initialRoute={ghSession?.username ? { name: "profile", login: ghSession.username } : undefined}
         onClose={() => setShowProfile(false)}
         onSignedOut={() => setGhSession(null)}
-        onOpenRemote={() => setShowRemoteModal(true)}
       />
 
       {/* GitHub Remote Manager Modal */}
@@ -340,7 +396,7 @@ export function GitHubDesktopView({
           busy={fileActionsBusy || mergeBusy}
           onClose={closeFileActions}
           actions={fileActionHandlers}
-          conflicted={conflictedSet.has(fileActionTarget.path)}
+          conflicted={allConflicted.has(fileActionTarget.path)}
           onUseOurs={() => resolveWith(fileActionTarget.path, "ours")}
           onUseTheirs={() => resolveWith(fileActionTarget.path, "theirs")}
           onOpenInEditor={() => openInEditor(fileActionTarget.path)}

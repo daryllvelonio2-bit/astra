@@ -15,17 +15,21 @@ import {
 
 const DEBOUNCE_MS = 600;
 const POLL_INTERVAL_MS = 2500;
-/** Slow trees back the poll off so the JS thread isn't permanently busy. */
-const POLL_INTERVAL_SLOW_MS = 15000;
-const POLL_INTERVAL_VERYSLOW_MS = 30000;
-const SLOW_FP_MS = 750;
-const VERYSLOW_FP_MS = 2000;
+/** Poll cost scales with tree size: next check waits 4x the last check's cost. */
+const POLL_INTERVAL_MAX_MS = 60000;
 const LOAD_TIMEOUT_MS = 30000;
 
 /** Module-level pause (set by useSidebarResizer while dragging). */
 let watcherPausedExternal = false;
 export function setWorkspaceWatcherPaused(paused: boolean): void {
   watcherPausedExternal = paused;
+}
+/** Bumps on drag start so an in-flight chunked walk aborts at the next
+ * yield instead of stealing animation frames. The walk's rejection is
+ * swallowed by the poll's catch — that cycle is simply skipped. */
+let watcherAbortGen = 0;
+export function cancelInFlightFingerprint(): void {
+  watcherAbortGen++;
 }
 
 function timeout<T>(ms: number): Promise<T | undefined> {
@@ -135,16 +139,18 @@ export function useWorkspaceAutoRefresh(
         return;
       fpInFlightRef.current = true;
       const stats: FingerprintStats = { dirCount: 0, durationMs: 0 };
-      computeWorkspaceFingerprintAsync(readDirectoryNative, dirPathRef.current, undefined, 25, stats)
+      const myGen = watcherAbortGen;
+      computeWorkspaceFingerprintAsync(readDirectoryNative, dirPathRef.current, undefined, 25, stats, () => myGen !== watcherAbortGen)
         .then((currentFp) => {
           fpInFlightRef.current = false;
-          // Adaptive poll: slow trees check less often.
-          const next =
-            stats.durationMs >= VERYSLOW_FP_MS
-              ? POLL_INTERVAL_VERYSLOW_MS
-              : stats.durationMs >= SLOW_FP_MS
-                ? POLL_INTERVAL_SLOW_MS
-                : POLL_INTERVAL_MS;
+          // Cost-proportional poll: checking costs ~durationMs of bridge
+          // traffic, so the next check waits 4x that (2.5s floor for small
+          // projects, 60s ceiling for huge ones). A 50ms tree still polls
+          // every 2.5s; an 8s tree drops to ~32s instead of hammering.
+          const next = Math.min(
+            POLL_INTERVAL_MAX_MS,
+            Math.max(POLL_INTERVAL_MS, Math.ceil(stats.durationMs * 4))
+          );
           if (next !== pollMsRef.current) {
             pollMsRef.current = next;
             if (pollInterval) clearInterval(pollInterval);

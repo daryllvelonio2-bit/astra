@@ -3,14 +3,14 @@ import { View, Text, TextInput, TouchableOpacity, FlatList } from "react-native"
 import { Ionicons } from "@expo/vector-icons";
 import { FileNode } from "../types";
 import { useFileDragDrop } from "./useFileDragDrop";
-import { getFileIcon, sortNodes } from "./fileExplorerUtils";
-import { subscribeIconTheme } from "../services/extensions/iconThemeService";
+import { getFileIcon, sortNodesStable } from "./fileExplorerUtils";
+import { subscribeIconTheme, isIconThemeLoaded, primeIconThemeSvgs, reloadActiveIconTheme } from "../services/extensions/iconThemeService";
 import { styles } from "./fileExplorerStyles";
 import { useTheme } from "../../theme/themeContext";
 import { useKeyboardMouseMode } from "../context/KeyboardMouseContext";
 import { FileExplorerRow } from "./FileExplorerRow";
 import { useVisibleExplorerRows, VisibleExplorerRow } from "./useVisibleExplorerRows";
-import { loadDirectoryChildren } from "../services/workspaceTreeService";
+import { useLazyExplorerTree } from "./useLazyExplorerTree";
 
 interface FileExplorerProps {
   projectName?: string;
@@ -54,89 +54,13 @@ function FileExplorerInner({
   const [isCreating, setIsCreating] = React.useState(false);
   const [inlineName, setInlineName] = React.useState("");
 
-  // Lazy children: shallow tree carries 1 level; deeper folders fetch on
-  // expand (one native listing each). Overlay presence means "loaded".
-  const [loadedChildren, setLoadedChildren] = React.useState<Record<string, { path: string; children: FileNode[] }>>({});
-  const loadedRef = React.useRef<Record<string, { path: string; children: FileNode[] }>>({});
-  loadedRef.current = loadedChildren;
-  const loadingRef = React.useRef<Set<string>>(new Set());
-  const wsIdRef = React.useRef(workspaceId);
-  wsIdRef.current = workspaceId;
-
-  // Workspace switch: drop caches (ids are namespaced, but stale overlays
-  // would linger in memory behind the new tree).
-  React.useEffect(() => {
-    setLoadedChildren({});
-    loadedRef.current = {};
-    setExpandedFolders({});
-  }, [workspaceId]);
-
-  // Tree refreshed (auto-refresh / pull): re-fetch open folders so expanded
-  // dirs show fresh contents instead of going stale behind the new tree.
-  const filesTickRef = React.useRef(0);
-  React.useEffect(() => {
-    if (++filesTickRef.current <= 1) return;
-    const open = Object.keys(expandedFoldersRef.current).filter((id) => loadedRef.current[id]);
-    if (!open.length || !wsIdRef.current) return;
-    let cancelled = false;
-    (async () => {
-      for (const id of open) {
-        const entry = loadedRef.current[id];
-        if (!entry) continue;
-        try {
-          const children = await loadDirectoryChildren(wsIdRef.current, entry.path);
-          if (!cancelled) setLoadedChildren((prev) => ({ ...prev, [id]: { path: entry.path, children } }));
-        } catch (_) {}
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [files]);
-
-  const mergedFiles = React.useMemo(() => {
-    if (!Object.keys(loadedChildren).length) return files;
-    const attach = (nodes: FileNode[]): FileNode[] =>
-      nodes.map((n) => {
-        const ov = loadedChildren[n.id];
-        const kids = ov ? ov.children : n.children;
-        if (!kids || n.type !== "folder") return n;
-        return { ...n, children: attach(kids) };
-      });
-    return attach(files);
-  }, [files, loadedChildren]);
-  const mergedRef = React.useRef<FileNode[]>([]);
-  mergedRef.current = mergedFiles;
-
-  const findNode = React.useCallback((nodes: FileNode[], id: string): FileNode | null => {
-    for (const n of nodes) {
-      if (n.id === id) return n;
-      if (n.type === "folder" && n.children?.length) {
-        const hit = findNode(n.children, id);
-        if (hit) return hit;
-      }
-    }
-    return null;
-  }, []);
-
-  const expandFolder = React.useCallback((folderId: string) => {
-    const node = findNode(mergedRef.current, folderId);
-    if (!node || node.type !== "folder") return;
-    if ((node.children?.length || 0) > 0 || loadedRef.current[folderId]) {
-      setExpandedFolders((prev) => (prev[folderId] ? prev : { ...prev, [folderId]: true }));
-      return;
-    }
-    if (loadingRef.current.has(folderId) || !wsIdRef.current) return;
-    loadingRef.current.add(folderId);
-    loadDirectoryChildren(wsIdRef.current, node.path)
-      .then((kids) => {
-        loadingRef.current.delete(folderId);
-        setLoadedChildren((prev) => ({ ...prev, [folderId]: { path: node.path, children: kids } }));
-        setExpandedFolders((prev) => ({ ...prev, [folderId]: true }));
-      })
-      .catch(() => {
-        loadingRef.current.delete(folderId);
-      });
-  }, [findNode]);
+  // Lazy tree (own hook): shallow base + fetch-on-expand overlays.
+  const { mergedFiles, expandFolder } = useLazyExplorerTree(
+    workspaceId,
+    files,
+    expandedFoldersRef,
+    setExpandedFolders
+  );
 
   const {
     draggingNode,
@@ -189,6 +113,33 @@ function FileExplorerInner({
     });
   }, []);
 
+  // Project opened/switched: resolve themed icons without user interaction.
+  // Prime fires all theme SVG reads up front (each completion notifies and
+  // bumps iconTick via the subscription above). The delayed bump covers the
+  // cold case where the definition itself was still loading — it fires only
+  // when new reads actually started, so warm opens cost zero extra renders.
+  React.useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    (async () => {
+      try {
+        if (!isIconThemeLoaded()) {
+          await reloadActiveIconTheme().catch(() => null);
+          if (cancelled) return;
+        }
+        const kicked = primeIconThemeSvgs();
+        if (kicked > 0 && !cancelled) {
+          timer = setTimeout(() => setIconTick((t) => t + 1), 900);
+        }
+      } catch (_) {}
+    })();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files]);
+
   const handleInlineSubmit = useCallback(() => {
     const trimmed = inlineName.trim();
     if (!trimmed) {
@@ -201,7 +152,15 @@ function FileExplorerInner({
     else if (onQuickAddFile) onQuickAddFile();
   }, [inlineName, onCreateFile, onQuickAddFile]);
 
-  const sortedFiles = React.useMemo(() => sortNodes(mergedFiles), [mergedFiles]);
+  // Stable sort: same order+subtree returns the previous array with the
+  // same node objects, so memo'd rows skip re-render on every refresh.
+  const prevSortedRef = React.useRef<FileNode[]>([]);
+  const sortedFiles = React.useMemo(() => {
+    const stable = sortNodesStable(prevSortedRef.current, mergedFiles);
+    prevSortedRef.current = stable;
+    return stable;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mergedFiles]);
 
   // Visible rows: flat list of expanded-path nodes. Identity stable
   // unless the tree or expansion changes — rows memo on this.

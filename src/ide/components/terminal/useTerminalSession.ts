@@ -51,6 +51,8 @@ async function startShellSession(sessionId: string, workspaceId?: string) {
   }
 }
 
+const formatTabName = (name: string) => name;
+
 const formatTaskTabName = (cmd: string) => {
   const clean = (cmd || "Task")
     .replace(/^(?:nohup|sudo|bash\s+-c)\s*/i, "")

@@ -29,7 +29,7 @@ export function RepoCloneIndicator() {
       style={[styles.wrap, { top: insets.top + 6, left: 10 }]}
     >
       <Text style={[styles.title, { color: theme.textPrimary }]} numberOfLines={1}>
-        Cloning {state.repo.fullName || state.repo.name}
+        Cloning {state.repo.fullName}
         {state.pct !== null ? ` · ${state.pct}%` : ""}
       </Text>
       {!!state.lastLine && (

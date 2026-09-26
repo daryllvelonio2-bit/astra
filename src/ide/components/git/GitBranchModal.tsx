@@ -24,6 +24,8 @@ interface GitBranchModalProps {
   onClose: () => void;
   onSwitchBranch: (branchName: string) => void;
   onCreateBranch: (branchName: string) => void;
+  /** Start rebasing the current branch onto this one (absent = no rebase UI). */
+  onRebaseOnto?: (branchName: string) => void;
 }
 
 export function GitBranchModal({
@@ -34,6 +36,7 @@ export function GitBranchModal({
   onClose,
   onSwitchBranch,
   onCreateBranch,
+  onRebaseOnto,
 }: GitBranchModalProps) {
   const { theme } = useTheme();
   const { keyboardMouseMode } = useKeyboardMouseMode();
@@ -129,6 +132,17 @@ export function GitBranchModal({
                     >
                       {item.name}
                     </Text>
+                    {onRebaseOnto && !isSelected && (
+                      <TouchableOpacity
+                        onPress={() => onRebaseOnto(item.name)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityLabel={`Rebase onto ${item.name}`}
+                      >
+                        <Text style={{ fontSize: 11.5, fontWeight: "600", color: theme.accent }}>
+                          Rebase
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                     {isSelected && (
                       <Ionicons name="checkmark" size={16} color={theme.accent} style={styles.checkIcon} />
                     )}

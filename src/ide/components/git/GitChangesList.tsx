@@ -30,6 +30,9 @@ interface GitChangesListProps {
   mergeBusy?: boolean;
   onAbortMerge?: () => void;
   onCompleteMerge?: () => void;
+  /** Stash shelf entry (hidden when onOpenStash is absent). */
+  stashCount?: number;
+  onOpenStash?: () => void;
 }
 
 export function GitChangesList({
@@ -50,6 +53,8 @@ export function GitChangesList({
   mergeBusy = false,
   onAbortMerge,
   onCompleteMerge,
+  stashCount = 0,
+  onOpenStash,
 }: GitChangesListProps) {
   const { theme } = useTheme();
   const { keyboardMouseMode } = useKeyboardMouseMode();
@@ -192,6 +197,18 @@ export function GitChangesList({
           <Text style={[styles.countText, isLandscape && styles.countTextLandscape, { color: theme.textMuted }]}>
             {files.length} changed file{files.length !== 1 ? "s" : ""}
           </Text>
+          {onOpenStash && (
+            <TouchableOpacity
+              style={{ marginLeft: "auto", paddingVertical: 4, paddingLeft: 12 }}
+              onPress={onOpenStash}
+              activeOpacity={0.7}
+              accessibilityLabel="Open stash"
+            >
+              <Text style={[styles.countText, isLandscape && styles.countTextLandscape, { color: theme.accent }]}>
+                Stash{stashCount > 0 ? ` (${stashCount})` : ""}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 

@@ -95,7 +95,8 @@ export async function computeWorkspaceFingerprintAsync(
   rootPath: string,
   maxDepth: number = WATCHER_MAX_DEPTH,
   yieldEvery: number = 25,
-  stats?: FingerprintStats
+  stats?: FingerprintStats,
+  shouldAbort?: () => boolean
 ): Promise<string> {
   const started = Date.now();
   const visited = new Set<string>();
@@ -110,7 +111,10 @@ export async function computeWorkspaceFingerprintAsync(
     } catch (_) {
       return hash >>> 0;
     }
-    if (++dirCount % yieldEvery === 0) await yieldTick();
+    if (++dirCount % yieldEvery === 0) {
+      if (shouldAbort?.()) throw new Error("aborted");
+      await yieldTick();
+    }
     const sorted = entries.slice().sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     for (const e of sorted) {
       if (!e || !e.name) continue;

@@ -1,5 +1,4 @@
-import { GitHubRepo } from "./gitHubProfileService";
-import { cloneUrlForRepo } from "./gitHubSearchService";
+import { cloneUrlForRepo } from "./gitHubSearchApi";
 import { cloneGitRepo, cancelClone as killGitClone } from "./gitCloneService";
 import { getWorkspacesDir } from "./storagePaths";
 import { getWorkspaceDirPath } from "./workspaceService";
@@ -9,12 +8,18 @@ import { showAppDialog } from "./appDialog";
  * Global one-tap repo clone. Lives outside React so the clone keeps running
  * (and reporting progress) no matter which screen or tab is open — the
  * RepoCloneIndicator renders its state at the app level. On success the
- * cloned folder is registered as a workspace and the app switches into it.
+ * cloned folder appears inside the current workspace (or the workspaces
+ * root when none is open).
  */
 
+/** Minimal shape a clone needs; every view can build one cheaply. */
+export interface CloneTarget {
+  fullName: string;
+}
+
 export interface RepoCloneState {
-  /** Repo currently cloning (null = idle). */
-  repo: GitHubRepo | null;
+  /** Target currently cloning (null = idle). */
+  repo: CloneTarget | null;
   /** 0-100 when git reported a percentage. */
   pct: number | null;
   /** Freshest progress line from git. */
@@ -48,13 +53,13 @@ export function subscribeRepoClone(cb: (s: RepoCloneState) => void): () => void 
 /** Start a clone into the open workspace's directory (as a subfolder there).
  *  No-op while one is already running. Without a workspaceId, falls back to
  *  the workspaces root. */
-export async function startRepoClone(repo: GitHubRepo, workspaceId?: string): Promise<void> {
+export async function startRepoClone(target: CloneTarget, workspaceId?: string): Promise<void> {
   if (busy) return;
   busy = true;
   cancelled = false;
-  setState({ repo, pct: null, lastLine: "Connecting..." });
+  setState({ repo: target, pct: null, lastLine: "Connecting..." });
   try {
-    const url = cloneUrlForRepo(repo);
+    const url = cloneUrlForRepo(target.fullName);
     const rawDir = workspaceId ? await getWorkspaceDirPath(workspaceId) : getWorkspacesDir();
     const parentDir = rawDir.replace(/\/+$/, "");
     const res = await cloneGitRepo(url, parentDir, undefined, (line) => {
@@ -76,7 +81,7 @@ export async function startRepoClone(repo: GitHubRepo, workspaceId?: string): Pr
     }
     showAppDialog({
       title: "Clone failed",
-      message: res.error || `Could not clone ${repo.fullName || repo.name}.`,
+      message: res.error || `Could not clone ${target.fullName}.`,
     });
   } catch (e: any) {
     setState(IDLE);

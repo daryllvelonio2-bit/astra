@@ -378,8 +378,8 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
 
       {/* Main Workspace Area */}
       <View style={workspaceStyle}>
-        {isSidebarOpen && bottomTab === "editor" && (
-          <Animated.View style={sidebarAnimStyle}>
+        {bottomTab === "editor" && (
+          <Animated.View style={sidebarAnimStyle} pointerEvents={isSidebarOpen ? "auto" : "none"}>
             <PanelErrorBoundary panelName="Explorer" resetKey={workspace?.id}>
             <FileExplorer
               projectName={workspace.name}

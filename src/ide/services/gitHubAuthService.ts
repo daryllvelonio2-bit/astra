@@ -1,6 +1,7 @@
 import { executeCommand } from "../../../modules/linux-runner/src";
 import { loadConfig, saveConfig } from "./configService";
 import { configureGitCredentials } from "./gitRemoteService";
+import { invalidateGitHubTokenCache } from "./gitHubApi";
 
 /**
  * GitHub sign-in via the OAuth **device flow** — the same method `gh` and
@@ -19,7 +20,7 @@ const DEVICE_CODE_URL = "https://github.com/login/device/code";
 const TOKEN_URL = "https://github.com/login/oauth/access_token";
 const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
 const API_BASE = "https://api.github.com";
-const SCOPES = "repo read:user user:email";
+const SCOPES = "repo read:user user:email notifications gist workflow";
 
 /** Astra's public OAuth App client ID (device flow — no secret exists). */
 const DEFAULT_CLIENT_ID = "Ov23liKNnfWWBaAsfR4o";
@@ -169,6 +170,7 @@ export async function completeGitHubLogin(token: string): Promise<GitHubSession>
     githubEmail: finalEmail,
     githubAvatarUrl: user?.avatar_url || "",
   });
+  invalidateGitHubTokenCache();
   return { username, email: finalEmail, avatarUrl: user?.avatar_url || "", hasToken: true };
 }
 
@@ -215,6 +217,7 @@ export async function ensureGitHubCredentials(): Promise<boolean> {
 /** Logout: forgets the token locally and removes guest git credentials. */
 export async function logoutGitHub(): Promise<void> {
   await saveConfig({ githubToken: "", githubUsername: "", githubEmail: "", githubAvatarUrl: "" });
+  invalidateGitHubTokenCache();
   try {
     await executeCommand(
       "rm -f ~/.git-credentials && git config --global --unset credential.helper 2>/dev/null; true"

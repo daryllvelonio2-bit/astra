@@ -9,7 +9,7 @@ recommendation for a daily-driver phone IDE.
 - [x] **1. Find & replace in the editor** — done 2026-09-26 (Phase 1: CM search panel, top-docked, ⋯ entry + Ctrl/Cmd+F).
 - [x] **2. Search across the project** — done 2026-09-26 (Phase 2: guest rg→grep, bottom-sheet results, tap-to-jump).
 - [x] **3. Merge conflict handling** — done 2026-09-26 (Phase 3: conflict banner + badges + ours/theirs resolve + abort/complete, friendly pull message).
-- [ ] **4. Git stash / rebase UI** — cherry-pick exists, these do not.
+- [x] **4. Git stash / rebase UI** — done 2026-09-27 (stash shelf: save/apply/pop/drop + untracked toggle; rebase: start-onto from branch rows, banner with continue/skip/abort, conflict badges shared with merge UI).
   *(Medium)*
 - [x] **5. File watcher** — done 2026-09-26 (Phase 4: existing 2.5s poll verified + hardened — depth-8 FNV fingerprint, cycle guard, order-independent).
 - [x] **6. Error boundaries** — done 2026-09-26 (Phase 5: per-panel boundaries with themed retry fallback; corrected — a root boundary in `App.tsx` already existed, the gap was panel scope).

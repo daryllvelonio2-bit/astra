@@ -229,3 +229,31 @@ export function getActiveIconThemeSvg(
 
 // Initial trigger to load active icon theme on app launch
 reloadActiveIconTheme().catch(() => {});
+
+/** True once the theme definition finished loading (SVGs may still stream in). */
+export function isIconThemeLoaded(): boolean {
+  return !!activeTheme?.definition;
+}
+
+/**
+ * Fire off reads for every SVG the active theme references, so the cache is
+ * warm before rows render. Each completed read notifies subscribers, which
+ * re-renders rows with real icons — no user interaction needed. Safe to
+ * call repeatedly: cached/pending paths are skipped inside getCachedSvg.
+ */
+export function primeIconThemeSvgs(): number {
+  if (!activeTheme?.definition) return 0;
+  const iconDefs = activeTheme.definition.iconDefinitions || {};
+  const baseDir = activeTheme.themeDir
+    ? `${activeTheme.installDir}/${activeTheme.themeDir}`
+    : activeTheme.installDir;
+  let kicked = 0;
+  for (const key of Object.keys(iconDefs)) {
+    const p = iconDefs[key]?.iconPath;
+    if (!p) continue;
+    const before = svgCache.has(resolvePath(baseDir, p));
+    getCachedSvg(resolvePath(baseDir, p));
+    if (!before) kicked++;
+  }
+  return kicked;
+}

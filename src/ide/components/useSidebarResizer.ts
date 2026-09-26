@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, PanResponder } from "react-native";
-import { setWorkspaceWatcherPaused } from "./useWorkspaceAutoRefresh";
+import { setWorkspaceWatcherPaused, cancelInFlightFingerprint } from "./useWorkspaceAutoRefresh";
 
 const MIN_WIDTH = 90;
 const MAX_WIDTH = 320;
@@ -57,6 +57,7 @@ export function useSidebarResizer(
       },
       onPanResponderGrant: () => {
         if (isCollapsingRef.current) return;
+        cancelInFlightFingerprint();
         sidebarWidthAnim.stopAnimation((val) => {
           if (typeof val === "number") {
             currentWidthRef.current = val;

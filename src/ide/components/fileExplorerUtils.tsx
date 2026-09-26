@@ -54,24 +54,53 @@ export function getFileIcon(fileName: string, isFolder = false, isExpanded = fal
   return <Ionicons name="document-text-outline" size={16} color="#9cdcfe" />;
 }
 
+function compareNodes(a: FileNode, b: FileNode): number {
+  const aIsFolder = a.type === 'folder';
+  const bIsFolder = b.type === 'folder';
+  if (aIsFolder !== bIsFolder) return aIsFolder ? -1 : 1;
+
+  const aIsDot = a.name.startsWith('.');
+  const bIsDot = b.name.startsWith('.');
+  if (aIsDot !== bIsDot) return aIsDot ? 1 : -1;
+
+  return a.name.localeCompare(b.name, undefined, { sensitivity: 'accent', numeric: true });
+}
+
 export function sortNodes(nodes: FileNode[]): FileNode[] {
   if (!nodes) return [];
-  const sorted = [...nodes].sort((a, b) => {
-    const aIsFolder = a.type === 'folder';
-    const bIsFolder = b.type === 'folder';
-    if (aIsFolder !== bIsFolder) return aIsFolder ? -1 : 1;
-
-    const aIsDot = a.name.startsWith('.');
-    const bIsDot = b.name.startsWith('.');
-    if (aIsDot !== bIsDot) return aIsDot ? 1 : -1;
-
-    return a.name.localeCompare(b.name, undefined, { sensitivity: 'accent', numeric: true });
-  });
+  const sorted = [...nodes].sort(compareNodes);
 
   return sorted.map((node) => ({
     ...node,
     children: node.children ? sortNodes(node.children) : undefined,
   }));
+}
+
+/**
+ * Identity-preserving sort: same comparator as sortNodes, but nodes whose
+ * order and subtree are unchanged keep their previous object identity, so
+ * memo'd rows skip re-render. Without this, every refresh hands the list
+ * all-new objects (the spread above) and VirtualizedList re-renders +
+ * re-parses icons for every row — the "large list slow to update" stall.
+ */
+export function sortNodesStable(prev: FileNode[] | undefined, nodes: FileNode[]): FileNode[] {
+  if (!nodes) return prev || [];
+  const sorted = [...nodes].sort(compareNodes);
+  const prevById = new Map<string, FileNode>();
+  if (prev) for (const p of prev) prevById.set(p.id, p);
+  const out = sorted.map((n) => {
+    const p = prevById.get(n.id);
+    if (!p || p.type !== n.type || p.name !== n.name) return n;
+    if (n.type !== "folder" || !n.children?.length) return !n.children?.length && !p.children?.length ? p : n;
+    const nextKids = sortNodesStable(p.children || [], n.children);
+    if (nextKids === p.children) return p;
+    return { ...n, children: nextKids };
+  });
+  const identical =
+    !!prev &&
+    prev.length === out.length &&
+    out.every((n, i) => prev[i] === n);
+  return identical && prev ? prev : out;
 }
 
 /** Recursively updates path and id for a node and all its descendants */

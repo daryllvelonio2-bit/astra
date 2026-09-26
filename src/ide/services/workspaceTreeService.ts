@@ -112,3 +112,36 @@ export async function loadDirectoryChildren(
     return [];
   }
 }
+
+/**
+ * Keep node identity stable across reloads: every shallow reload builds
+ * fresh objects, which would defeat the memo'd rows and re-render the
+ * whole list on each refresh. Nodes with the same id/type/name/path keep
+ * their previous object (recursively) so only truly changed rows render.
+ */
+export function reuseUnchangedNodes(prev: FileNode[], next: FileNode[]): FileNode[] {
+  if (prev === next) return next;
+  const prevById = new Map<string, FileNode>();
+  for (const n of prev) prevById.set(n.id, n);
+  let changed = prev.length !== next.length;
+  if (!changed) {
+    for (let i = 0; i < next.length; i++) {
+      if (prev[i]?.id !== next[i]?.id) { changed = true; break; }
+    }
+  }
+  const out = next.map((n) => {
+    const p = prevById.get(n.id);
+    if (!p || p.type !== n.type || p.name !== n.name || p.path !== n.path) {
+      changed = true;
+      return n;
+    }
+    if (n.type !== "folder") return p;
+    const kids = reuseUnchangedNodes(p.children || [], n.children || []);
+    if (kids !== p.children) {
+      changed = true;
+      return { ...n, children: kids };
+    }
+    return p;
+  });
+  return changed ? out : prev;
+}
