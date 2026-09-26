@@ -24,6 +24,7 @@ interface FileExplorerProps {
   resizerPanHandlers?: any;
   isDraggingSidebar?: boolean;
   onRefresh?: () => void;
+  onOpenSearch?: () => void;
 }
 
 function FileExplorerInner({
@@ -39,6 +40,7 @@ function FileExplorerInner({
   resizerPanHandlers,
   isDraggingSidebar,
   onRefresh,
+  onOpenSearch,
 }: FileExplorerProps) {
   const { theme } = useTheme();
   const { keyboardMouseMode } = useKeyboardMouseMode();
@@ -223,6 +225,16 @@ function FileExplorerInner({
               <Text style={[styles.header, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>
                 {projectName ? projectName.toUpperCase() : "EXPLORER"}
               </Text>
+              {onOpenSearch && (
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPress={onOpenSearch}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Search in project"
+                >
+                  <Ionicons name="search-outline" size={14} color={theme.textMuted} />
+                </TouchableOpacity>
+              )}
               {onRefresh && (
                 <TouchableOpacity
                   style={styles.iconBtn}

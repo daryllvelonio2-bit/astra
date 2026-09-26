@@ -198,24 +198,6 @@ export function TerminalHeader({
           </TouchableOpacity>
         )}
 
-        {/* Restart Active */}
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={onRestartSession}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-        >
-          <Ionicons name="refresh-outline" size={14} color={appTheme.textSecondary} />
-        </TouchableOpacity>
-
-        {/* Clear Active */}
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={onClearSession}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-        >
-          <Ionicons name="trash-outline" size={14} color={appTheme.textSecondary} />
-        </TouchableOpacity>
-
         {/* More Options Menu */}
         <TouchableOpacity
           style={styles.actionBtn}

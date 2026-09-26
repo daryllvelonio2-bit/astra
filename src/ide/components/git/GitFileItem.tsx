@@ -7,6 +7,8 @@ import { GitFileIcon } from "./GitFileIcon";
 
 interface GitFileItemProps {
   file: GitFileStatus;
+  /** True while the file has unresolved merge conflicts — overrides the badge. */
+  conflicted?: boolean;
   isSelected: boolean;
   isLandscape: boolean;
   onSelectFile: (file: GitFileStatus) => void;
@@ -16,6 +18,7 @@ interface GitFileItemProps {
 
 export const GitFileItem = React.memo(function GitFileItem({
   file,
+  conflicted = false,
   isSelected,
   isLandscape,
   onSelectFile,
@@ -41,7 +44,9 @@ export const GitFileItem = React.memo(function GitFileItem({
     }
   };
 
-  const badge = getStatusDetails(file.status);
+  const badge = conflicted
+    ? { text: "Conflict", color: theme.accentRed, bg: `${theme.accentRed}18` }
+    : getStatusDetails(file.status);
 
   return (
     <TouchableOpacity

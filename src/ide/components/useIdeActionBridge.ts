@@ -5,7 +5,7 @@ import { ToggleableBottomTab } from "../services/configService";
 
 interface UseIdeActionBridgeParams {
   workspace: Workspace | null;
-  applyOpenFile: (targetWs: Workspace, rawPath: string) => Promise<void>;
+  applyOpenFile: (targetWs: Workspace, rawPath: string, line?: number) => Promise<void>;
   setBrowserUrl: (url: string) => void;
   safeSetBottomTab: (tab: ToggleableBottomTab) => void;
 }
@@ -26,14 +26,14 @@ export function useIdeActionBridge({
   safeSetBottomTabRef.current = safeSetBottomTab;
 
   useEffect(() => {
-    const unsubOpenFile = ideActionService.subscribe("OPEN_FILE", async ({ filePath, workspaceId: targetWsId, userInitiated }) => {
+    const unsubOpenFile = ideActionService.subscribe("OPEN_FILE", async ({ filePath, line, workspaceId: targetWsId, userInitiated }) => {
       // Background agent actions must never steal focus — only explicit
       // user taps (userInitiated=true) may open + switch tabs.
       if (!userInitiated) return;
       const currentWs = wsRef.current;
       if (targetWsId && currentWs && targetWsId !== currentWs.id) return;
       if (!currentWs || !filePath) return;
-      await applyOpenFileRef.current(currentWs, filePath);
+      await applyOpenFileRef.current(currentWs, filePath, line);
     });
 
     const unsubOpenBrowser = ideActionService.subscribe("OPEN_BROWSER", ({ url, userInitiated }) => {
@@ -85,7 +85,7 @@ export function useIdeActionBridge({
         } else if (pBrowser?.payload?.url) {
           setBrowserUrlRef.current(pBrowser.payload.url);
         } else if (pFile?.payload?.userInitiated && pFile?.payload?.filePath && (!pFile.payload.workspaceId || pFile.payload.workspaceId === ws.id)) {
-          await applyOpenFileRef.current(ws, pFile.payload.filePath);
+          await applyOpenFileRef.current(ws, pFile.payload.filePath, pFile.payload.line);
         }
       } catch (_) {}
     },

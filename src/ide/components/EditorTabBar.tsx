@@ -33,6 +33,8 @@ interface EditorTabBarProps {
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onResetZoom?: () => void;
+  /** Open the CodeMirror find & replace panel. */
+  onOpenFind?: () => void;
   /** Unsaved-changes indicator for the title bar dirty dot. */
   isDirty?: boolean;
 }
@@ -61,6 +63,7 @@ function EditorTabBarInner({
   onZoomIn,
   onZoomOut,
   onResetZoom,
+  onOpenFind,
   isDirty = false,
 }: EditorTabBarProps) {
   const { theme } = useTheme();
@@ -87,6 +90,9 @@ function EditorTabBarInner({
   // their own surfaces (handlers still wired, just no menu buttons).
   const menuActions: EditorMenuAction[] = useMemo(() => {
     const items: EditorMenuAction[] = [];
+    if (onOpenFind) {
+      items.push({ key: "find", label: "Find & Replace", icon: "search-outline", run: onOpenFind });
+    }
     if (onOpenSettings) {
       items.push({ key: "settings", label: "Settings", icon: "settings-outline", run: onOpenSettings });
     }
@@ -94,7 +100,7 @@ function EditorTabBarInner({
       items.push({ key: "exit", label: "Exit Project", icon: "exit-outline", destructive: true, run: onExitProject });
     }
     return items;
-  }, [onOpenSettings, onExitProject]);
+  }, [onOpenFind, onOpenSettings, onExitProject]);
 
   return (
     <>

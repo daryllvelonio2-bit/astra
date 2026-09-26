@@ -57,6 +57,8 @@ export interface CodeMirrorEditorHandle {
   redo: () => void;
   focus: () => void;
   blur: () => void;
+  openFind: () => void;
+  closeFind: () => void;
 }
 
 interface CodeMirrorEditorViewProps {
@@ -77,6 +79,9 @@ interface CodeMirrorEditorViewProps {
   onZoomOut?: (step?: number) => void;
   onZoomReset?: () => void;
   visible?: boolean;
+  /** Jump-to-line request; applied once the WebView is ready (file switch safe). */
+  jumpSignal?: { line: number; nonce: number } | null;
+  onJumpConsumed?: () => void;
 }
 
 // Phase 1 anti-echo: CodeMirror is source-of-truth while typing. React
@@ -116,6 +121,8 @@ export const CodeMirrorEditorView = memo(
         onZoomOut,
         onZoomReset,
         visible = true,
+        jumpSignal,
+        onJumpConsumed,
       },
       ref
     ) {
@@ -211,6 +218,12 @@ export const CodeMirrorEditorView = memo(
           },
           focus: () => {
             inject(`window.__cmFocus && window.__cmFocus()`);
+          },
+          openFind: () => {
+            inject(`window.__cmOpenFind && window.__cmOpenFind()`);
+          },
+          closeFind: () => {
+            inject(`window.__cmCloseFind && window.__cmCloseFind()`);
           },
           blur: triggerBlur,
         }),
@@ -383,6 +396,19 @@ export const CodeMirrorEditorView = memo(
         if (!isReadyRef.current) return;
         inject(`window.__cmSetKeyboardMouseMode && window.__cmSetKeyboardMouseMode(${!!keyboardMouseMode})`);
       }, [keyboardMouseMode, inject]);
+
+      // Search-result jump-to-line. Declared AFTER the content-sync effect so
+      // in a shared commit the content injection queues before the jump;
+      // ready-gating covers the WebView still booting when the tap lands.
+      const appliedJumpNonceRef = useRef(0);
+      useEffect(() => {
+        if (!jumpSignal || !isReadyRef.current) return;
+        if (appliedJumpNonceRef.current === jumpSignal.nonce) return;
+        appliedJumpNonceRef.current = jumpSignal.nonce;
+        const line = Math.max(1, Math.floor(jumpSignal.line) || 1);
+        inject(`window.__cmJumpToLine && window.__cmJumpToLine(${line})`);
+        onJumpConsumed?.();
+      }, [jumpSignal, isReady, inject, onJumpConsumed]);
 
       return (
         <View style={[styles.container, { backgroundColor: theme.bgPrimary }]}>

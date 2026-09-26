@@ -1,13 +1,48 @@
 # Project Progress Tracker
 
-### [2026-09-26] - Explorer tree virtualized (FlatList + memoized rows)
-- **Problem:** full-tree ScrollView mounted every row always; each render re-created all rows and re-parsed every SVG icon, and every resize frame laid out the whole tree.
-- **Fix (explorer-owned files only):**
-  - `useVisibleExplorerRows.ts` (new, 33 lines) — flattens expanded tree to [{node, depth}], stable identity.
-  - `FileExplorerRow.tsx` (new, 190 lines) — React.memo row, theme via hook, SvgXml icon cached per file/folder state.
-  - `FileExplorer.tsx` (417→353 lines) — FlatList with virtualization (25/20/7, clipped subviews), header/inline-create/empty/drop-zone as list parts, ghost SVG cached.
-- **Verify:** `tsc --noEmit` exit 0; all files <500 lines; live on phone (pid 4584, Bundled 355ms, 0 redbox/fatal); screenshots prove tree renders + folder expand with indentation works.
-- **Feel check needed:** drag the resize edge and scroll a big folder — say if lag remains and I'll throttle setValue / attack sortNodes localeCompare next.
+### [2026-09-26] - Build + install (Phases 1–6 on device)
+- **Build:** `assembleDebug` BUILD SUCCESSFUL in 4m 33s (25 executed, 322 up-to-date); 106 MB APK copied to `/home/janelle/Downloads/app-debug.apk`, installed and launched on JNY-LX1 via USB.
+- **On device now:** find & replace, project search, conflict UI, hardened watcher, panel boundaries, Keys tab. Metro was not started — JS bundle is the last build's; start Metro + reload for the newest JS, or rebuild after a JS-only change is unnecessary (Metro serves JS live).
+
+### [2026-09-26] - Phase 6: shortcut help (Settings → Keys tab, zero invented entries)
+- **Feature:** new Keys tab in Settings — 5 groups, 20 shortcuts (tabs, find, edit, lines/cursors, go), keycap chips, touch equivalents where they exist, plus the precedence note (Ctrl E/T/B/G always switch tabs, never reach the editor).
+- **Files:** `shortcutList.ts` (new, single source of truth) + `settings/ShortcutsSection.tsx` (new) + `SettingsTabBar.tsx` (Keys tab) + `SettingsModal.tsx` (render).
+- **Verify:** `tsc --noEmit` exit 0; every entry machine-checked against the installed `@codemirror/*` bundles and `useKeyboardShortcuts` — caught two real subtleties (no Shift-F3/replace bindings in this CM version, so not listed; redo is `linux: Ctrl-Shift-z` platform variant). Live reload via Metro, on-device look pending.
+- **Feel check needed:** open Settings → Keys on the phone; 4 tabs should fit without crowding.
+
+### [2026-09-26] - Phase 5: panel error boundaries (one crash no longer kills the IDE)
+- **Correction:** gap analysis said "zero boundaries" — wrong. `App.tsx` already has a root boundary, but its fallback is a dead-end ("restart the app", hardcoded colors). The real gap was panel scope: any tab crash nuked everything.
+- **Fix:** new `PanelErrorBoundary.tsx` (themed fallback with panel name + Try again; `resetKey` auto-clears stuck errors on file/workspace switch; crashes logged with panel tag) wrapping all 5 panels in `IDELayout` (Explorer, Editor, Terminal, Browser, Git). Root boundary stays as last resort.
+- **Verify:** `tsc --noEmit` exit 0; 5/5 headless state-machine tests on the compiled component (capture, retry, resetKey change/same, healthy passthrough). NOTE: `IDELayout.tsx` is at 498 lines — next change there must split it first.
+- **Feel check needed:** can't crash a panel on demand from here — trust the red fallback if you ever see it; Try again should recover without an app restart.
+
+### [2026-09-26] - Phase 4: file watcher hardened (was present but unverified, depth-blind past 4)
+- **Found:** `useWorkspaceAutoRefresh` already polled every 2.5s (subscribe + fingerprint + app-resume) but was never verified; its fingerprint missed everything deeper than 4 dirs, built unbounded strings per poll, and had no symlink-cycle guard.
+- **Fix:** new pure `workspaceWatcherService.ts` (FNV-1a hash, O(1) memory, sorted entries so readdir order can't false-trigger, visited-set + depth-8 bound for cycles, same ignore list); hook now delegates to it, behavior otherwise unchanged.
+- **Verify:** `tsc --noEmit` exit 0; 9/9 node contract tests against the compiled service (depth-7 edit, add/remove, order-independence, stability, node_modules ignored, cycle terminates in 2 reads, throwing/empty FS safe); live reload via Metro, on-device feel check pending.
+- **Feel check needed:** in the phone terminal, `touch` a file deep in the tree and watch the Explorer pick it up within ~3s.
+
+### [2026-09-26] - Phase 3: merge conflict handling (detect + banner + resolve + abort/complete)
+- **Feature:** conflicting pulls now explain themselves; Changes tab shows a red banner (count + Abort + Complete), conflicted rows get a Conflict badge, long-press offers Keep mine / Take theirs / Open to edit markers (jumps to first `<<<<<<<` in the editor).
+- **Files:** `gitConflictService.ts` (new: MERGE_HEAD check, `--diff-filter=U`, marker grep, ours/theirs resolve, abort, `--no-edit` complete) + `useMergeConflicts.ts` (new hook, re-checks on every git refresh) + `GitHubDesktopView.tsx` (wiring) + `GitChangesList.tsx` + styles (banner) + `GitFileItem.tsx` (badge) + `GitFileActionsModal.tsx` (resolve rows) + `gitService.ts` (pull returns friendly guidance).
+- **Verify:** `tsc --noEmit` exit 0; all files <500 (gitService 497 — next git work must split it); real-git scratch test passed full lifecycle (conflict → detect → resolve → complete, plus abort and quote-filename quoting); live reload via Metro, on-device feel check pending.
+- **Feel check needed:** hard to stage a real conflict on the phone — if you hit one, the banner should appear after the pull dialog; say if it doesn't.
+
+### [2026-09-26] - Phase 2: project-wide search (ripgrep/grep in guest + results sheet + line jump)
+- **Feature:** search the whole workspace from the Explorer header (search icon) — query + Aa case toggle + .* regex toggle + `files:` glob filter, bottom-sheet results (path:line + snippet, virtualized), tap opens the file and jumps to the line.
+- **Files:** `projectSearchService.ts` (new, guest rg→grep fallback, shell-quoted, binary dirs skipped, 400-cap) + `ProjectSearchModal.tsx` (new) + `FileExplorer.tsx` (header button) + `IDELayout.tsx` (pendingJump signal, modal render) + `EditorView.tsx` + `CodeMirrorEditorView.tsx` (ready-gated jump effect) + `useIdeActionBridge.ts` (line now passed through OPEN_FILE).
+- **Verify:** `tsc --noEmit` exit 0; all files <500 lines; contract test passed (sq() injection roundtrip literal, parser found runService.ts:81, empty-result ok) then removed the temp test script; live reload via Metro, on-device check pending (no ADB device attached).
+- **Feel check needed:** run one search on the phone and tap a result — say if the jump lands wrong and I'll adjust timing.
+
+### [2026-09-26] - Phase 1: editor Find & Replace (CodeMirror search panel, top-docked)
+- **Feature:** ⋯ menu → Find & Replace opens the native CM panel (next/prev, Replace/Replace-all, match-case/regex/whole-word); Ctrl/Cmd+F on hardware keyboards; selection auto-highlights all matches.
+- **Files:** `codemirror-entry.js` (`search({top:true})` + searchKeymap + `__cmOpenFind/__cmCloseFind` bridge) + `codemirror-theme.js` (new, extracted theme incl. themed `.cm-search` panel) + `CodeMirrorEditorView.tsx` (handle) + `EditorView.tsx` + `EditorTabBar.tsx` (⋯ entry).
+- **Verify:** `tsc --noEmit` exit 0; bundle rebuilt (549.9 KB, panel confirmed inside); on-device check pending (no ADB device attached).
+
+### [2026-09-26] - Terminal ⋯ menu: removed split terminal, zoom in/out, restart, and clear buffer buttons
+- **User Directive:** remove split terminal, zoom in, zoom out, restart, and clear terminal buffer from the terminal ⋯ options menu.
+- **Fix:** `TerminalHeader.tsx` and `TerminalActionMenuModal.tsx` removed the split terminal toggle and action items (copy and paste remain in the ⋯ options menu).
+- **Verify:** `tsc --noEmit` exit 0; app built and verified on device.
 
 ### [2026-09-26] - Explorer resize lag: killed the measure→setState loop
 - **Fix (3 files, explorer/resizer only — coding UI untouched for the other agent):**

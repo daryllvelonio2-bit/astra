@@ -22,6 +22,7 @@ import { GitProfilePopup } from "./GitProfilePopup";
 import { GitRemoteModal } from "./GitRemoteModal";
 import { useGitOperations } from "./useGitOperations";
 import { useFileActions } from "./useFileActions";
+import { useMergeConflicts } from "./useMergeConflicts";
 import { loadGitHubSession, GitHubSession } from "../../services/gitService";
 
 interface GitHubDesktopViewProps {
@@ -137,6 +138,17 @@ export function GitHubDesktopView({
 
   const files = status?.files || [];
 
+  // Merge conflicts: re-checked whenever git status refreshes (`files` identity).
+  const {
+    mergeState,
+    conflictedSet,
+    mergeBusy,
+    resolveWith,
+    abortMergeOp,
+    completeMergeOp,
+    openInEditor,
+  } = useMergeConflicts({ workspaceId, files, refreshGitState });
+
   // System back button (Android) in portrait master/detail navigation:
   // detail -> back goes to the master list instead of leaving the screen.
   useEffect(() => {
@@ -239,6 +251,11 @@ export function GitHubDesktopView({
                 onToggleStageAll={handleToggleStageAll}
                 onCommit={handleCommit}
                 onLongPressFile={openFileActions}
+                mergeState={mergeState}
+                conflictedPaths={conflictedSet}
+                mergeBusy={mergeBusy}
+                onAbortMerge={abortMergeOp}
+                onCompleteMerge={completeMergeOp}
               />
             ) : selectedCommit ? (
               <GitCommitFilesList
@@ -319,9 +336,13 @@ export function GitHubDesktopView({
           anchor={fileActionAnchor}
           file={fileActionTarget}
           canOpenOnGitHub={!!fileGithubUrl}
-          busy={fileActionsBusy}
+          busy={fileActionsBusy || mergeBusy}
           onClose={closeFileActions}
           actions={fileActionHandlers}
+          conflicted={conflictedSet.has(fileActionTarget.path)}
+          onUseOurs={() => resolveWith(fileActionTarget.path, "ours")}
+          onUseTheirs={() => resolveWith(fileActionTarget.path, "theirs")}
+          onOpenInEditor={() => openInEditor(fileActionTarget.path)}
         />
       )}
 

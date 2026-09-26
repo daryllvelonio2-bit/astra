@@ -450,6 +450,25 @@ export async function pullGitRemote(
       res = await executeCommand(`git pull origin "${branch}"`, workspaceId);
     }
     invalidateGitStatusCache(workspaceId);
+    // A conflicting pull leaves MERGE_HEAD behind: say what to do next
+    // instead of dumping raw git output. The Changes tab picks it up too.
+    try {
+      const head = await executeCommand(
+        "git rev-parse --verify MERGE_HEAD >/dev/null 2>&1 && echo yes || echo no",
+        workspaceId
+      );
+      if ((head.stdout || "").trim() === "yes") {
+        const u = await executeCommand("git diff --name-only --diff-filter=U | wc -l", workspaceId);
+        const n = parseInt((u.stdout || "").trim(), 10) || 0;
+        return {
+          success: false,
+          message:
+            `Pull stopped with merge conflicts in ${n} file(s). ` +
+            `Open the Changes tab: the banner at the top resolves each file ` +
+            `(keep yours / take theirs / edit the markers), then completes the merge.`,
+        };
+      }
+    } catch (_) {}
     return { success: res.exitCode === 0, message: res.stdout || (res.exitCode === 0 ? "Pulled latest changes" : "Pull failed") };
   } catch (e: any) {
     invalidateGitStatusCache(workspaceId);

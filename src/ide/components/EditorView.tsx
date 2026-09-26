@@ -36,6 +36,9 @@ interface EditorViewProps {
   onSelectRecentFile?: (file: RecentFileItem) => void;
   onCloseRecentFile?: (filePath: string) => void;
   visible?: boolean;
+  /** Queued jump request from project search (path must match this file). */
+  jumpSignal?: { path: string; line: number; nonce: number } | null;
+  onJumpConsumed?: () => void;
 }
 
 function EditorViewInner({
@@ -53,6 +56,8 @@ function EditorViewInner({
   onSelectRecentFile,
   onCloseRecentFile,
   visible = true,
+  jumpSignal,
+  onJumpConsumed,
 }: EditorViewProps) {
   const { theme } = useTheme();
   const { editorSettings, keyboardMouseMode } = useEditorConfig();
@@ -129,6 +134,17 @@ function EditorViewInner({
     cmRef.current?.jumpToLine(line);
   }, []);
 
+  const handleOpenFind = useCallback(() => {
+    cmRef.current?.openFind();
+  }, []);
+
+  // Search-result jump: only consume the signal for the file it belongs to
+  // (a stale signal from another file must not move this editor's cursor).
+  const activeJump = useMemo(
+    () => (jumpSignal && activeFilePath && jumpSignal.path === activeFilePath ? jumpSignal : null),
+    [jumpSignal, activeFilePath]
+  );
+
   const handleShowProblems = useCallback(() => {
     setShowProblems((prev) => !prev);
     const first = firstErrorLine(assists.diagnostics);
@@ -193,6 +209,7 @@ function EditorViewInner({
         onZoomIn={gestures.zoomIn}
         onZoomOut={gestures.zoomOut}
         onResetZoom={gestures.resetZoom}
+        onOpenFind={handleOpenFind}
       />
 
       <EditorFloatingHud
@@ -221,6 +238,8 @@ function EditorViewInner({
         onZoomOut={gestures.zoomOut}
         onZoomReset={gestures.resetZoom}
         visible={visible}
+        jumpSignal={activeJump}
+        onJumpConsumed={activeJump ? onJumpConsumed : undefined}
       />
 
       <EditorStatusBar

@@ -23,6 +23,8 @@ import { useOrientation } from "../../theme/useOrientation";
 import { useIdeActionBridge } from "./useIdeActionBridge";
 import { useKeyboardMouseMode } from "../context/KeyboardMouseContext";
 import { SettingsModal } from "./SettingsModal";
+import { ProjectSearchModal } from "./ProjectSearchModal";
+import { PanelErrorBoundary } from "./PanelErrorBoundary";
 import { resolveChatPathToRelative } from "../services/chatFileLinkService";
 import { useRecentFiles } from "./editor/useRecentFiles";
 import { useIDELayoutCallbacks, addVisitedTab } from "./useIDELayoutCallbacks";
@@ -58,6 +60,14 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
   const { keyboardMouseMode } = useKeyboardMouseMode();
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [activeFile, setActiveFile] = useState<FileNode | null>(null);
+  // Queued "open file and jump to line" request (from project search).
+  const [pendingJump, setPendingJump] = useState<{ path: string; line: number; nonce: number } | null>(null);
+  const [isSearchVisible, setSearchVisible] = useState(false);
+  const requestJump = useCallback((path: string, line: number) => {
+    setPendingJump({ path, line, nonce: Date.now() });
+  }, []);
+  const clearJump = useCallback(() => setPendingJump(null), []);
+  const handleOpenSearch = useCallback(() => setSearchVisible(true), []);
   const { recentFiles, recordRecentFile, removeRecentFile } = useRecentFiles(workspaceId);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [bottomTab, setBottomTab] = useState<ToggleableBottomTab>("editor");
@@ -141,7 +151,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
 
   // Open a raw agent/chat file path inside the given workspace, normalizing
   // PRoot (/workspace, /workspaces/<id>) and file:// prefixes to relative paths.
-  const applyOpenFile = useCallback(async (targetWs: Workspace, rawPath: string) => {
+  const applyOpenFile = useCallback(async (targetWs: Workspace, rawPath: string, line?: number) => {
     const relative = resolveChatPathToRelative(rawPath, targetWs.id);
     if (!relative) return;
     try {
@@ -151,11 +161,22 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
       setActiveFile(fileNode);
       recordRecentFile(fileNode, false);
       safeSetBottomTab("editor");
+      // Search-result taps carry a line: queue a jump once the editor has
+      // loaded this exact file (EditorView consumes and clears the signal).
+      if (line && line > 0) requestJump(relative, line);
       if (!content) showAppDialog({ title: "File opened", message: `${fileName} is empty or could not be read at:\n${relative}` });
     } catch (e: any) {
       showAppDialog({ title: "Could not open file", message: e?.message || relative });
     }
-  }, [safeSetBottomTab, recordRecentFile]);
+  }, [safeSetBottomTab, recordRecentFile, requestJump]);
+
+  // Project-search result tap: open the matched file and queue the line jump.
+  const handleSearchOpenMatch = useCallback(
+    (path: string, line: number) => {
+      if (workspace) void applyOpenFile(workspace, path, line);
+    },
+    [workspace, applyOpenFile]
+  );
 
   const handleOpenInBrowser = useCallback((u: string) => { setBrowserUrl(u); safeSetBottomTab("browser"); }, [safeSetBottomTab]);
   const onOpenTerminal = useCallback(() => safeSetBottomTab("terminal"), [safeSetBottomTab]);
@@ -358,6 +379,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
       <View style={workspaceStyle}>
         {isSidebarOpen && bottomTab === "editor" && (
           <Animated.View style={sidebarAnimStyle}>
+            <PanelErrorBoundary panelName="Explorer" resetKey={workspace?.id}>
             <FileExplorer
               projectName={workspace.name}
               files={workspace.root.children || []}
@@ -369,15 +391,18 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
               onQuickAddFile={handleQuickAddFile}
               onMoveNode={handleMoveNode}
               onRefresh={refreshWorkspace}
+              onOpenSearch={handleOpenSearch}
               resizerPanHandlers={resizerPanHandlers}
               isDraggingSidebar={isDraggingSidebar}
             />
+            </PanelErrorBoundary>
           </Animated.View>
         )}
 
         <View style={editorContainerStyle}>
           {visitedTabs.has("editor") && (
             <View style={[tabContentStyle, bottomTab !== "editor" && styles.hiddenTab]}>
+              <PanelErrorBoundary panelName="Editor" resetKey={activeFile?.id || workspace?.id}>
               <EditorView
                 fileName={activeFile?.name}
                 activeFilePath={activeFile?.path}
@@ -393,23 +418,32 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
                 onSelectRecentFile={handleSelectFile}
                 onCloseRecentFile={removeRecentFile}
                 visible={bottomTab === "editor"}
+                jumpSignal={pendingJump}
+                onJumpConsumed={clearJump}
               />
+              </PanelErrorBoundary>
             </View>
           )}
 
           {visitedTabs.has("terminal") && (
             <View style={[tabContentStyle, bottomTab !== "terminal" && styles.hiddenTab]}>
+              <PanelErrorBoundary panelName="Terminal" resetKey={workspace?.id}>
               <TerminalView key={workspace?.id || "none"} workspaceId={workspace?.id} visible={bottomTab === "terminal"} />
+              </PanelErrorBoundary>
             </View>
           )}
           {visitedTabs.has("browser") && (
             <View style={[tabContentStyle, bottomTab !== "browser" && styles.hiddenTab]}>
+              <PanelErrorBoundary panelName="Browser" resetKey={workspace?.id}>
               <WebBrowserPreview initialUrl={browserUrl} workspaceId={workspace?.id} />
+              </PanelErrorBoundary>
             </View>
           )}
           {visitedTabs.has("git") && (
             <View style={[tabContentStyle, bottomTab !== "git" && styles.hiddenTab]}>
+              <PanelErrorBoundary panelName="Git" resetKey={workspace?.id}>
               <GitHubDesktopView workspaceId={workspace?.id} projectName={workspace?.name} visible={bottomTab === "git"} />
+              </PanelErrorBoundary>
             </View>
           )}
         </View>
@@ -449,6 +483,12 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
         workspaceId={workspace?.id} onSyncWorkspace={refreshWorkspace}
       />
       <ExtensionMarketplaceModal visible={isMarketplaceVisible} onClose={handleCloseMarketplace} />
+      <ProjectSearchModal
+        visible={isSearchVisible}
+        workspaceId={workspace?.id}
+        onClose={() => setSearchVisible(false)}
+        onOpenMatch={handleSearchOpenMatch}
+      />
     </View>
   );
 }

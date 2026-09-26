@@ -7,6 +7,7 @@ import {
   Workspace,
 } from "../services/workspaceService";
 import { readDirectoryNative } from "../services/nativeFs";
+import { computeWorkspaceFingerprint } from "../services/workspaceWatcherService";
 
 const DEBOUNCE_MS = 600;
 const POLL_INTERVAL_MS = 2500;
@@ -16,30 +17,13 @@ function timeout<T>(ms: number): Promise<T | undefined> {
   return new Promise((resolve) => setTimeout(() => resolve(undefined), ms));
 }
 
-const IGNORED_NAMES = new Set([
-  "node_modules", "vendor", ".git", "dist", "build", ".cache", "coverage", ".idea", ".vscode"
-]);
-
-/**
- * Fast synchronous directory fingerprint using native readDirectory.
- * Traverses up to maxDepth so it completes in < 2ms without JS overhead.
- */
-function computeDirFingerprint(dirPath: string, depth = 0, maxDepth = 4): string {
-  if (depth > maxDepth) return "";
-  const clean = dirPath.endsWith("/") ? dirPath : `${dirPath}/`;
-  const entries = readDirectoryNative(clean);
-  if (!entries || entries.length === 0) return "";
-  let fp = "";
-  for (let i = 0; i < entries.length; i++) {
-    const e = entries[i];
-    if (IGNORED_NAMES.has(e.name)) continue;
-    if (e.name.startsWith(".") && e.name !== ".env" && e.name !== ".gitignore") continue;
-    fp += `${e.name}:${e.isDirectory ? "d" : "f"}:${e.lastModified}:${e.size};`;
-    if (e.isDirectory) {
-      fp += computeDirFingerprint(e.path, depth + 1, maxDepth);
-    }
+/** Thin wrapper so the hook keeps passing a bare function reference. */
+function fingerprintOf(dirPath: string): string {
+  try {
+    return computeWorkspaceFingerprint(readDirectoryNative, dirPath);
+  } catch (_) {
+    return "";
   }
-  return fp;
 }
 
 export function useWorkspaceAutoRefresh(
@@ -75,7 +59,7 @@ export function useWorkspaceAutoRefresh(
     getWorkspaceDirPath(workspaceId).then((p) => {
       dirPathRef.current = p;
       try {
-        lastFingerprintRef.current = computeDirFingerprint(p);
+        lastFingerprintRef.current = fingerprintOf(p);
       } catch (_) {}
     });
 
@@ -116,7 +100,7 @@ export function useWorkspaceAutoRefresh(
     const checkDiskChanges = () => {
       if (!dirPathRef.current || inFlightRef.current || AppState.currentState !== "active") return;
       try {
-        const currentFp = computeDirFingerprint(dirPathRef.current);
+        const currentFp = fingerprintOf(dirPathRef.current);
         if (currentFp && currentFp !== lastFingerprintRef.current) {
           lastFingerprintRef.current = currentFp;
           schedule();

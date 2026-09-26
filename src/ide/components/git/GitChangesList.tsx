@@ -24,6 +24,12 @@ interface GitChangesListProps {
   onToggleStageAll: (stageAll: boolean) => void;
   onCommit: (summary: string, description: string) => void;
   onLongPressFile: (file: GitFileStatus, position: { x: number; y: number }) => void;
+  /** Active merge state (null/undefined hides the conflict banner). */
+  mergeState?: { merging: boolean; files: { path: string }[] } | null;
+  conflictedPaths?: Set<string>;
+  mergeBusy?: boolean;
+  onAbortMerge?: () => void;
+  onCompleteMerge?: () => void;
 }
 
 export function GitChangesList({
@@ -39,6 +45,11 @@ export function GitChangesList({
   onToggleStageAll,
   onCommit,
   onLongPressFile,
+  mergeState,
+  conflictedPaths,
+  mergeBusy = false,
+  onAbortMerge,
+  onCompleteMerge,
 }: GitChangesListProps) {
   const { theme } = useTheme();
   const { keyboardMouseMode } = useKeyboardMouseMode();
@@ -92,6 +103,7 @@ export function GitChangesList({
     ({ item }: { item: GitFileStatus }) => (
       <GitFileItem
         file={item}
+        conflicted={conflictedPaths?.has(item.path) ?? false}
         isSelected={selectedPath === item.path}
         isLandscape={isLandscape}
         onSelectFile={handleSelectItem}
@@ -99,7 +111,7 @@ export function GitChangesList({
         onLongPressFile={handleLongPressItem}
       />
     ),
-    [selectedPath, isLandscape, handleSelectItem, handleToggleItem, handleLongPressItem]
+    [selectedPath, isLandscape, conflictedPaths, handleSelectItem, handleToggleItem, handleLongPressItem]
   );
   const fileKeyExtractor = useCallback((item: GitFileStatus) => item.path, []);
 
@@ -119,6 +131,41 @@ export function GitChangesList({
 
   return (
     <View style={[styles.container, !isLandscape && isKeyboardVisible && { paddingBottom: keyboardOffset }]}>
+      {/* Merge-conflict banner: resolve each file (long-press), then finish. */}
+      {mergeState?.merging && (
+        <View style={[styles.mergeBanner, { backgroundColor: `${theme.accentRed}14`, borderColor: theme.accentRed }]}>
+          <Octicons name="alert" size={isLandscape ? 13 : 15} color={theme.accentRed} />
+          <Text style={[styles.mergeBannerText, { color: theme.textPrimary }]}>
+            {mergeState.files.length === 0
+              ? "Merge ready — all conflicts resolved"
+              : `Merge conflicts — ${mergeState.files.length} file${mergeState.files.length !== 1 ? "s" : ""} to resolve`}
+          </Text>
+          <TouchableOpacity
+            onPress={onAbortMerge}
+            disabled={mergeBusy}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Abort merge"
+          >
+            <Text style={[styles.mergeBannerBtn, { color: theme.textMuted }]}>Abort</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onCompleteMerge}
+            disabled={mergeBusy || mergeState.files.length > 0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Complete merge"
+          >
+            <Text
+              style={[
+                styles.mergeBannerBtn,
+                styles.mergeBannerBtnPrimary,
+                { color: mergeState.files.length > 0 ? theme.textMuted : theme.accentGreen },
+              ]}
+            >
+              Complete
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
       {/* Select-all strip: no background, hidden when there is nothing to stage */}
       {files.length > 0 && (
         <View style={[styles.subHeader, isLandscape && styles.subHeaderLandscape]}>

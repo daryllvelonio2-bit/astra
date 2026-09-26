@@ -45,16 +45,6 @@ export function TerminalActionMenuModal({
   onToggleSplit,
 }: TerminalActionMenuModalProps) {
   const actions: ActionItem[] = [
-    ...(onToggleSplit
-      ? [
-          {
-            id: "split",
-            label: isSplit ? "Close Split View (1 Pane)" : "Split Terminal (2 Panes)",
-            icon: (isSplit ? "grid" : "grid-outline") as keyof typeof Ionicons.glyphMap,
-            onPress: onToggleSplit,
-          },
-        ]
-      : []),
     ...(onCopyOutput
       ? [
           {
@@ -75,31 +65,6 @@ export function TerminalActionMenuModal({
           },
         ]
       : []),
-    {
-      id: "zoom-in",
-      label: "Zoom In (+ Font Size)",
-      icon: "add-circle-outline",
-      onPress: onZoomIn,
-    },
-    {
-      id: "zoom-out",
-      label: "Zoom Out (- Font Size)",
-      icon: "remove-circle-outline",
-      onPress: onZoomOut,
-    },
-    {
-      id: "restart",
-      label: "Restart Active Session",
-      icon: "refresh-outline",
-      onPress: onRestartSession,
-    },
-    {
-      id: "clear",
-      label: "Clear Terminal Buffer",
-      icon: "trash-outline",
-      onPress: onClearSession,
-      destructive: true,
-    },
   ];
 
   return (

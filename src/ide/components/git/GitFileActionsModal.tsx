@@ -21,6 +21,11 @@ interface GitFileActionsModalProps {
   busy: boolean;
   onClose: () => void;
   actions: FileActionHandlers;
+  /** Set when the file has unresolved merge conflicts — swaps in resolve rows. */
+  conflicted?: boolean;
+  onUseOurs?: () => void;
+  onUseTheirs?: () => void;
+  onOpenInEditor?: () => void;
 }
 
 const MENU_WIDTH = 250;
@@ -38,12 +43,17 @@ export function GitFileActionsModal({
   busy,
   onClose,
   actions,
+  conflicted = false,
+  onUseOurs,
+  onUseTheirs,
+  onOpenInEditor,
 }: GitFileActionsModalProps) {
   const { theme } = useTheme();
   const { width: winW, height: winH } = useWindowDimensions();
   if (!file) return null;
 
-  const menuH = 6 * 44 + 56 + (canOpenOnGitHub ? 0 : -44); // rows + header pad
+  const rowCount = conflicted ? 3 : 5 + (canOpenOnGitHub ? 1 : 0);
+  const menuH = rowCount * 44 + 56; // rows + header pad
   const top = Math.min(Math.max(anchor.y - 10, 60), Math.max(winH - menuH - 20, 60));
   const left = Math.max(Math.min(anchor.x - MENU_WIDTH + 10, winW - MENU_WIDTH - 12), 12);
 
@@ -67,6 +77,41 @@ export function GitFileActionsModal({
             {file.path}
           </Text>
 
+          {conflicted ? (
+            <>
+              <Row
+                icon="check"
+                label="Keep mine (ours)"
+                disabled={busy}
+                theme={theme}
+                onPress={() => {
+                  onClose();
+                  onUseOurs?.();
+                }}
+              />
+              <Row
+                icon="arrow-down"
+                label="Take theirs"
+                disabled={busy}
+                theme={theme}
+                onPress={() => {
+                  onClose();
+                  onUseTheirs?.();
+                }}
+              />
+              <Row
+                icon="pencil"
+                label="Open to edit markers"
+                disabled={busy}
+                theme={theme}
+                onPress={() => {
+                  onClose();
+                  onOpenInEditor?.();
+                }}
+              />
+            </>
+          ) : (
+            <>
           <Row
             icon="trash"
             label="Discard changes"
@@ -119,6 +164,8 @@ export function GitFileActionsModal({
                 onClose();
               }}
             />
+          )}
+            </>
           )}
         </View>
       </TouchableOpacity>

@@ -199,4 +199,27 @@ export const gitChangesListStyles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: "700",
   },
+  mergeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 10,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderRadius: 6,
+  },
+  mergeBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  mergeBannerBtn: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  mergeBannerBtnPrimary: {
+    fontWeight: "700",
+  },
 });
