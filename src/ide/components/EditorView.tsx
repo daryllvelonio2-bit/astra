@@ -6,6 +6,7 @@ import { EditorTabBar } from "./EditorTabBar";
 import { ProblemsPanel } from "./ProblemsPanel";
 import { useEditorAssists } from "./useEditorAssists";
 import { firstErrorLine } from "../services/codeDiagnosticsService";
+import { registerFindCloser, unregisterFindCloser } from "../services/findPanelBackPress";
 import { useEditorConfig } from "./editor/useEditorConfig";
 import { EditorEmptyState } from "./editor/EditorEmptyState";
 import { useEditorKeyboardPad } from "./editor/useEditorKeyboardPad";
@@ -134,8 +135,30 @@ function EditorViewInner({
     cmRef.current?.jumpToLine(line);
   }, []);
 
+  // ⋯ "Find & Replace" toggles the panel: with all panel buttons hidden by
+  // theme this is also the touch close path. (If Esc closed it out of band,
+  // one tap re-syncs — the toggle self-heals.)
+  const findOpenRef = useRef(false);
+  // Back press closes the floating find panel first (registered globally).
+  useEffect(() => {
+    registerFindCloser(() => {
+      if (findOpenRef.current) {
+        cmRef.current?.closeFind();
+        findOpenRef.current = false;
+        return true;
+      }
+      return false;
+    });
+    return () => unregisterFindCloser();
+  }, []);
   const handleOpenFind = useCallback(() => {
-    cmRef.current?.openFind();
+    if (findOpenRef.current) {
+      cmRef.current?.closeFind();
+      findOpenRef.current = false;
+    } else {
+      cmRef.current?.openFind();
+      findOpenRef.current = true;
+    }
   }, []);
 
   // Search-result jump: only consume the signal for the file it belongs to

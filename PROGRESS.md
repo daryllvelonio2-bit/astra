@@ -1,5 +1,47 @@
 # Project Progress Tracker
 
+### [2026-09-27] - Clone lands INSIDE the current workspace, not a new one
+- **User directive:** cloning from the profile popup must place the repo in the currently open project directory — no new top-level workspace, no workspace switch.
+- **Change:** `repoCloneCoordinator.ts` — `startRepoClone(repo, workspaceId?)` resolves the parent via `getWorkspaceDirPath(workspaceId)` (fallback: workspaces root); success is now a "Clone complete" dialog (the watcher picks the folder up in the Explorer), no more `openExistingDirectoryAsProject`/`switchWorkspace`. `workspaceId` threaded `GitHubDesktopView` → `GitProfilePopup` → clone handler.
+- **Verify:** `tsc --noEmit` exit 0; coordinator 94 / popup 324 / view 426 lines (all <500). On-device feel check: clone a repo from the Git tab of an open project — the folder appears in the same project's explorer within ~3s.
+
+### [2026-09-27] - Git profile popup: search ALL of GitHub + one-tap clone
+- **Feature:** the Repositories tab in `GitProfilePopup` now has a search bar — empty query lists your repos, typing searches every public GitHub repo (debounced 450 ms, stale responses dropped by sequence). Every row has a Clone chip: one tap starts the clone and closes the popup; progress is GLOBAL (see next entry), and on success the folder registers as a workspace and the app switches straight into it.
+- **Files:** `gitHubSearchService.ts` (new: `/search/repositories`, token when signed in, public fallback) + `GitReposTab.tsx` (new: search bar + rows + states) + `GitProfilePopup.tsx` (hosts tab + clone chip, dead repo-row markup/styles removed) + `gitHubProfileService.ts` (`apiGet` exported, reused — no second fetch layer).
+- **Verify:** `tsc --noEmit` exit 0; all touched files <500; zero leftover `formatStale`/repo-row references; theme tokens only.
+
+### [2026-09-27] - Clone progress is global, top-left, text-only
+- **User directive:** clone status must show anywhere in the app (IDE, terminal, any tab) — not inside the profile popup — as plain text at the top-left, no background boxes.
+- **Change:** `repoCloneCoordinator.ts` (new service: module-level clone state + pub/sub, owns clone lifecycle, workspace registration, error dialogs) + `RepoCloneIndicator.tsx` (new app-level overlay, `position:absolute` top-left under the status bar, `pointerEvents:"box-none"`, text only, Cancel link). Mounted once in `App.tsx` above all screens. Popup now just fires `startRepoClone` + closes; the local `useRepoClone` hook was deleted (zero references kept).
+- **Verify:** `tsc --noEmit` exit 0; App.tsx 168 / indicator 52 / coordinator 98 / popup 324 lines; no `useRepoClone` references remain. On-device feel check: clone from the popup, switch to the terminal tab — text stays top-left over everything until done.
+
+### [2026-09-27] - Explorer lazy tree (huge projects no longer freeze)
+- **Cause:** open + every refresh ran a depth-6 full scan (thousands of sync native listings, tens of thousands of nodes) before first paint.
+- **Fix:** new `workspaceTreeService.ts` — open loads root+1 level only; folders fetch one listing on expand; refreshes are shallow with open folders re-fetching themselves; watcher/hook/refresh paths all shallow. `tsc` clean. Debt: IDELayout at exactly 500/500 lines, workspaceService 494 — split before next growth there.
+
+### [2026-09-27] - Workspace deletion actually deletes
+- **Cause:** trash path had a trailing slash, so `movePath` created the dest dir then failed the move into it — every delete fell into a fire-and-forget background wipe. On big trees the dir was still there when the list reloaded, so the project reappeared.
+- **Fix:** slash-free instant rename (list already skips `-deleting-`), background sweep with one retry, awaited+verified in-place delete with 3 retries when rename fails (throws → error dialog instead of silent resurrect), deletions serialized. `tsc` clean. Live via Metro reload — or delete again to confirm.
+
+### [2026-09-27] - Build + install over WiFi ADB (resize-lag fix on device)
+- **Build:** `assembleDebug` BUILD SUCCESSFUL in 3m 56s; 106 MB APK at `/home/janelle/Downloads/app-debug.apk`, streamed-install + launched on JNY-LX1 via `adb connect 192.168.43.1:5555` (laptop on phone hotspot, no USB).
+
+### [2026-09-26] - Resize lag on big projects (watcher no longer blocks the JS thread)
+- **Cause:** the file watcher ran a synchronous full-tree walk every 2.5s; on big clones each pass was a multi-second JS-thread block, starving the (JS-driven) sidebar-resize animation.
+- **Fix:** new chunked `computeWorkspaceFingerprintAsync` (yields every 25 dirs, identical hashes — 4/4 contract checks pass); disk checks never overlap, back off to 15s/30s on slow trees, and pause entirely while the sidebar drags. `tsc` clean. Live via Metro reload.
+
+### [2026-09-26] - Back press closes the find panel
+- **Change:** new `findPanelBackPress.ts` registry; EditorView registers its closer, `useSystemBackHandler` tries it before edit-mode/project-close handling. Back with panel open dismisses it; otherwise behavior unchanged. `tsc` clean. Live via Metro reload.
+
+### [2026-09-26] - Find panel floats top-center, zero layout space
+- **Change:** panel is now `position:absolute; top:2px; left:50%; translateX(-50%)` — floats over the editor, out of flow, so it takes no space in portrait or landscape. Transparent, no border/shadow. Bundle rebuilt, verified in generated file. Live via Metro reload.
+
+### [2026-09-26] - Find panel input-only (all buttons/options hidden)
+- **Change:** panel buttons (next/prev/all/replace/close) + option labels now `display:none`; transparent, borderless. Navigate with Enter/Shift+Enter; ⋯ Find & Replace toggles the panel (also the touch close path). Bundle rebuilt, `display:none` verified in generated file, `tsc` clean. Live via Metro reload.
+
+### [2026-09-26] - Find panel slimmed (input only, no chrome)
+- **Change:** search panel is now transparent with no borders (3px padding); buttons borderless/muted; only the text input keeps its field background. Bundle rebuilt (549.9 KB), verified in generated file. Live via Metro reload.
+
 ### [2026-09-26] - Build + install (Phases 1–6 on device)
 - **Build:** `assembleDebug` BUILD SUCCESSFUL in 4m 33s (25 executed, 322 up-to-date); 106 MB APK copied to `/home/janelle/Downloads/app-debug.apk`, installed and launched on JNY-LX1 via USB.
 - **On device now:** find & replace, project search, conflict UI, hardened watcher, panel boundaries, Keys tab. Metro was not started — JS bundle is the last build's; start Metro + reload for the newest JS, or rebuild after a JS-only change is unnecessary (Metro serves JS live).

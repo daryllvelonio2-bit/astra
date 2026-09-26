@@ -107,17 +107,22 @@ export function buildEditorTheme(themeObj) {
         backgroundColor: activeLineGutterBg,
         color: textPrimary,
       },
-      // Search panel — generous touch targets (phone-first), themed fields.
+      // Search panel — minimal chrome: just the input, no panel background
+      // or borders, so it costs almost no vertical space.
       ".cm-panels": {
-        backgroundColor: bgSecondary,
+        backgroundColor: "transparent",
         color: textPrimary,
-        borderBottom: panelBorder,
-      },
-      ".cm-panels-bottom": {
-        borderTop: panelBorder,
       },
       ".cm-panel.cm-search": {
-        padding: "8px 10px",
+        position: "absolute",
+        top: "2px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 50,
+        padding: "0",
+        backgroundColor: "transparent",
+        border: "none",
+        boxShadow: "none",
         fontFamily: 'ui-monospace, "SF Mono", "Roboto Mono", Menlo, monospace',
         fontSize: "13px",
       },
@@ -133,22 +138,14 @@ export function buildEditorTheme(themeObj) {
       ".cm-panel.cm-search input:focus": {
         borderColor: accent,
       },
-      ".cm-panel.cm-search button, .cm-panel.cm-search [name=close]": {
-        padding: "5px 9px",
-        borderRadius: "5px",
-        border: `1px solid ${fieldBorder}`,
-        backgroundColor: fieldBg,
-        color: textPrimary,
-        cursor: "pointer",
-        fontSize: "12px",
-      },
-      ".cm-panel.cm-search button:active": {
-        backgroundColor: accent,
-        color: "#ffffff",
+      // Search panel — input only: every button (next/prev/all/replace/close)
+      // and option checkbox (case/regex/word) is hidden. Navigation is via
+      // Enter (next) / Shift+Enter (previous) inside the input.
+      ".cm-panel.cm-search button": {
+        display: "none",
       },
       ".cm-panel.cm-search label": {
-        color: textMuted,
-        fontSize: "12px",
+        display: "none",
       },
     },
     { dark: isDark }

@@ -10,9 +10,11 @@ import { useTheme } from "../../theme/themeContext";
 import { useKeyboardMouseMode } from "../context/KeyboardMouseContext";
 import { FileExplorerRow } from "./FileExplorerRow";
 import { useVisibleExplorerRows, VisibleExplorerRow } from "./useVisibleExplorerRows";
+import { loadDirectoryChildren } from "../services/workspaceTreeService";
 
 interface FileExplorerProps {
   projectName?: string;
+  workspaceId: string;
   files: FileNode[];
   onSelectFile: (file: FileNode) => void;
   activeFileId?: string;
@@ -29,6 +31,7 @@ interface FileExplorerProps {
 
 function FileExplorerInner({
   projectName,
+  workspaceId,
   files,
   onSelectFile,
   activeFileId,
@@ -51,6 +54,90 @@ function FileExplorerInner({
   const [isCreating, setIsCreating] = React.useState(false);
   const [inlineName, setInlineName] = React.useState("");
 
+  // Lazy children: shallow tree carries 1 level; deeper folders fetch on
+  // expand (one native listing each). Overlay presence means "loaded".
+  const [loadedChildren, setLoadedChildren] = React.useState<Record<string, { path: string; children: FileNode[] }>>({});
+  const loadedRef = React.useRef<Record<string, { path: string; children: FileNode[] }>>({});
+  loadedRef.current = loadedChildren;
+  const loadingRef = React.useRef<Set<string>>(new Set());
+  const wsIdRef = React.useRef(workspaceId);
+  wsIdRef.current = workspaceId;
+
+  // Workspace switch: drop caches (ids are namespaced, but stale overlays
+  // would linger in memory behind the new tree).
+  React.useEffect(() => {
+    setLoadedChildren({});
+    loadedRef.current = {};
+    setExpandedFolders({});
+  }, [workspaceId]);
+
+  // Tree refreshed (auto-refresh / pull): re-fetch open folders so expanded
+  // dirs show fresh contents instead of going stale behind the new tree.
+  const filesTickRef = React.useRef(0);
+  React.useEffect(() => {
+    if (++filesTickRef.current <= 1) return;
+    const open = Object.keys(expandedFoldersRef.current).filter((id) => loadedRef.current[id]);
+    if (!open.length || !wsIdRef.current) return;
+    let cancelled = false;
+    (async () => {
+      for (const id of open) {
+        const entry = loadedRef.current[id];
+        if (!entry) continue;
+        try {
+          const children = await loadDirectoryChildren(wsIdRef.current, entry.path);
+          if (!cancelled) setLoadedChildren((prev) => ({ ...prev, [id]: { path: entry.path, children } }));
+        } catch (_) {}
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files]);
+
+  const mergedFiles = React.useMemo(() => {
+    if (!Object.keys(loadedChildren).length) return files;
+    const attach = (nodes: FileNode[]): FileNode[] =>
+      nodes.map((n) => {
+        const ov = loadedChildren[n.id];
+        const kids = ov ? ov.children : n.children;
+        if (!kids || n.type !== "folder") return n;
+        return { ...n, children: attach(kids) };
+      });
+    return attach(files);
+  }, [files, loadedChildren]);
+  const mergedRef = React.useRef<FileNode[]>([]);
+  mergedRef.current = mergedFiles;
+
+  const findNode = React.useCallback((nodes: FileNode[], id: string): FileNode | null => {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      if (n.type === "folder" && n.children?.length) {
+        const hit = findNode(n.children, id);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  }, []);
+
+  const expandFolder = React.useCallback((folderId: string) => {
+    const node = findNode(mergedRef.current, folderId);
+    if (!node || node.type !== "folder") return;
+    if ((node.children?.length || 0) > 0 || loadedRef.current[folderId]) {
+      setExpandedFolders((prev) => (prev[folderId] ? prev : { ...prev, [folderId]: true }));
+      return;
+    }
+    if (loadingRef.current.has(folderId) || !wsIdRef.current) return;
+    loadingRef.current.add(folderId);
+    loadDirectoryChildren(wsIdRef.current, node.path)
+      .then((kids) => {
+        loadingRef.current.delete(folderId);
+        setLoadedChildren((prev) => ({ ...prev, [folderId]: { path: node.path, children: kids } }));
+        setExpandedFolders((prev) => ({ ...prev, [folderId]: true }));
+      })
+      .catch(() => {
+        loadingRef.current.delete(folderId);
+      });
+  }, [findNode]);
+
   const {
     draggingNode,
     hoveredTargetId,
@@ -67,12 +154,12 @@ function FileExplorerInner({
   } = useFileDragDrop({
     onMoveNode: (source, targetFolder) => {
       if (targetFolder) {
-        setExpandedFolders((prev) => ({ ...prev, [targetFolder.id]: true }));
+        expandFolder(targetFolder.id);
       }
       if (onMoveNode) onMoveNode(source, targetFolder);
     },
     onExpandFolder: (folderId) => {
-      setExpandedFolders((prev) => (prev[folderId] ? prev : { ...prev, [folderId]: true }));
+      expandFolder(folderId);
     },
     onCollapseFolder: (folderId) => {
       setExpandedFolders((prev) => {
@@ -93,7 +180,7 @@ function FileExplorerInner({
     if (isDraggingSidebar) return;
     const t = setTimeout(measureAllFolders, 100);
     return () => clearTimeout(t);
-  }, [expandedFolders, files, measureAllFolders, isDraggingSidebar]);
+  }, [expandedFolders, mergedFiles, measureAllFolders, isDraggingSidebar]);
 
   const [iconTick, setIconTick] = React.useState(0);
   React.useEffect(() => {
@@ -114,15 +201,23 @@ function FileExplorerInner({
     else if (onQuickAddFile) onQuickAddFile();
   }, [inlineName, onCreateFile, onQuickAddFile]);
 
-  const sortedFiles = React.useMemo(() => sortNodes(files), [files]);
+  const sortedFiles = React.useMemo(() => sortNodes(mergedFiles), [mergedFiles]);
 
   // Visible rows: flat list of expanded-path nodes. Identity stable
   // unless the tree or expansion changes — rows memo on this.
   const flatRows = useVisibleExplorerRows(sortedFiles, expandedFolders);
 
   const toggleFolder = useCallback((folderId: string) => {
-    setExpandedFolders((prev) => ({ ...prev, [folderId]: !prev[folderId] }));
-  }, []);
+    if (expandedFoldersRef.current[folderId]) {
+      setExpandedFolders((prev) => {
+        const next = { ...prev };
+        delete next[folderId];
+        return next;
+      });
+    } else {
+      expandFolder(folderId);
+    }
+  }, [expandFolder]);
 
   const renderItem = useCallback(
     ({ item }: { item: VisibleExplorerRow }) => {

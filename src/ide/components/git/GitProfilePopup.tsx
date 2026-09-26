@@ -16,16 +16,19 @@ import { useTheme } from "../../../theme/themeContext";
 import {
   fetchMyProfile,
   fetchMyRepos,
-  formatStale,
   formatJoined,
   GitHubProfile,
   GitHubRepo,
 } from "../../services/gitHubProfileService";
 import { logoutGitHub } from "../../services/gitService";
+import { GitReposTab } from "./GitReposTab";
+import { startRepoClone } from "../../services/repoCloneCoordinator";
 
 interface GitProfilePopupProps {
   visible: boolean;
   anchor: { x: number; y: number };
+  /** Clone target: repo lands inside this workspace's directory. */
+  workspaceId?: string;
   onClose: () => void;
   onSignedOut?: () => void;
   onOpenRemote?: () => void;
@@ -40,7 +43,7 @@ type Tab = "profile" | "repos";
  * standing popup rule). Two views: profile facts, and the user's repos.
  * Read-only data from the device-flow token via gitHubProfileService.
  */
-export function GitProfilePopup({ visible, anchor, onClose, onSignedOut, onOpenRemote }: GitProfilePopupProps) {
+export function GitProfilePopup({ visible, anchor, workspaceId, onClose, onSignedOut, onOpenRemote }: GitProfilePopupProps) {
   const { theme } = useTheme();
   const { width: winW, height: winH } = useWindowDimensions();
   const [tab, setTab] = useState<Tab>("profile");
@@ -85,6 +88,14 @@ export function GitProfilePopup({ visible, anchor, onClose, onSignedOut, onOpenR
     onClose();
     onSignedOut?.();
   };
+
+  const handleCloneRepo = useCallback(
+    (repo: GitHubRepo) => {
+      void startRepoClone(repo, workspaceId);
+      onClose();
+    },
+    [onClose, workspaceId]
+  );
 
   if (!visible) return null;
 
@@ -217,54 +228,7 @@ export function GitProfilePopup({ visible, anchor, onClose, onSignedOut, onOpenR
               </TouchableOpacity>
             </View>
           ) : (
-            <ScrollView style={styles.repoList} showsVerticalScrollIndicator={false}>
-              {repos === null ? (
-                <View style={styles.center}>
-                  <Text style={[styles.errorText, { color: theme.textSecondary }]}>Could not load repositories.</Text>
-                </View>
-              ) : repos.length === 0 ? (
-                <View style={styles.center}>
-                  <Text style={[styles.errorText, { color: theme.textSecondary }]}>No repositories yet.</Text>
-                </View>
-              ) : (
-                repos.map((repo) => (
-                  <TouchableOpacity
-                    key={repo.id}
-                    style={[styles.repoRow, { borderBottomColor: theme.border }]}
-                    onPress={() => openUrl(repo.htmlUrl)}
-                    activeOpacity={0.7}
-                  >
-                    <Octicons
-                      name={repo.isPrivate ? "lock" : "repo"}
-                      size={13}
-                      color={theme.textSecondary}
-                      style={styles.repoIcon}
-                    />
-                    <View style={styles.repoBody}>
-                      <Text style={[styles.repoName, { color: theme.textPrimary }]} numberOfLines={1}>
-                        {repo.name}
-                      </Text>
-                      {!!repo.description && (
-                        <Text style={[styles.repoDesc, { color: theme.textSecondary }]} numberOfLines={2}>
-                          {repo.description}
-                        </Text>
-                      )}
-                      <View style={styles.repoMeta}>
-                        {!!repo.language && (
-                          <Text style={[styles.repoMetaText, { color: theme.accent }]}>{repo.language}</Text>
-                        )}
-                        {repo.stars > 0 && (
-                          <Text style={[styles.repoMetaText, { color: theme.textMuted }]}>★ {repo.stars}</Text>
-                        )}
-                        {repo.isFork && <Text style={[styles.repoMetaText, { color: theme.textMuted }]}>fork</Text>}
-                        <Text style={[styles.repoMetaText, { color: theme.textMuted }]}>{formatStale(repo.updatedAt)}</Text>
-                      </View>
-                    </View>
-                    <Octicons name="chevron-right" size={12} color={theme.textMuted} />
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
+            <GitReposTab myRepos={repos} onCloneRepo={handleCloneRepo} />
           )}
         </View>
       </View>
@@ -357,19 +321,4 @@ const styles = StyleSheet.create({
   },
   footerText: { fontSize: 12, fontWeight: "600" },
   signOutText: { fontSize: 12, fontWeight: "700", color: "#f85149" },
-  repoList: { maxHeight: 400 },
-  repoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  repoIcon: { marginTop: 2 },
-  repoBody: { flex: 1, gap: 2 },
-  repoName: { fontSize: 13, fontWeight: "700" },
-  repoDesc: { fontSize: 11.5, lineHeight: 15 },
-  repoMeta: { flexDirection: "row", gap: 10, flexWrap: "wrap", marginTop: 1 },
-  repoMetaText: { fontSize: 10.5 },
 });

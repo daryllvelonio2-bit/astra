@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, PanResponder } from "react-native";
+import { setWorkspaceWatcherPaused } from "./useWorkspaceAutoRefresh";
 
 const MIN_WIDTH = 90;
 const MAX_WIDTH = 320;
@@ -40,6 +41,7 @@ export function useSidebarResizer(
   useEffect(() => {
     return () => {
       sidebarWidthAnim.stopAnimation();
+      setWorkspaceWatcherPaused(false);
     };
   }, [sidebarWidthAnim]);
 
@@ -62,6 +64,7 @@ export function useSidebarResizer(
           }
         });
         setIsDraggingSidebar(true);
+        setWorkspaceWatcherPaused(true);
       },
       onPanResponderMove: (_, gestureState) => {
         if (isCollapsingRef.current) return;
@@ -113,10 +116,12 @@ export function useSidebarResizer(
           }).start(() => {
             isCollapsingRef.current = false;
             setIsDraggingSidebar(false);
+            setWorkspaceWatcherPaused(false);
             onCollapseRef.current?.();
           });
         } else {
           setIsDraggingSidebar(false);
+          setWorkspaceWatcherPaused(false);
           // Snap back safely to at least MIN_WIDTH
           const snapWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, currentW));
           currentWidthRef.current = snapWidth;
@@ -132,6 +137,7 @@ export function useSidebarResizer(
       onPanResponderTerminate: () => {
         if (isCollapsingRef.current) return;
         setIsDraggingSidebar(false);
+        setWorkspaceWatcherPaused(false);
         const snapWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, currentWidthRef.current));
         currentWidthRef.current = snapWidth;
         sidebarWidthAnim.setValue(snapWidth);

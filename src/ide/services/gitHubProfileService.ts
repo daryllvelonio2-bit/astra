@@ -72,7 +72,8 @@ interface ApiRepo {
   default_branch?: string;
 }
 
-async function apiGet<T>(path: string, token: string): Promise<T | null> {
+/** Shared GitHub REST GET (returns null on any failure). Token may be "". */
+export async function apiGet<T>(path: string, token: string): Promise<T | null> {
   try {
     const response = await fetch(`${API_BASE}${path}`, {
       headers: {

@@ -338,17 +338,28 @@ import { json as jsonLang } from "@codemirror/lang-json";
   };
 
   // --- Find & Replace bridge (RN touch trigger; keyboard uses searchKeymap) ---
+  // __cmFindOpen tracks visibility so the ⋯ menu item toggles the panel
+  // (all panel buttons are hidden by theme, so this is the touch close path).
+  window.__cmFindOpen = false;
   window.__cmOpenFind = function () {
     try {
       openSearchPanel(view);
       view.focus();
+      window.__cmFindOpen = true;
     } catch (_) {}
   };
   window.__cmCloseFind = function () {
     try {
       closeSearchPanel(view);
     } catch (_) {}
+    window.__cmFindOpen = false;
   };
+  window.__cmIsFindOpen = function () {
+    return window.__cmFindOpen === true;
+  };
+  view.dom.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") window.__cmFindOpen = false;
+  });
 
   // Multi-touch gestures & pinch-to-zoom
   let touchStartDist = 0;

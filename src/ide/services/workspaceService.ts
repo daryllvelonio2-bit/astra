@@ -15,7 +15,7 @@ import {
 const WORKSPACES_DIR = `${FileSystem.documentDirectory}workspaces/`;
 const REGISTRY_FILE = `${FileSystem.documentDirectory}workspaces_registry.json`;
 
-const IGNORED_FOLDERS = new Set([
+export const IGNORED_FOLDERS = new Set([
   "node_modules",
   "vendor",
   ".git",
@@ -430,7 +430,15 @@ export async function moveNodeInWorkspace(
   }
 }
 
+/** Serializes workspace deletions so two deletes can't race on one dir. */
+let _wsDeleteQueue = Promise.resolve();
+
 export async function deleteWorkspace(workspaceId: string): Promise<void> {
+  _wsDeleteQueue = _wsDeleteQueue.then(() => deleteWorkspaceInner(workspaceId));
+  return _wsDeleteQueue;
+}
+
+async function deleteWorkspaceInner(workspaceId: string): Promise<void> {
   const workspacePath = await getWorkspaceDirPath(workspaceId);
   // 1. Remove registry first so list reloads instantly.
   try {
@@ -440,20 +448,44 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
       await writeFileText(REGISTRY_FILE, JSON.stringify(registry, null, 2));
     }
   } catch (_) {}
-  // 2. Instant O(1) rename, then slow recursive delete in background.
+  // 2. Instant O(1) rename (no trailing slashes — they make moveAsync
+  // create the dest dir first, which then fails the move into it), then
+  // slow recursive delete in background. The list skips -deleting- dirs.
+  const clean = normalizeCleanPath(workspacePath).replace(/\/+$/, "");
+  const trash = `${clean}-deleting-${Date.now()}`;
   try {
-    const clean = normalizeCleanPath(workspacePath).replace(/\/+$/, "");
-    const trash = `${clean}-deleting-${Date.now()}/`;
-    const renamed = await movePath(`${clean}/`, trash);
+    const renamed = await movePath(clean, trash);
     if (renamed) {
-      deletePath(trash).catch(() => {});
-    } else {
-      deletePath(workspacePath).catch(() => {});
+      const sweep = async () => {
+        if (await deletePath(trash)) return true;
+        await new Promise<void>((r) => setTimeout(r, 2000));
+        return deletePath(trash);
+      };
+      sweep().catch(() => {});
+      return;
     }
-  } catch (_) {
-    try { await deletePath(workspacePath); } catch (_) {}
+  } catch (_) {}
+  // 3. Rename failed: delete in place, awaited with retries — verify gone
+  // so the UI can report failure instead of silently resurrecting the entry.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await deletePath(workspacePath);
+    } catch (_) {}
+    try {
+      const info = await getFileInfo(workspacePath);
+      if (!info || !info.exists) break;
+    } catch (_) {
+      break;
+    }
+    await new Promise<void>((r) => setTimeout(r, 2000));
   }
-  // 3. Tiny conversation file + notify (fast).
+  try {
+    const info = await getFileInfo(workspacePath);
+    if (info && info.exists) throw new Error(`Could not delete workspace dir: ${workspacePath}`);
+  } catch (e: any) {
+    if (e?.message?.startsWith("Could not delete")) throw e;
+  }
+  // 4. Tiny conversation file + notify (fast).
   try {
     const safeId = (workspaceId || "default").replace(/[^a-zA-Z0-9_-]/g, "_");
     await deletePath(`${FileSystem.documentDirectory}conversations/${safeId}.json`);

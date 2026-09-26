@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackHandler } from "react-native";
 import { showAppDialog } from "../services/appDialog";
+import { tryCloseFindPanel } from "../services/findPanelBackPress";
 
 interface SystemBackHandlerOptions {
   /** Original edit-mode handler (sidebar parking etc.). */
@@ -32,6 +33,8 @@ export function useSystemBackHandler({ onEditModeChange, onCloseProject, ideVisi
   useEffect(() => {
     if (!ideVisible) return;
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      // Floating find panel first — it has no close button of its own.
+      if (tryCloseFindPanel()) return true;
       if (isEditingRef.current) {
         setExitEditSignal((s) => s + 1);
         return true;

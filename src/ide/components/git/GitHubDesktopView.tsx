@@ -316,6 +316,7 @@ export function GitHubDesktopView({
       <GitProfilePopup
         visible={showProfile}
         anchor={profileAnchor}
+        workspaceId={workspaceId}
         onClose={() => setShowProfile(false)}
         onSignedOut={() => setGhSession(null)}
         onOpenRemote={() => setShowRemoteModal(true)}

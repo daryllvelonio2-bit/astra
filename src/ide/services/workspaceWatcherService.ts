@@ -36,6 +36,23 @@ export function computeWorkspaceFingerprint(
   rootPath: string,
   maxDepth: number = WATCHER_MAX_DEPTH
 ): string {
+  const r = computeWorkspaceFingerprintSync(readDir, rootPath, maxDepth);
+  return r.fp;
+}
+
+export interface FingerprintStats {
+  /** Directories listed during the walk. */
+  dirCount: number;
+  /** Wall time in ms. */
+  durationMs: number;
+}
+
+function computeWorkspaceFingerprintSync(
+  readDir: WatcherReadDir,
+  rootPath: string,
+  maxDepth: number
+): FingerprintStats & { fp: string } {
+  const started = Date.now();
   const visited = new Set<string>();
 
   function walk(dirPath: string, depth: number): number {
@@ -63,5 +80,58 @@ export function computeWorkspaceFingerprint(
     return hash >>> 0;
   }
 
-  return walk(rootPath, 0).toString(16);
+  const fp = walk(rootPath, 0).toString(16);
+  return { fp, dirCount: visited.size, durationMs: Date.now() - started };
+}
+
+/**
+ * Chunked async twin of the walk above: yields to the JS thread every
+ * `yieldEvery` directories so sidebar-resize animation frames (JS-driven)
+ * and taps interleave instead of queueing behind a multi-second block.
+ * Same traversal order and hash — fingerprints match the sync version.
+ */
+export async function computeWorkspaceFingerprintAsync(
+  readDir: WatcherReadDir,
+  rootPath: string,
+  maxDepth: number = WATCHER_MAX_DEPTH,
+  yieldEvery: number = 25,
+  stats?: FingerprintStats
+): Promise<string> {
+  const started = Date.now();
+  const visited = new Set<string>();
+  let dirCount = 0;
+  const yieldTick = () => new Promise<void>((r) => setTimeout(r, 0));
+
+  async function walk(dirPath: string, depth: number): Promise<number> {
+    let hash = 0x811c9dc5;
+    let entries: NativeDirEntry[];
+    try {
+      entries = readDir(dirPath.endsWith("/") ? dirPath : `${dirPath}/`) || [];
+    } catch (_) {
+      return hash >>> 0;
+    }
+    if (++dirCount % yieldEvery === 0) await yieldTick();
+    const sorted = entries.slice().sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const e of sorted) {
+      if (!e || !e.name) continue;
+      if (IGNORED_NAMES.has(e.name)) continue;
+      if (e.name.startsWith(".") && e.name !== ".env" && e.name !== ".gitignore") continue;
+      hash = mixStr(hash, e.name);
+      hash = mixStr(hash, e.isDirectory ? "|d" : "|f");
+      hash = mixNum(hash, e.lastModified);
+      hash = mixNum(hash, e.size);
+      if (e.isDirectory && depth < maxDepth && e.path && !visited.has(e.path)) {
+        visited.add(e.path);
+        hash = mixNum(hash, await walk(e.path, depth + 1));
+      }
+    }
+    return hash >>> 0;
+  }
+
+  const fp = (await walk(rootPath, 0)).toString(16);
+  if (stats) {
+    stats.dirCount = dirCount;
+    stats.durationMs = Date.now() - started;
+  }
+  return fp;
 }

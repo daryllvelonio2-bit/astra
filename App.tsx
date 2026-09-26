@@ -3,6 +3,7 @@ import { LogBox, View, StyleSheet, Text } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ProjectPicker } from "./src/ide/components/ProjectPicker";
+import { RepoCloneIndicator } from "./src/ide/components/RepoCloneIndicator";
 import { IDELayout } from "./src/ide/components/IDELayout";
 import { PRootService } from "./src/ide/services/prootService";
 import { ThemeProvider } from "./src/theme/themeContext";
@@ -149,6 +150,7 @@ export default function App() {
               </>
             )}
           </KeyboardMouseProvider>
+          <RepoCloneIndicator />
           <AppDialogHost />
         </ThemeProvider>
       </ErrorBoundary>

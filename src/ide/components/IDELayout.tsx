@@ -15,7 +15,8 @@ import { runningTasksService, RunningTask } from "../../ai/services/runningTasks
 import { FileNode } from "../types";
 import { useSidebarResizer } from "./useSidebarResizer";
 import { useWorkspaceFileActions } from "./useWorkspaceFileActions";
-import { readFileContent, loadOrCreateDefaultWorkspace, loadWorkspace, Workspace } from "../services/workspaceService";
+import { readFileContent, loadOrCreateDefaultWorkspace, Workspace } from "../services/workspaceService";
+import { loadWorkspaceShallow } from "../services/workspaceTreeService";
 import { useDebouncedFileSave } from "./useDebouncedFileSave";
 import { useWorkspaceAutoRefresh } from "./useWorkspaceAutoRefresh";
 import { useTheme } from "../../theme/themeContext";
@@ -209,7 +210,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
       let ws: Workspace;
       try {
         ws = workspaceId
-          ? await loadWorkspace(workspaceId, onProgress)
+          ? await loadWorkspaceShallow(workspaceId, onProgress)
           : await loadOrCreateDefaultWorkspace();
       } catch (e: any) {
         if (!cancelled) setLoadError(e?.message || "Failed to load workspace");
@@ -239,7 +240,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
   const refreshWorkspace = useCallback(async () => {
     if (!workspace) return;
     try {
-      const updated = await loadWorkspace(workspace.id);
+      const updated = await loadWorkspaceShallow(workspace.id);
       setWorkspace(updated);
       const af = activeFileRef.current;
       if (af?.path && Date.now() - lastLocalEditTimeRef.current > 3000) {
@@ -382,6 +383,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
             <PanelErrorBoundary panelName="Explorer" resetKey={workspace?.id}>
             <FileExplorer
               projectName={workspace.name}
+              workspaceId={workspace.id}
               files={workspace.root.children || []}
               onSelectFile={handleSelectFile}
               activeFileId={activeFile?.id}
