@@ -1,5 +1,10 @@
 # Project Progress Tracker
 
+### [2026-09-27] - GitHub suite: duplicate search entry points removed
+- **User report:** search appeared three times — the Home bar ("Search repositories, code, users..."), a magnifier in the suite header, and a Search tab in the bottom nav.
+- **Change (`GitHubSuiteView.tsx` 374→370):** deleted the header magnifier button and the bottom-nav Search tab. Home keeps the one real search bar (routes into `GitHubSearchView`, which owns the repos/code/users/issues scopes) plus the Quick actions "Search code" / "Search users"; `showTabs` still lists the `search` route so Home / Inbox / You stay reachable from a result list. Bottom bar is now Home / Inbox / You.
+- **Verify:** `tsc --noEmit` exit 0; file <500 lines; theme tokens only. JS-only — Metro reload is enough, no APK rebuild.
+
 ### [2026-09-27] - Gap 4 Phase 3: stash + rebase UI wired into the Git tab
 - **New:** `useStashRebase.ts` (160 lines, mirrors `useMergeConflicts` refresh ownership so `useGitOperations` at 499 stays untouched) + `GitRebaseBanner.tsx` (68 lines, reuses merge-banner shared styles, gold variant, Abort/Skip/Continue with Continue disabled while files stay conflicted) + `GitStashModal.tsx` (247 lines: message + untracked toggle + save row, entries with Apply/Pop/Drop, drop confirmed).
 - **Wiring (`GitHubDesktopView` 423→481):** banner above Changes, Stash (n) entry in the select-all strip (`GitChangesList` 364→381), Rebase action on non-current branch rows (`GitBranchModal` 286→300), rebase-conflicted paths unioned into the merge set so badges + long-press ours/theirs + open-in-editor all work mid-rebase. `gap-analysis.md` item 4 checked off.

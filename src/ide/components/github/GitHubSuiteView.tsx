@@ -137,9 +137,6 @@ export function GitHubSuiteView({ visible, session, workspaceId, initialRoute, o
           <Text style={[styles.topTitle, { color: theme.textPrimary }]} numberOfLines={1}>
             {routeTitle(route)}
           </Text>
-          <TouchableOpacity style={styles.topBtn} onPress={() => goTab({ name: "search", scope: "repos" })} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Octicons name="search" size={15} color={theme.textSecondary} />
-          </TouchableOpacity>
         </View>
 
         {/* Active route */}
@@ -151,7 +148,6 @@ export function GitHubSuiteView({ visible, session, workspaceId, initialRoute, o
         {showTabs && !editor && (
           <View style={[styles.tabBar, { borderTopColor: theme.border, backgroundColor: theme.bgSecondary, paddingBottom: Math.max(7, insets.bottom) }]}>
             <BottomTab icon="home" label="Home" active={route.name === "home"} onPress={() => goTab({ name: "home" })} />
-            <BottomTab icon="search" label="Search" active={route.name === "search"} onPress={() => goTab({ name: "search", scope: "repos" })} />
             <BottomTab icon="bell" label="Inbox" active={route.name === "notifications"} onPress={() => goTab({ name: "notifications" })} />
             <BottomTab
               icon="person"
