@@ -31,6 +31,14 @@
 - **Change:** `repoCloneCoordinator.ts` (new service: module-level clone state + pub/sub, owns clone lifecycle, workspace registration, error dialogs) + `RepoCloneIndicator.tsx` (new app-level overlay, `position:absolute` top-left under the status bar, `pointerEvents:"box-none"`, text only, Cancel link). Mounted once in `App.tsx` above all screens. Popup now just fires `startRepoClone` + closes; the local `useRepoClone` hook was deleted (zero references kept).
 - **Verify:** `tsc --noEmit` exit 0; App.tsx 168 / indicator 52 / coordinator 98 / popup 324 lines; no `useRepoClone` references remain. On-device feel check: clone from the popup, switch to the terminal tab — text stays top-left over everything until done.
 
+### [2026-09-27] - Token sign-in now saves the API session (fixes ghost signed-out)
+- **Cause:** all three token entry points (Git credentials modal, clone modal, onboarding) only wrote git-level `~/.git-credentials`, never the app's API token/username. Public views (profiles, repos) worked unauthenticated while Home identity, session, notifications and GraphQL 401'd — suite looked signed out and funneled to browser OAuth.
+- **Fix:** all three route through `completeGitHubLogin(token)` — validates via `/user`, wires git creds, saves token+username+email+avatar, clears the token cache. `tsc` clean. Healing: re-paste the token once in the Git tab.
+
+### [2026-09-27] - Contribution graph on profiles
+- **What:** year contributions grid under the Repos/Followers/Following/Gists stats — total count on top, weeks as green-square columns (GitHub's own per-day colors) in a horizontal scroller pinned to the recent end.
+- **How:** new `fetchContributionCalendar` (GraphQL `contributionCalendar` — REST has no equivalent, same token/auth), `GitHubContribGraph.tsx` (85 lines). Skipped for orgs, silent on error so the profile never breaks. `tsc` clean.
+
 ### [2026-09-27] - Avatar opens your profile, not Home
 - **Cause:** the header avatar opened the GitHub suite at its default Home route — the profile only appeared via deeper taps.
 - **Fix:** suite takes an `initialRoute` applied fresh on every open; avatar passes `{profile, your-login}` (signed-out falls back to Home's sign-in). `tsc` clean.

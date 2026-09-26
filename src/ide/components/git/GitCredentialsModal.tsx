@@ -5,6 +5,7 @@ import { Ionicons, Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { useAccurateKeyboard } from "../../../theme/useAccurateKeyboard";
 import {
+  completeGitHubLogin,
   configureGitCredentials,
   getSshPublicKey,
   generateSshKey,
@@ -70,22 +71,22 @@ export function GitCredentialsModal({ visible, onClose }: GitCredentialsModalPro
   };
 
   const handleSaveToken = async () => {
-    if (!token.trim() || !username.trim()) {
-      showAppDialog({ title: "Missing information", message: "Please provide at least your GitHub username and token." });
+    if (!token.trim()) {
+      showAppDialog({ title: "Missing information", message: "Please paste your GitHub token." });
       return;
     }
     setSavingToken(true);
-    const ok = await configureGitCredentials(
-      token.trim(),
-      username.trim(),
-      email.trim() || `${username.trim()}@users.noreply.github.com`
-    );
-    setSavingToken(false);
-    if (ok) {
-      showAppDialog({ title: "Saved", message: "GitHub credentials configured successfully. Push and pull will now authenticate automatically." });
+    try {
+      // Full login: validates the token, wires git credentials AND saves the
+      // API session (token + username) so Home, profile, notifications and
+      // every auth-gated view work — token-only git wiring left those dead.
+      const session = await completeGitHubLogin(token.trim());
+      showAppDialog({ title: "Saved", message: `Signed in as @${session.username}. Push, pull and the full GitHub suite are now authenticated.` });
       onClose();
-    } else {
-      showAppDialog({ title: "Error", message: "Could not configure git credentials." });
+    } catch (e: any) {
+      showAppDialog({ title: "Error", message: e?.message || "Could not sign in with that token." });
+    } finally {
+      setSavingToken(false);
     }
   };
 

@@ -15,6 +15,7 @@ import { GitHubNavigation } from "./useGitHubNavigation";
 import { GitHubUserDetail, GitHubUserSummary } from "../../services/gitHubTypes";
 import { formatJoined, formatStale } from "../../services/gitHubProfileService";
 import { GitHubRepoListView } from "./GitHubRepoListView";
+import { GitHubContribGraph } from "./GitHubContribGraph";
 
 /**
  * Profile of any user or organization: identity, stats, bio, and tabs for
@@ -78,6 +79,8 @@ export function GitHubProfileView({
           <Stat label="Following" value={u.following} onPress={() => setTab("following")} />
           <Stat label="Gists" value={u.publicGists} onPress={() => nav.push({ name: "gists" })} />
         </View>
+
+        {!u.isOrganization && <GitHubContribGraph login={u.login} />}
       </View>
 
       <View style={[styles.tabs, { borderBottomColor: theme.border }]}>

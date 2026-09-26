@@ -25,6 +25,7 @@ import {
   cancelClone,
 } from '../services/gitCloneService';
 import {
+  completeGitHubLogin,
   configureGitCredentials,
   getSshPublicKey,
   generateSshKey,
@@ -185,19 +186,19 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
   };
 
   const handleSaveToken = async () => {
-    if (!credUsername.trim() || !credToken.trim()) {
-      setError('Username and token are required.');
+    if (!credToken.trim()) {
+      setError('Token is required.');
       return;
     }
     setSavingToken(true);
     try {
-      const ok = await configureGitCredentials(credToken.trim(), credUsername.trim(), credEmail.trim());
-      if (!ok) {
-        setError('Could not save credentials.');
-        return;
-      }
+      // Full login so the API session is saved too (not just git wiring),
+      // then continue straight into the clone.
+      await completeGitHubLogin(credToken.trim());
       setAuthSection(null);
       handleClone();
+    } catch (e: any) {
+      setError(e?.message || 'Could not sign in with that token.');
     } finally {
       setSavingToken(false);
     }

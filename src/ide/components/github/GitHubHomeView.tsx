@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from "react-native";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { GitHubUserDetail } from "../../services/gitHubTypes";
@@ -91,7 +91,13 @@ export function GitHubHomeView({
               onPress={() => nav.push({ name: "profile", login: user.login })}
               activeOpacity={0.7}
             >
-              <Octicons name="person" size={20} color={theme.accent} />
+              {user.avatarUrl ? (
+                <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: `${theme.accent}22` }]}>
+                  <Octicons name="person" size={18} color={theme.accent} />
+                </View>
+              )}
               <View style={styles.identityText}>
                 <Text style={[styles.name, { color: theme.textPrimary }]} numberOfLines={1}>
                   {user.name || `@${user.login}`}
@@ -259,6 +265,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   identityText: { flex: 1, gap: 2 },
+  avatar: { width: 38, height: 38, borderRadius: 19, marginRight: 10 },
+  avatarFallback: { alignItems: "center", justifyContent: "center" },
   name: { fontSize: 14.5, fontWeight: "800" },
   handle: { fontSize: 12 },
   stats: { flexDirection: "row", paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },

@@ -84,8 +84,14 @@ export function GitHubSuiteView({ visible, session, workspaceId, initialRoute, o
 
   const goTab = useCallback(
     (tab: GitHubRoute) => {
+      // Home must reset the stack explicitly: the entry route may be the
+      // profile (avatar entry), where popToRoot alone would strand us.
+      if (tab.name === "home") {
+        nav.popToRoot();
+        nav.replace({ name: "home" });
+        return;
+      }
       nav.popToRoot();
-      if (tab.name === "home") return;
       nav.push(tab);
     },
     [nav]

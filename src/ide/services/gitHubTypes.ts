@@ -277,3 +277,16 @@ export interface GitHubEvent {
 
 /** Sign-in scopes Astra requests; used to explain 403s to the user. */
 export const GITHUB_SCOPES = "repo read:user user:email notifications gist workflow";
+
+/** One day cell of the contributions calendar (colors come from GitHub itself). */
+export interface ContribDay {
+  date: string;
+  count: number;
+  color: string;
+}
+
+/** Full-year contributions calendar: weeks of day cells + yearly total. */
+export interface ContribCalendar {
+  total: number;
+  weeks: ContribDay[][];
+}

@@ -4,6 +4,7 @@ import { showAppDialog } from "../../ide/services/appDialog";
 import { Ionicons, Octicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../theme/themeContext";
 import {
+  completeGitHubLogin,
   configureGitCredentials,
   getSshPublicKey,
   generateSshKey,
@@ -55,19 +56,17 @@ export function GitHubSetupStep({
       showAppDialog({ title: "Token Required", message: "Please enter your GitHub Personal Access Token." });
       return;
     }
-    const cleanUsername = username.trim() || "git";
-    const cleanEmail = email.trim() || `${cleanUsername}@users.noreply.github.com`;
-
     setSavingToken(true);
-    const ok = await configureGitCredentials(token.trim(), cleanUsername, cleanEmail);
-    setSavingToken(false);
-
-    if (ok) {
+    try {
+      // Full login so the API session is saved too (not just git wiring).
+      const session = await completeGitHubLogin(token.trim());
       setTokenSaved(true);
       onConfigured();
-      showAppDialog({ title: "Success", message: "GitHub credentials configured successfully!" });
-    } else {
-      showAppDialog({ title: "Error", message: "Failed to save Git credentials." });
+      showAppDialog({ title: "Success", message: `Signed in as @${session.username}. GitHub is fully configured!` });
+    } catch (e: any) {
+      showAppDialog({ title: "Error", message: e?.message || "Failed to sign in with that token." });
+    } finally {
+      setSavingToken(false);
     }
   };
 
