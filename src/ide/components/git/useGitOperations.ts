@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect } from "react";
-import { Linking } from "react-native";
 import {
   GitBranch,
   GitCommit,
@@ -28,20 +27,7 @@ import {
   getGitRemoteUrl,
   setGitRemoteUrl,
 } from "../../services/gitService";
-import {
-  amendCommit,
-  resetToCommit,
-  checkoutCommit,
-  revertCommit,
-  cherryPickCommit,
-  createBranchFromCommit,
-  createTag,
-  getCommitMessage,
-  buildCommitWebUrl,
-  ResetMode,
-  GitOpResult,
-} from "../../services/gitCommitActions";
-import { Clipboard } from "../../services/clipboardService";
+import { useCommitMenuActions } from "./useCommitMenuActions";
 import { useCommitAvatars } from "./useCommitAvatars";
 import { isGitAuthError } from "../../services/gitCloneService";
 import { showAppDialog } from "../../services/appDialog";

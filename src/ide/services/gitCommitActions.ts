@@ -40,18 +40,53 @@ export async function amendCommit(
 export async function resetToCommit(
   workspaceId: string | undefined,
   hash: string,
-  mode: ResetMode
-): Promise<GitOpResult> {
-  const res = await executeCommand(`git reset --${mode} ${hash}`, workspaceId);
+  mode: ResetMode,
+  isHead?: boolean
+): Promise<GitOpResult & { uncommitted?: boolean; message?: string }> {
+  if (isHead) {
+    const uncommitRes = await uncommitLatest(workspaceId, mode);
+    return { ...uncommitRes, uncommitted: true };
+  }
+  const res = await executeCommand(`git reset --${mode} ${hash} 2>&1`, workspaceId);
   invalidateGitStatusCache(workspaceId);
   return ok(res);
+}
+
+/**
+ * Undo the most recent commit (HEAD) and return all its changes back
+ * to the working tree ("mixed") or index ("soft").
+ * If this is the initial/root commit, drops the HEAD ref cleanly.
+ */
+export async function uncommitLatest(
+  workspaceId: string | undefined,
+  mode: ResetMode = "mixed"
+): Promise<GitOpResult & { message?: string }> {
+  // Capture commit message so caller can restore it to the input field
+  const msgRes = await executeCommand("git log -1 --pretty=%B 2>&1", workspaceId);
+  const commitMsg = (msgRes.stdout || "").trim();
+
+  // Check if HEAD has a parent commit
+  const hasParent = await executeCommand("git rev-parse --verify HEAD~1 2>&1", workspaceId);
+  let res;
+  if (hasParent.exitCode === 0) {
+    res = await executeCommand(`git reset --${mode} HEAD~1 2>&1`, workspaceId);
+  } else {
+    // Root commit with no parent: delete HEAD ref
+    res = await executeCommand("git update-ref -d HEAD 2>&1", workspaceId);
+    if (res.exitCode === 0 && mode === "mixed") {
+      await executeCommand("git rm --cached -r . 2>&1", workspaceId);
+    }
+  }
+  invalidateGitStatusCache(workspaceId);
+  const r = ok(res);
+  return { ...r, message: commitMsg };
 }
 
 export async function checkoutCommit(
   workspaceId: string | undefined,
   hash: string
 ): Promise<GitOpResult> {
-  const res = await executeCommand(`git checkout ${hash}`, workspaceId);
+  const res = await executeCommand(`git checkout ${hash} 2>&1`, workspaceId);
   invalidateGitStatusCache(workspaceId);
   return ok(res);
 }
@@ -60,7 +95,7 @@ export async function revertCommit(
   workspaceId: string | undefined,
   hash: string
 ): Promise<GitOpResult> {
-  const res = await executeCommand(`git revert --no-edit ${hash}`, workspaceId);
+  const res = await executeCommand(`git revert --no-edit ${hash} 2>&1`, workspaceId);
   invalidateGitStatusCache(workspaceId);
   return ok(res);
 }

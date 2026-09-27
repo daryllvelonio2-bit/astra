@@ -6,6 +6,8 @@
  * and keeps per-frame work out of the render path.
  */
 
+import { ShooterPlan, buildShooterPlan } from "./contribShooterPlan";
+
 export const ROWS = 7;
 export const CELL = 11;
 export const GAP = 2.5;
@@ -67,6 +69,7 @@ export interface ContribPoint {
 /** A square that carries at least one contribution. */
 export interface ContribCell extends ContribPoint {
   key: string;
+  color?: string;
 }
 
 /** A square on the grid: the classic snake walks whole cells, never pixels. */
@@ -91,28 +94,8 @@ export interface SnakePlan {
   headStart: number;
 }
 
-export interface PlanePass {
-  start: number;
-  duration: number;
-}
-
-export interface PlaneShot {
-  key: string;
-  col: number;
-  row: number;
-  /** Muzzle moment: the plane sits directly above the square here. */
-  fireAt: number;
-  /** Pixels the bullet drops before it lands on the square. */
-  fall: number;
-}
-
-export interface PlanePlan {
-  mode: "plane";
-  passes: PlanePass[];
-  shots: PlaneShot[];
-  cycleMs: number;
-  vanishAt: Map<string, number>;
-}
+export type PlanePlan = ShooterPlan;
+export const buildPlanePlan = buildShooterPlan;
 
 export type ContribPlan = SnakePlan | PlanePlan;
 
@@ -410,67 +393,5 @@ export function buildSnakePlan(
   const vanishAt = new Map<string, number>();
   visitAt.forEach((times, key) => vanishAt.set(key, times[0]));
   return { mode: "snake", route, cycleMs, vanishAt, visitAt, headStart };
-}
-
-export function buildPlanePlan(alive: ContribCell[], cols: number): PlanePlan {
-  const rowsByCol = new Map<number, number[]>();
-  const keyAtPos = new Map<string, string>();
-  alive.forEach((c) => {
-    const rows = rowsByCol.get(c.col);
-    if (rows) rows.push(c.row);
-    else rowsByCol.set(c.col, [c.row]);
-    keyAtPos.set(posKey(c.col, c.row), c.key);
-  });
-  rowsByCol.forEach((rows) => rows.sort((a, b) => a - b));
-
-  // A pass clears the top-most surviving square of every column the aircraft
-  // crosses, so a column n squares tall needs n passes — and a pass with
-  // nothing left to shoot never happens at all.
-  const layers: ContribPoint[][] = [];
-  const taken = new Map<number, number>();
-  for (let pass = 0; pass < ROWS; pass++) {
-    const targets: ContribPoint[] = [];
-    rowsByCol.forEach((rows, col) => {
-      const i = taken.get(col) || 0;
-      if (i < rows.length) {
-        targets.push({ col, row: rows[i] });
-        taken.set(col, i + 1);
-      }
-    });
-    if (!targets.length) break;
-    layers.push(targets);
-  }
-
-  const width = gridWidth(cols);
-  const span = width + PLANE_BOX; // right edge -> just past the left edge
-  // The aircraft flies right to left, so a column decides when the plane is
-  // above it — and therefore when the bullet leaves the belly.
-  const lane = (col: number) => Math.min(0.97, Math.max(0.03, (width - cellCenterX(col)) / span));
-  const passMs = Math.min(PASS_MAX_MS, Math.max(PASS_MIN_MS, Math.round(PLANE_BUDGET_MS / Math.max(1, layers.length))));
-
-  const shots: PlaneShot[] = [];
-  const passes: PlanePass[] = [];
-  const vanishAt = new Map<string, number>();
-  let t = 0;
-  layers.forEach((targets) => {
-    targets.forEach((target) => {
-      // The square dies when the bullet lands, and no bullet is airborne longer
-      // than its flight time.
-      const at = Math.max(t + BULLET_FLIGHT_MS + 20, t + lane(target.col) * passMs);
-      const key = keyAtPos.get(posKey(target.col, target.row));
-      shots.push({
-        key: key || posKey(target.col, target.row),
-        col: target.col,
-        row: target.row,
-        fireAt: at - BULLET_FLIGHT_MS,
-        fall: Math.max(2, rowCenterY(target.row) - muzzleY() - BULLET_H / 2),
-      });
-      if (key) vanishAt.set(key, at);
-    });
-    passes.push({ start: t, duration: passMs });
-    t += passMs + PASS_GAP_MS;
-  });
-
-  return { mode: "plane", passes, shots, cycleMs: Math.max(600, t - PASS_GAP_MS), vanishAt };
 }
 

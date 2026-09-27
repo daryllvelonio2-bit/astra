@@ -5,6 +5,7 @@ import { fetchContributionCalendar } from "../../services/gitHubAccountService";
 import { ContribCalendar } from "../../services/gitHubTypes";
 import { useGitHubResource } from "./useGitHubResource";
 import { ContribCell, CELL, GAP, ROWS, SKY, gridWidth } from "./contribPlan";
+import { SHOOTER_SPACE } from "./contribShooterPlan";
 import { useContribAnimation } from "./useContribAnimation";
 import { ContribAnimOverlay } from "./ContribAnimOverlay";
 
@@ -51,7 +52,7 @@ export function GitHubContribGraph({ login }: { login: string }) {
     const squares: ContribCell[] = [];
     columns.forEach((slots, col) => {
       slots.forEach((slot, row) => {
-        if (slot && slot.count > 0) squares.push({ key: slot.key, col, row });
+        if (slot && slot.count > 0) squares.push({ key: slot.key, col, row, color: slot.color });
       });
     });
     return squares;
@@ -75,7 +76,7 @@ export function GitHubContribGraph({ login }: { login: string }) {
         showsHorizontalScrollIndicator={false}
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
       >
-        <View style={[styles.stage, { width: gridWidth(columns.length) }]}>
+        <View style={[styles.stage, { width: gridWidth(columns.length) + SHOOTER_SPACE }]}>
           <View style={styles.grid}>
             {columns.map((slots, wi) => (
               <View key={`w${wi}`} style={styles.col}>

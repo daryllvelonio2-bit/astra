@@ -16,6 +16,7 @@ import type { ResetMode } from "../../services/gitCommitActions";
 export interface CommitActionHandlers {
   amend: (message: string) => void;
   reset: (mode: ResetMode) => void;
+  undo?: (mode?: ResetMode) => void;
   checkout: () => void;
   revert: () => void;
   createBranch: (name: string) => void;
@@ -31,6 +32,7 @@ interface GitCommitActionsModalProps {
   commitSummary: string;
   amendInitialMessage: string;
   shortHash: string;
+  isHead?: boolean;
   canViewOnGitHub: boolean;
   busy: boolean;
   onClose: () => void;
@@ -48,6 +50,7 @@ export function GitCommitActionsModal({
   commitSummary,
   amendInitialMessage,
   shortHash,
+  isHead,
   canViewOnGitHub,
   busy,
   onClose,
@@ -217,6 +220,16 @@ export function GitCommitActionsModal({
 
             {panel === "menu" && (
               <ScrollView style={[styles.menuScroll, { maxHeight: Math.max(200, winH - 140) }]}>
+                {isHead && actions.undo && (
+                  <MenuRow
+                    icon="history"
+                    label="Undo commit (put back into Changes)"
+                    onPress={() => {
+                      actions.undo?.();
+                      close();
+                    }}
+                  />
+                )}
                 <MenuRow
                   icon="pencil"
                   label="Amend commit"
@@ -224,7 +237,7 @@ export function GitCommitActionsModal({
                 />
                 <MenuRow
                   icon="sync"
-                  label="Reset to commit"
+                  label={isHead ? "Reset / Uncommit this commit" : "Reset branch to this commit"}
                   onPress={() => setPanel("reset")}
                 />
                 <MenuRow icon="check-circle" label="Checkout commit" onPress={actions.checkout} />
@@ -249,21 +262,23 @@ export function GitCommitActionsModal({
             {panel === "reset" && (
               <View style={styles.panelBody}>
                 <Text style={[styles.panelHint, { color: theme.textMuted }]}>
-                  Reset moves the current branch to #{shortHash}.
+                  {isHead
+                    ? `Undo commit #${shortHash} and return its changes to the Changes tab.`
+                    : `Reset moves the current branch to #${shortHash} (commits after this will be undone).`}
                 </Text>
                 <MenuRow
-                  icon="file"
-                  label="Soft — keep staged changes"
+                  icon="dash"
+                  label={isHead ? "Mixed — uncommit to working changes" : "Mixed — keep working changes"}
                   onPress={() => {
-                    actions.reset("soft");
+                    actions.reset("mixed");
                     close();
                   }}
                 />
                 <MenuRow
-                  icon="dash"
-                  label="Mixed — keep working changes"
+                  icon="file"
+                  label={isHead ? "Soft — uncommit but keep staged" : "Soft — keep staged changes"}
                   onPress={() => {
-                    actions.reset("mixed");
+                    actions.reset("soft");
                     close();
                   }}
                 />

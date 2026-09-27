@@ -1,6 +1,15 @@
 # Project Progress Tracker
 
-### [2026-09-27] - Fix contribution snake eating colors & prevent reversing into body
+### [2026-09-27] - Redo shooting animation: stationary right-side turret + color block explosions
+- **User directives:** (a) shooter should be placed on the right only and shoot the colors instead of moving right-to-left across the screen and repeating, (b) when a color is shot it should explode like a block of that color.
+- **Changes:**
+  - `contribShooterPlan.ts`: created dedicated shooter planner. Stations the turret on the right edge (`gridWidth(cols) + 4`) and plans target sweeps right-to-left with diverse row heights so the turret glides vertically while remaining pinned to the right edge.
+  - `contribPlaneAnim.ts`: completely reworked animation nodes. Drives shots natively via `Animated.Value(0 -> 2)`: `0 -> 1` translates high-speed laser bolt leftward from muzzle to target block; `1 -> 2` triggers 4-fragment diagonal block explosion in the target's exact color (`slot.color`), bursting outward by 8px, scaling down, and fading out. Turret smoothly tracks the target row before each shot.
+  - `ContribAnimOverlay.tsx`: renders the futuristic right-edge turret (cyan mount/barrel + gold core) + leftward laser bolts + native 4-piece block explosion fragments.
+  - `GitHubContribGraph.tsx`: passes `color: slot.color` into `ContribCell` so explosions match block color, and allocates 24px (`SHOOTER_SPACE`) on stage width so the right-side turret is in view when scrolled to the recent end.
+  - `contribPlan.ts`: added `color?: string` to `ContribCell`, removed old aircraft strafing code, forwarded `PlanePlan` to `ShooterPlan`.
+- **Verify:** All github files compile clean. Headless probe verifies turret placement on the right, valid leftward flight, 100% color matching, and explosion intervals. File line counts: `contribShooterPlan.ts` (98), `contribPlaneAnim.ts` (169), `ContribAnimOverlay.tsx` (151), `contribPlan.ts` (397), `GitHubContribGraph.tsx` (125), `useContribAnimation.ts` (284) — all strictly < 500 lines.
+
 - **User directives:** (a) snake could not eat the colors (colors still present after walking over them), (b) when it ticks, it moved back to where its body of the snake is.
 - **Root causes:**
   1. `Animated.timing` with `delay: hitAt` started simultaneously for all visits on each cell's `Animated.Value`. In React Native, starting a new animation on an `Animated.Value` immediately stops/cancels any previous animation on that value (`this._animation && this._animation.stop()`). The later visits/delays cancelled earlier bites, and respawn timeouts stopped the surviving ones — preventing squares from fading out.
