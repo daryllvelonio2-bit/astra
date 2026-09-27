@@ -236,9 +236,45 @@ function curveThrough(points: PathPoint[]): { dense: PathPoint[]; mark: number[]
 }
 
 /**
+ * How far apart the wiggle midpoints sit on a long hop, and how far they lean
+ * off the hop line. A long hop gets several, leaning alternately to each side
+ * like a snake actually travels; a short hop gets one small bend.
+ */
+const WIGGLE_EVERY_PX = 4 * CELL_STEP;
+const WIGGLE_PX = 1.5 * CELL_STEP;
+
+/**
+ * Midpoints that turn a hop into a wiggle: evenly spaced between `from` and
+ * `to`, leaning off to alternating sides, never past a third of the hop — so
+ * a short hop only bends where a long one properly snakes. `exit` runs are
+ * plain travelling: no bends, so the snake streams away straight.
+ */
+function wiggleBetween(from: PathPoint, to: PathPoint, box: { right: number; bottom: number }): PathPoint[] {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 1) return [];
+  const bends = Math.max(1, Math.floor(length / WIGGLE_EVERY_PX));
+  const px = -dy / length;
+  const py = dx / length;
+  const sway = Math.min(WIGGLE_PX, length / 3);
+  let side = Math.random() < 0.5 ? 1 : -1;
+  const mids: PathPoint[] = [];
+  for (let k = 1; k <= bends; k++) {
+    const t = k / (bends + 1);
+    const lean = side * sway * (0.6 + 0.8 * Math.random());
+    side = -side;
+    mids.push({
+      x: Math.min(box.right, Math.max(-SNAKE_BODY_PX, from.x + dx * t + px * lean)),
+      y: Math.min(box.bottom, Math.max(-SNAKE_BODY_PX, from.y + dy * t + py * lean)),
+    });
+  }
+  return mids;
+}
+
+/**
  * The hunt as a centre-line: `path` is the curve resampled at an even spacing,
- * so turning a travelled distance into a spot on it is one multiplication, and
- * `bites[i]` is how far along it the snake reaches square i.
+ * with `bites[i]` how far along it the snake reaches square i.
  */
 function buildHunt(order: ContribCell[], cols: number): { path: PathPoint[]; spacing: number; length: number; bites: number[] } {
   const squares = order.map((c) => ({ x: cellCenterX(c.col), y: rowCenterY(c.row) }));
@@ -246,7 +282,21 @@ function buildHunt(order: ContribCell[], cols: number): { path: PathPoint[]; spa
   const tail = squares.length - 1;
   const entry = stretch(squares[0], squares[1] || { x: squares[0].x - 120, y: squares[0].y }, SNAKE_BODY_PX + 24, box);
   const exit = stretch(squares[tail], squares[tail - 1] || squares[0], SNAKE_BODY_PX + 24, box);
-  const { dense, mark } = curveThrough([entry, ...squares, exit]);
+  // A short hop holds one bend, a long one a wiggle every few squares: evenly
+  // spaced along the hop, leaning off to alternating sides like a real snake, so
+  // the curve can never fly one straight line across several squares in a row.
+  // `bitesIndex[l]` is the stop index of the l-th eaten square.
+  const stops: PathPoint[] = [entry];
+  let from = entry;
+  squares.forEach((square) => {
+    for (const mid of wiggleBetween(from, square, box)) stops.push(mid);
+    stops.push(square);
+    from = square;
+  });
+  // The last square flows straight into the exit: bends there would read as
+  // the snake turning back on the hunt it just finished.
+  stops.push(exit);
+  const { dense } = curveThrough(stops);
 
   const cum: number[] = [0];
   for (let i = 1; i < dense.length; i++) {
@@ -266,8 +316,23 @@ function buildHunt(order: ContribCell[], cols: number): { path: PathPoint[]; spa
       y: dense[segment].y + (dense[segment + 1].y - dense[segment].y) * t,
     });
   }
-  // mark[0] is the entry point, so the eaten squares start at mark[1].
-  return { path, spacing: total / (count - 1), length: total, bites: squares.map((_, i) => cum[mark[i + 1]]) };
+  const spacing = total / (count - 1);
+  // Bite timing is read off the rendered path itself: the step whose point sits
+  // closest to the square. The head is driven along these same steps, so it is
+  // on the square at the moment the square vanishes — on every ruler at once.
+  const bites = squares.map((square) => {
+    let best = 0;
+    let bestOff = Infinity;
+    for (let i = 0; i < count; i++) {
+      const off = Math.hypot(path[i].x - square.x, path[i].y - square.y);
+      if (off < bestOff) {
+        bestOff = off;
+        best = i;
+      }
+    }
+    return best * spacing;
+  });
+  return { path, spacing, length: (count - 1) * spacing, bites };
 }
 
 export function buildSnakePlan(alive: ContribCell[], cols: number): SnakePlan {
