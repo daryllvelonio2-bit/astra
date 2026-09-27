@@ -8,14 +8,14 @@ import {
 
 /** Dedicated space on the right edge of the grid for the shooter turret. */
 export const SHOOTER_SPACE = 24;
-/** Flight duration for a laser bolt from the turret to a target. */
-export const LASER_FLIGHT_MS = 140;
+/** Flight duration for a laser bolt from the turret to a target (fast by default). */
+export const LASER_FLIGHT_MS = 130;
 /** Duration of the block fragment explosion. */
-export const EXPLOSION_MS = 240;
-/** Gap between consecutive shots fired by the turret. */
-const SHOT_GAP_MS = 360;
+export const EXPLOSION_MS = 220;
+/** Gap between consecutive shots fired by the turret (1 shot per 2 seconds). */
+const SHOT_GAP_MS = 2000;
 /** Maximum targets engaged in one shooting round. */
-const MAX_ROUND_TARGETS = 24;
+const MAX_ROUND_TARGETS = 14;
 
 export interface ShooterShot {
   id: string;
@@ -52,14 +52,31 @@ export function buildShooterPlan(alive: ContribCell[], cols: number): ShooterPla
   const width = gridWidth(cols);
   const turretX = width + 4;
 
-  // Pick up to MAX_ROUND_TARGETS, starting from the rightmost columns (in view)
-  // and interleave rows for dynamic vertical aiming motion.
-  const pool = [...alive].sort((a, b) => b.col - a.col || ((a.row * 3) % ROWS) - ((b.row * 3) % ROWS));
-  const targets = pool.slice(0, Math.min(MAX_ROUND_TARGETS, pool.length));
+  // Pick up to MAX_ROUND_TARGETS, prioritizing recent weeks (right side in view)
+  // and smoothly connecting rows so the turret glides naturally between nearby targets.
+  const remaining = [...alive].sort((a, b) => b.col - a.col || a.row - b.row);
+  const targets: ContribCell[] = [];
+  let curRow = remaining[0]?.row ?? 0;
+
+  while (remaining.length && targets.length < MAX_ROUND_TARGETS) {
+    const windowSize = Math.min(8, remaining.length);
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let k = 0; k < windowSize; k++) {
+      const d = Math.abs(remaining[k].row - curRow);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = k;
+      }
+    }
+    const [picked] = remaining.splice(bestIdx, 1);
+    targets.push(picked);
+    curRow = picked.row;
+  }
 
   const shots: ShooterShot[] = [];
   const vanishAt = new Map<string, number>();
-  let t = 200; // initial delay for turret to align
+  let t = 350; // initial delay for turret to smoothly aim before the first shot
 
   targets.forEach((target) => {
     const fireAt = t;
@@ -88,7 +105,7 @@ export function buildShooterPlan(alive: ContribCell[], cols: number): ShooterPla
   return {
     mode: "plane",
     shots,
-    cycleMs: Math.max(1200, t + 600),
+    cycleMs: Math.max(1200, t + 400),
     vanishAt,
     turretX,
   };

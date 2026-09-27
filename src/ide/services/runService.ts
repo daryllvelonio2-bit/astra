@@ -3,7 +3,6 @@ import {
   getWorkspaceDirPath,
   resolveFullPath,
 } from "./workspaceService";
-import { runningTasksService } from "../../ai/services/runningTasksService";
 import {
   executeCommand,
   isEnvironmentReady,
@@ -83,17 +82,8 @@ function guestDir(workspaceId: string, relPath: string): string {
   return dir ? `/workspaces/${workspaceId}/${dir}` : `/workspaces/${workspaceId}`;
 }
 
-/** First free port in 8080..8099 given ports already tracked. */
+/** First free port in 8080..8099. */
 function pickPort(): number {
-  const used = new Set(
-    runningTasksService
-      .getRunningTasks()
-      .map((t) => t.port)
-      .filter((p): p is number => typeof p === "number")
-  );
-  for (let p = 8080; p < 8100; p++) {
-    if (!used.has(p)) return p;
-  }
   return 8080;
 }
 
@@ -398,14 +388,6 @@ export async function executeRunPlan(
       cb.onLog?.(`Error: Failed to send command: ${err}`);
       return;
     }
-    try {
-      runningTasksService.addTask({
-        command: plan.command,
-        port: plan.port,
-        url: plan.url,
-        workspaceId,
-      });
-    } catch (_) {}
     cb.onOpenBrowser(plan.url);
     return;
   }

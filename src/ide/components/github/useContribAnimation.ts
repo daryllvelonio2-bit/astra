@@ -17,7 +17,7 @@ import {
   snakeEase,
 } from "./contribPlan";
 import { SnakeNodes, buildSnakeNodes } from "./contribSnakeAnim";
-import { PlaneNodes, buildPlaneNodes, planeClockSteps, shotFlight } from "./contribPlaneAnim";
+import { PlaneNodes, buildPlaneNodes, shotFlight, turretMotion } from "./contribPlaneAnim";
 
 /**
  * Runs the contribution-graph animation as one endless loop: the mode (snake
@@ -239,8 +239,8 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
       }
 
       if (plane && plan.mode === "plane") {
-        plane.clock.setValue(0);
-        track(Animated.sequence(planeClockSteps(plan, plane.clock)));
+        plane.time.setValue(0);
+        track(turretMotion(plane, plan));
         plane.shots.forEach((shot) => {
           shot.value.setValue(0);
           track(shotFlight(shot));

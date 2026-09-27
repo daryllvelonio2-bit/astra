@@ -11,7 +11,6 @@ import { GitHubDesktopView } from "./git/GitHubDesktopView";
 import { IDEBottomBar } from "./IDEBottomBar";
 import { WorkspaceLoadingScreen } from "./WorkspaceLoadingScreen";
 import { ExtensionMarketplaceModal } from "./extensions/ExtensionMarketplaceModal";
-import { runningTasksService, RunningTask } from "../../ai/services/runningTasksService";
 import { FileNode } from "../types";
 import { useSidebarResizer } from "./useSidebarResizer";
 import { useWorkspaceFileActions } from "./useWorkspaceFileActions";
@@ -117,7 +116,6 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isSettingsModalVisible, setSettingsModalVisible] = useState(false);
   const [isMarketplaceVisible, setMarketplaceVisible] = useState(false);
-  const [runningTasks, setRunningTasks] = useState<RunningTask[]>([]);
   const [loadStatus, setLoadStatus] = useState("Starting…");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadSeq, setLoadSeq] = useState(0);
@@ -127,7 +125,6 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
   const activeFileRef = useRef<FileNode | null>(null);
   activeFileRef.current = activeFile;
   const lastLocalEditTimeRef = useRef(0);
-  const runningTasksSigRef = useRef("");
 
   useEffect(() => {
     setIsSidebarOpen(!isLandscape);
@@ -135,20 +132,6 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
   }, [isLandscape]);
 
   useEffect(() => { StatusBar.setHidden(isLandscape, "fade"); }, [isLandscape]);
-
-  useEffect(() => {
-    const unsubTasks = runningTasksService.subscribe((currentTasks) => {
-      const sig = currentTasks.map((t) => `${t.id}|${t.status}`).join(";");
-      if (sig !== runningTasksSigRef.current) {
-        runningTasksSigRef.current = sig;
-        setRunningTasks(currentTasks);
-      }
-    });
-    // Never auto-switch tabs on background task registration — the user
-    // stays where they are (e.g. chat). Tasks surface via RunningTasksBar
-    // badge; explicit taps navigate.
-    return () => { unsubTasks(); };
-  }, []);
 
   // Open a raw agent/chat file path inside the given workspace, normalizing
   // PRoot (/workspace, /workspaces/<id>) and file:// prefixes to relative paths.
@@ -346,7 +329,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
     runningTaskCount, containerStyle, sidebarAnimStyle,
     workspaceStyle, editorContainerStyle, tabContentStyle,
   } = useIDELayoutStyles({
-    runningTasks,
+    runningTasks: [],
     bgPrimary: theme.bgPrimary,
     bgSecondary: theme.bgSecondary,
     isLandscape,

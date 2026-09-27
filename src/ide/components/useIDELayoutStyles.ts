@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { StyleSheet } from "react-native";
 import { Animated } from "react-native";
-import { RunningTask } from "../../ai/services/runningTasksService";
+import { RunningTask } from "../types/runningTask";
 
 interface StylesParams {
   runningTasks: RunningTask[];

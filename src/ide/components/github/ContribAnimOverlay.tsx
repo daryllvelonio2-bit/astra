@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
   turretBase: { position: "absolute", right: 0, top: 1, width: 4, height: 14, borderRadius: 2 },
   turretBarrel: { position: "absolute", left: 0, top: 6.5, width: 10, height: 3, borderRadius: 1.5 },
   turretCore: { position: "absolute", right: 3, top: 6, width: 4, height: 4, borderRadius: 2 },
-  laser: { position: "absolute", left: 0, width: 8, height: 3, borderRadius: 1.5 },
+  laser: { position: "absolute", left: 0, width: 18, height: 3, borderRadius: 1.5 },
   explosion: { position: "absolute", width: CELL, height: CELL },
   fragment: { position: "absolute", width: 5, height: 5, borderRadius: 1 },
 });

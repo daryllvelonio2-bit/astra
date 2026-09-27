@@ -1,5 +1,50 @@
 # Project Progress Tracker
 
+### [2026-09-27] - Update contribution shooter pace to 1 shot per 2 seconds
+- **User directives:** make shooting delay 1 shoot per 2 second.
+- **Changes:**
+  - `contribShooterPlan.ts`: set `SHOT_GAP_MS = 2000` (1 shot every 2000ms); set `MAX_ROUND_TARGETS = 14`.
+  - `contribPlaneAnim.ts`: expanded `AIM_HOLD_MS = 250ms`, giving the turret an extended ~1.5s slow, graceful glide between target rows followed by a steady lock-in before firing the fast 130ms bullet.
+- **Verification:** `npx tsc --noEmit` exit 0 (0 errors). Headless contract probe verified exact 2000ms shot intervals, strictly-increasing native keyframes, and fast 130ms bullet flight. All files within <= 500 line limits.
+
+### [2026-09-27] - Fix contribution shooter: fast bullet speed, smooth non-blinking slow glide to next target
+- **User directives:** it should move smoothly, not blink, but slowly to the next target, the bullet speed should be fast by default.
+- **Root causes:**
+  1. Turret tracking previously ran via `Animated.sequence` of stepped timings and non-native delays on JS thread, which dropped frames and stuttered/blinked when switching rows.
+  2. Targets previously interleaved rows arbitrarily (`(row * 3) % ROWS`), causing huge erratic jumps between row 0 and 6.
+  3. `shot.value` normalization previously assumed 50/50 flight-to-explosion ratio, desyncing flight from target impact when flight was fast.
+- **Changes:**
+  - `contribShooterPlan.ts`: set fast default bullet flight `LASER_FLIGHT_MS = 130ms`; set `GLIDE_MS = 550ms` and `AIM_HOLD_MS = 140ms` (`SHOT_GAP_MS = 900ms`); ordered targets to prioritize nearby rows and columns for natural scanning without wild teleport hops.
+  - `contribPlaneAnim.ts`: replaced stepped `Animated.sequence` and `planeClockSteps` with a single native `Animated.timing` on `plane.time`; generated smooth continuous cubic S-curve keyframes for `turretY` across the whole round; calibrated `shot.value` directly in milliseconds so 130ms bullet impact precisely triggers fragment burst and cell fade at `landAt`.
+  - `useContribAnimation.ts`: wired `turretMotion` on native driver replacing sequence delays.
+  - `ContribAnimOverlay.tsx`: styled laser bolt at 18px width for a fast, glowing energy beam.
+- **Verification:** `npx tsc --noEmit` exit 0 (0 errors). Headless contract probe verified 130ms fast flight, 900ms shot gaps, strictly-increasing native keyframes for `turretY`, and zero sequence stalls. All touched files <= 284 lines.
+
+### [2026-09-27] - Fix GitHub profile contribution shooting animation speed and blinking
+- **User directives:** in the github profile tab, contribution shooting animation shoots too fast, plus it's blinking instead of moving normally.
+- **Root causes:**
+  1. `LASER_FLIGHT_MS` was set to an ultra-fast 140ms across 700px stages (~5,000 px/sec), creating stroboscopic stepping where a tiny 8px rectangle jumped 60+ pixels per frame, appearing as a blinking flicker rather than continuous flight.
+  2. `SHOT_GAP_MS` was set to 360ms, triggering continuous rapid machine-gun firing before previous impacts had completed.
+  3. Turret row transition `duration` was set to 80ms, creating erratic jumping between rows.
+  4. Flight vs explosion timing in `shotFlight` was desynced (`0 -> 1` half-duration did not match `LASER_FLIGHT_MS = 140ms` vs `EXPLOSION_MS = 240ms`).
+- **Changes:**
+  - `contribShooterPlan.ts`: adjusted `LASER_FLIGHT_MS` to 380ms for smooth continuous flight; synchronized `EXPLOSION_MS` to 380ms; paced `SHOT_GAP_MS` to a deliberate 800ms cadence; set `MAX_ROUND_TARGETS` to 16; added 260ms initial aiming delay.
+  - `contribPlaneAnim.ts`: adjusted turret aiming slide duration `AIM_MS` to 240ms with smooth cubic ease-out; widened muzzle offset to `turretX - 16`; tuned laser opacity and explosion ranges; synchronized flight and block dispersal.
+  - `ContribAnimOverlay.tsx`: widened laser bolt `width` to 16px to ensure frame-to-frame continuous trail coverage with zero flicker.
+- **Verification:** `npx tsc --noEmit` exit 0 (0 errors repo-wide). Headless contract probe verified 800ms shot gaps, 380ms flight, 380ms explosion, and precise target coordinates. All touched files <= 170 lines (well under 500-line cap).
+
+### [2026-09-27] - Fix runningTasksService imports & invalid Octicon cloud-upload
+- **User directives:** fix `Unable to resolve "../../../ai/services/runningTasksService"` after deleting legacy feature services, and `WARN "cloud-upload" is not a valid icon name for family "octicons"`.
+- **Changes:**
+  - `gitSyncReport.tsx`: replaced invalid Octicon `"cloud-upload"` with authentic Octicon `rep.kind === "push" ? "repo-push" : "upload"`.
+  - `runningTask.ts`: defined compact standalone `RunningTask` interface under `src/ide/types/runningTask.ts` for browser views and layout props.
+  - `useTerminalSession.ts`: removed stale `runningTasksService` background task sync, task restart/kill branches, and `formatTaskTabName`.
+  - `IDELayout.tsx`: removed `runningTasksService` subscription, passed clean `runningTasks: []`.
+  - `WebBrowserPreview.tsx`: removed `runningTasksService` subscription.
+  - `runService.ts`: removed `runningTasksService.addTask` and simplified `pickPort`.
+  - `WebBrowserEmptyView.tsx`, `WebBrowserErrorView.tsx`, `useIDELayoutStyles.ts`: repointed `RunningTask` import to `src/ide/types/runningTask.ts`.
+- **Verification:** `npx tsc --noEmit` exit 0 (0 errors repo-wide). All touched files $\le 500$ lines.
+
 ### [2026-09-27] - Fix "Reset branch to this commit": clear mode labels, workspace reload & HEAD-only history
 - **User directives:** when resetting branch to a commit, (1) the code didn't reset, and (2) it didn't reflect on history (commit was still there).
 - **Root causes:**

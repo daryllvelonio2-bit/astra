@@ -15,7 +15,6 @@ import {
 } from "../../../../modules/linux-runner/src";
 import { PTY_XTERM_ENABLED } from "./ptyConfig";
 import { themeToTerminalTheme, TerminalTheme } from "./terminalThemes";
-import { runningTasksService, RunningTask } from "../../../ai/services/runningTasksService";
 import { useRunSessionEffect } from "./useRunSession";
 import { useTheme } from "../../../theme/themeContext";
 import {
@@ -52,15 +51,6 @@ async function startShellSession(sessionId: string, workspaceId?: string) {
     await startTerminalSession(sessionId, workspaceId);
   }
 }
-
-const formatTaskTabName = (cmd: string) => {
-  const clean = (cmd || "Task")
-    .replace(/^(?:nohup|sudo|bash\s+-c)\s*/i, "")
-    .replace(/\s+>[^&]+.*$/, "")
-    .trim();
-  const shortCmd = clean.length > 16 ? `${clean.slice(0, 14)}..` : clean;
-  return `⚙️ ${shortCmd}`;
-};
 
 export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
   const { theme: appTheme } = useTheme();
@@ -214,66 +204,6 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
     }
   }, [activeSessionId]);
 
-  // Synchronize running background tasks with terminal tabs
-  useEffect(() => {
-    const unsubTasks = runningTasksService.subscribe((tasks) => {
-      if (tasks.length === 0) return;
-
-      setSessions((prevSessions) => {
-        const existingIds = new Set(prevSessions.map((s) => s.id));
-        const newTabs: TerminalTab[] = [];
-
-        tasks.forEach((task) => {
-          // task.id already has the "task-" prefix (e.g. "task-port-8080")
-          const tabId = task.id;
-          if (!existingIds.has(tabId)) {
-            newTabs.push({
-              id: tabId,
-              name: formatTaskTabName(task.command),
-              isTask: true,
-              taskId: task.id,
-            });
-          }
-        });
-
-        if (newTabs.length === 0) return prevSessions;
-        return [...prevSessions, ...newTabs];
-      });
-
-      // Update session outputs for all running tasks
-      setSessionOutputs((prevOutputs) => {
-        let changed = false;
-        const updated = { ...prevOutputs };
-
-        tasks.forEach((task) => {
-          const tabId = task.id;
-          const currentOut = updated[tabId];
-          const taskOut = task.output || "";
-          if (currentOut !== taskOut && taskOut) {
-            updated[tabId] = taskOut;
-            changed = true;
-          }
-        });
-
-        return changed ? updated : prevOutputs;
-      });
-    });
-
-    // Auto-focus the newly triggered task tab
-    const unsubTrigger = runningTasksService.subscribeTrigger((taskId) => {
-      // taskId already has the "task-" prefix from runningTasksService
-      if (taskId) {
-        setActiveSessionId(taskId);
-        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
-      }
-    });
-
-    return () => {
-      unsubTasks();
-      unsubTrigger();
-    };
-  }, []);
-
   // Editor Run button executes in the dedicated Run session (created once, reused).
   useRunSessionEffect({
     workspaceId,
@@ -378,17 +308,8 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
     async (idToClose: string) => {
       if (sessions.length <= 1) return;
 
-      if (idToClose.startsWith("task-")) {
-        const taskId = idToClose;
-        const stopped = await runningTasksService.killTask(taskId);
-        if (!stopped) {
-          runningTasksService.forceRemoveTask(taskId);
-        }
-        showToast("Background task stopped");
-      } else {
-        await stopTerminalSession(idToClose);
-        shellIdsRef.current = shellIdsRef.current.filter((id) => id !== idToClose);
-      }
+      await stopTerminalSession(idToClose);
+      shellIdsRef.current = shellIdsRef.current.filter((id) => id !== idToClose);
 
       const remaining = sessions.filter((s) => s.id !== idToClose);
       setSessions(remaining);
@@ -404,26 +325,10 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
         setActiveSessionId(remaining[0]?.id || "session-1");
       }
     },
-    [sessions, activeSessionId, showToast, dropTracked]
+    [sessions, activeSessionId, dropTracked]
   );
 
   const restartActiveSession = useCallback(async () => {
-    if (activeSessionId.startsWith("task-")) {
-      const taskId = activeSessionId;
-      const task = runningTasksService.findTask(taskId);
-      if (task) {
-        await runningTasksService.killTask(taskId, true);
-        runningTasksService.addTask({
-          command: task.command,
-          port: task.port,
-          url: task.url,
-          workspaceId: task.workspaceId,
-        });
-        showToast("Task restarted");
-      }
-      return;
-    }
-
     await stopTerminalSession(activeSessionId);
     setSessionOutputs((prev) => ({ ...prev, [activeSessionId]: getBanner(workspaceId) }));
     seenNativeLen.current[activeSessionId] = 0;
@@ -437,17 +342,6 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
   }, [activeSessionId, workspaceId, appTheme.isDark, syncThemeEnv, showToast, dropTracked, renameShellTab]);
 
   const clearActiveSession = useCallback(() => {
-    if (activeSessionId.startsWith("task-")) {
-      const taskId = activeSessionId;
-      const task = runningTasksService.findTask(taskId);
-      const banner = `\u001b[1;34m⚡ Background Task: \u001b[1;37m${task?.command || "Task"}\u001b[0m\r\n----------------------------------------\r\n`;
-      setSessionOutputs((prev) => ({
-        ...prev,
-        [activeSessionId]: banner,
-      }));
-      return;
-    }
-
     // Clear scrollback to a title-only banner and ask the shell for a fresh,
     // truthful prompt (never a frozen fake one, so `cd` always displays).
     writeTerminalInput(activeSessionId, "\n");

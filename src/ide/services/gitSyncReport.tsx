@@ -65,7 +65,7 @@ function ReportBody({ rep }: { rep: SyncReport }) {
     <View style={styles.body}>
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {rep.newRefs.length > 0 && (
-          <Section title={rep.kind === "push" ? "Pushed" : "Refs updated"} icon="cloud-upload" theme={theme}>
+          <Section title={rep.kind === "push" ? "Pushed" : "Refs updated"} icon={rep.kind === "push" ? "repo-push" : "upload"} theme={theme}>
             {rep.newRefs.map((r, i) => (
               <Line key={i} text={r} theme={theme} mono />
             ))}

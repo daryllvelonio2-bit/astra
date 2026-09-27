@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import * as WebBrowser from "expo-web-browser";
-import { runningTasksService, RunningTask } from "../../ai/services/runningTasksService";
+import { RunningTask } from "../types/runningTask";
 import { WebBrowserNavBar } from "./browser/WebBrowserNavBar";
 import { WebBrowserErrorView } from "./browser/WebBrowserErrorView";
 import { WebBrowserEmptyView } from "./browser/WebBrowserEmptyView";
@@ -27,7 +27,7 @@ export function WebBrowserPreview({
   const [canGoForward, setCanGoForward] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [runningTasks, setRunningTasks] = useState<RunningTask[]>([]);
+  const [runningTasks] = useState<RunningTask[]>([]);
 
   const webViewRef = useRef<WebView>(null);
 
@@ -52,31 +52,6 @@ export function WebBrowserPreview({
       }
     }
   }, [initialUrl]);
-
-  // Subscribe to live background servers: auto-load only into an empty tab,
-  // never hijack a page the user already opened.
-  // Speed: signature-guarded so terminal output floods don't re-render this tab.
-  const tasksSigRef = useRef("");
-  useEffect(() => {
-    const unsub = runningTasksService.subscribe((tasks) => {
-      const sig = tasks.map((t) => `${t.id}|${t.url || ""}|${t.port || ""}|${t.status}`).join(";");
-      if (sig !== tasksSigRef.current) {
-        tasksSigRef.current = sig;
-        setRunningTasks(tasks);
-      }
-      if (tasks.length > 0 && !url) {
-        const activeTask = tasks.find((t) => t.url || t.port) || tasks[0];
-        let taskUrl = activeTask.url || (activeTask.port ? `http://127.0.0.1:${activeTask.port}` : undefined);
-        if (taskUrl) {
-          taskUrl = taskUrl.replace(/^exp:\/\//i, "http://").replace(/localhost/gi, "127.0.0.1").replace(/0\.0\.0\.0/g, "127.0.0.1");
-          setUrl(taskUrl);
-          setInputUrl(taskUrl);
-          setHasError(false);
-        }
-      }
-    });
-    return unsub;
-  }, [url]);
 
   const handleNavigate = (targetUrl?: string) => {
     let finalUrl = (targetUrl || inputUrl).trim();

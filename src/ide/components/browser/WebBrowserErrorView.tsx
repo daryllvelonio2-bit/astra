@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { RunningTask } from "../../../ai/services/runningTasksService";
+import { RunningTask } from "../../types/runningTask";
 import { useTheme } from "../../../theme/themeContext";
 
 interface WebBrowserErrorViewProps {
