@@ -26,6 +26,7 @@ interface UseCommitMenuActionsArgs {
   handleBackToCommits: () => void;
   setActiveTab: (tab: "changes" | "history") => void;
   onRestoreCommitMessage?: (msg: string) => void;
+  onSyncWorkspace?: () => void | Promise<void>;
 }
 
 export function useCommitMenuActions({
@@ -36,6 +37,7 @@ export function useCommitMenuActions({
   handleBackToCommits,
   setActiveTab,
   onRestoreCommitMessage,
+  onSyncWorkspace,
 }: UseCommitMenuActionsArgs) {
   const [showCommitActions, setShowCommitActions] = useState(false);
   const [commitActionTarget, setCommitActionTarget] = useState<GitCommit | null>(null);
@@ -76,6 +78,7 @@ export function useCommitMenuActions({
       closeCommitActions();
       handleBackToCommits();
       await refreshGitState();
+      await onSyncWorkspace?.();
       if (res.uncommitted) {
         setActiveTab("changes");
         if (res.message && onRestoreCommitMessage) {
@@ -119,8 +122,12 @@ export function useCommitMenuActions({
           commit,
           () => resetToCommit(workspaceId, commit.hash, mode, isHead),
           isHead
-            ? `Commit #${commit.shortHash} undone. Changes returned to the Changes tab.`
-            : `Branch reset to #${commit.shortHash}. Newer changes returned to the Changes tab.`
+            ? (mode === "hard"
+                ? `Commit #${commit.shortHash} and all changes discarded.`
+                : `Commit #${commit.shortHash} undone. Changes returned to the Changes tab.`)
+            : (mode === "hard"
+                ? `Branch and files reset to #${commit.shortHash}. Later changes discarded.`
+                : `Branch reset to #${commit.shortHash}. Later changes returned to the Changes tab.`)
         );
 
       if (mode === "hard") {
@@ -128,7 +135,7 @@ export function useCommitMenuActions({
           "Hard Reset",
           isHead
             ? `Discard commit #${commit.shortHash} and all its changes? This cannot be undone.`
-            : `Discard all commits after #${commit.shortHash} and all working changes? This cannot be undone.`,
+            : `Discard all commits after #${commit.shortHash} and revert files to that commit? This cannot be undone.`,
           run
         );
       } else {
@@ -146,6 +153,7 @@ export function useCommitMenuActions({
       closeCommitActions();
       handleBackToCommits();
       await refreshGitState();
+      await onSyncWorkspace?.();
       if (res.success) {
         setActiveTab("changes");
         if (res.message && onRestoreCommitMessage) {

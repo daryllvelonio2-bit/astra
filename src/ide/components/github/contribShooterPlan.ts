@@ -1,13 +1,10 @@
 import {
-  CELL,
   ContribCell,
-  GAP,
   ROWS,
-  SKY,
   cellCenterX,
   gridWidth,
   rowCenterY,
-} from "./contribPlan";
+} from "./contribGrid";
 
 /** Dedicated space on the right edge of the grid for the shooter turret. */
 export const SHOOTER_SPACE = 24;

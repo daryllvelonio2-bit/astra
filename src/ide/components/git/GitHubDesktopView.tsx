@@ -32,12 +32,14 @@ interface GitHubDesktopViewProps {
   workspaceId?: string;
   projectName?: string;
   visible: boolean;
+  onSyncWorkspace?: () => void | Promise<void>;
 }
 
 export function GitHubDesktopView({
   workspaceId,
   projectName = "Project",
   visible,
+  onSyncWorkspace,
 }: GitHubDesktopViewProps) {
   const { theme } = useTheme();
   const { isLandscape } = useOrientation();
@@ -95,7 +97,7 @@ export function GitHubDesktopView({
     handleToggleStageFile,
     handleToggleStageAll,
     handleCommit,
-
+    handleCommitAndPush,
     handleSaveRemote,
     handlePush,
     handleFetch,
@@ -103,7 +105,7 @@ export function GitHubDesktopView({
     handleSwitchBranch,
     handleCreateBranch,
     handleInitRepo,
-  } = useGitOperations(workspaceId, visible, isLandscape);
+  } = useGitOperations(workspaceId, visible, isLandscape, onSyncWorkspace);
 
   // Long-press file menu in the Changes tab (discard / ignore / copy / GitHub).
   const {

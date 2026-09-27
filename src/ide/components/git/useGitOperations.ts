@@ -36,7 +36,8 @@ import { parseSyncOutput, hasSyncContent, showSyncReportDialog } from "../../ser
 export function useGitOperations(
   workspaceId: string | undefined,
   visible: boolean,
-  isLandscape: boolean
+  isLandscape: boolean,
+  onSyncWorkspace?: () => void | Promise<void>
 ) {
   const [activeTab, setActiveTab] = useState<"changes" | "history">("changes");
   const [status, setStatus] = useState<GitRepoStatus | null>(null);
@@ -60,12 +61,6 @@ export function useGitOperations(
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [showRemoteModal, setShowRemoteModal] = useState(false);
   const [portraitShowDetail, setPortraitShowDetail] = useState(false);
-
-  // Commit actions (long-press on a history row)
-  const [commitActionTarget, setCommitActionTarget] = useState<GitCommit | null>(null);
-  const [commitActionAnchor, setCommitActionAnchor] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [showCommitActions, setShowCommitActions] = useState(false);
-  const [commitActionBusy, setCommitActionBusy] = useState(false);
 
   // Avatar store lives here (stays mounted) so History never refetches.
   const { avatars, brokenAvatars, markBroken } = useCommitAvatars(remoteUrl);
@@ -269,6 +264,7 @@ export function useGitOperations(
     const res = await pullGitRemote(workspaceId, status.currentBranch);
     setSyncing(false);
     refreshGitState();
+    await onSyncWorkspace?.();
     reportSyncResult("pull", res);
   };
 
@@ -279,6 +275,7 @@ export function useGitOperations(
       return;
     }
     refreshGitState();
+    await onSyncWorkspace?.();
     if (!remoteUrl) return;
     try {
       await fetchGitRemote(workspaceId);
@@ -288,8 +285,12 @@ export function useGitOperations(
 
   const handleCreateBranch = async (branchName: string) => {
     const res = await createGitBranch(workspaceId, branchName);
-    if (res.success) refreshGitState();
-    else showAppDialog({ title: "Error", message: res.error || "Could not create branch." });
+    if (res.success) {
+      refreshGitState();
+      await onSyncWorkspace?.();
+    } else {
+      showAppDialog({ title: "Error", message: res.error || "Could not create branch." });
+    }
   };
 
   const handleInitRepo = async () => {
@@ -298,139 +299,15 @@ export function useGitOperations(
     else showAppDialog({ title: "Error", message: "Could not initialize Git repository." });
   };
 
-  // ----- Commit actions (long-press menu) -----------------------------------
-
-  const openCommitActions = (commit: GitCommit, position: { x: number; y: number }) => {
-    setCommitActionTarget(commit);
-    setCommitActionAnchor(position);
-    setShowCommitActions(true);
-  };
-
-  const closeCommitActions = () => {
-    setShowCommitActions(false);
-    setCommitActionBusy(false);
-  };
-
-  // Destructive resets need a confirm first; everything else runs directly.
-  const runCommitOp = async (
-    commit: GitCommit,
-    op: () => Promise<GitOpResult>,
-    successMsg: string
-  ) => {
-    setCommitActionBusy(true);
-    const res = await op();
-    setCommitActionBusy(false);
-    if (res.success) {
-      closeCommitActions();
-      handleBackToCommits();
-      refreshGitState();
-      if (successMsg) showAppDialog({ title: "Success", message: successMsg });
-    } else {
-      showAppDialog({ title: "Git Error", message: res.error || "The command failed." });
-    }
-  };
-
-  const confirmDangerous = (title: string, body: string, run: () => void) =>
-    showAppDialog({ title: title, message: body, buttons: [
-      { text: "Cancel", style: "cancel" },
-      { text: "Confirm", style: "destructive", onPress: run },
-    ] });
-
-  const handleAmend = (message: string) => {
-    if (!commitActionTarget) return;
-    const commit = commitActionTarget;
-    runCommitOp(commit, () => amendCommit(workspaceId, message), "Commit amended.");
-  };
-
-  const handleResetToCommit = (mode: ResetMode) => {
-    if (!commitActionTarget) return;
-    const commit = commitActionTarget;
-    const run = () =>
-      runCommitOp(commit, () => resetToCommit(workspaceId, commit.hash, mode), "");
-    if (mode === "hard") {
-      confirmDangerous(
-        "Hard Reset",
-        `Discard all commits after ${commit.shortHash} and all uncommitted changes? This cannot be undone.`,
-        run
-      );
-    } else {
-      run();
-    }
-  };
-
-  const handleCheckoutCommit = () => {
-    if (!commitActionTarget) return;
-    const commit = commitActionTarget;
-    runCommitOp(
-      commit,
-      () => checkoutCommit(workspaceId, commit.hash),
-      `Checked out ${commit.shortHash} (detached HEAD).`
-    );
-  };
-
-  const handleRevertCommit = () => {
-    if (!commitActionTarget) return;
-    const commit = commitActionTarget;
-    runCommitOp(
-      commit,
-      () => revertCommit(workspaceId, commit.hash),
-      `Reverted ${commit.shortHash}.`
-    );
-  };
-
-  const handleCherryPickCommit = () => {
-    if (!commitActionTarget) return;
-    const commit = commitActionTarget;
-    runCommitOp(
-      commit,
-      () => cherryPickCommit(workspaceId, commit.hash),
-      `Cherry-picked ${commit.shortHash}.`
-    );
-  };
-
-  const handleCreateBranchFromCommit = (name: string) => {
-    if (!commitActionTarget) return;
-    const commit = commitActionTarget;
-    runCommitOp(
-      commit,
-      () => createBranchFromCommit(workspaceId, name, commit.hash),
-      `Created and switched to ${name}.`
-    );
-  };
-
-  const handleCreateTag = (name: string) => {
-    if (!commitActionTarget) return;
-    const commit = commitActionTarget;
-    runCommitOp(
-      commit,
-      () => createTag(workspaceId, name, commit.hash),
-      `Tagged ${commit.shortHash} as ${name}.`
-    );
-  };
-
-  const handleCopyCommitSha = async () => {
-    if (!commitActionTarget) return;
-    await Clipboard.setStringAsync(commitActionTarget.hash);
-  };
-
-  const handleViewCommitOnGitHub = async () => {
-    if (!commitActionTarget) return;
-    const url = buildCommitWebUrl(remoteUrl, commitActionTarget.hash);
-    if (!url) return showAppDialog({ title: "Not on GitHub", message: "This repository has no GitHub remote." });
-    try {
-      await Linking.openURL(url);
-    } catch (_) {
-      showAppDialog({ title: "Error", message: "Could not open the browser." });
-    }
-  };
-
-  // Amend wants the real multi-line message, not the truncated list title.
-  const [amendInitialMessage, setAmendInitialMessage] = useState("");
-  useEffect(() => {
-    if (showCommitActions && commitActionTarget) {
-      getCommitMessage(workspaceId, commitActionTarget.hash).then(setAmendInitialMessage);
-    }
-  }, [showCommitActions, commitActionTarget, workspaceId]);
+  const commitMenu = useCommitMenuActions({
+    workspaceId,
+    remoteUrl,
+    commits,
+    refreshGitState,
+    handleBackToCommits,
+    setActiveTab,
+    onSyncWorkspace,
+  });
 
   return {
     activeTab,
@@ -456,22 +333,7 @@ export function useGitOperations(
     setShowCredentialsModal,
     showRemoteModal,
     setShowRemoteModal,
-    showCommitActions,
-    commitActionTarget,
-    commitActionAnchor,
-    commitActionBusy,
-    amendInitialMessage,
-    openCommitActions,
-    closeCommitActions,
-    handleAmend,
-    handleResetToCommit,
-    handleCheckoutCommit,
-    handleRevertCommit,
-    handleCherryPickCommit,
-    handleCreateBranchFromCommit,
-    handleCreateTag,
-    handleCopyCommitSha,
-    handleViewCommitOnGitHub,
+    ...commitMenu,
     portraitShowDetail,
     setPortraitShowDetail,
     avatars,

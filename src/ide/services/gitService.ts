@@ -228,10 +228,7 @@ export async function getGitFileDiff(
   }
 }
 
-export async function stageGitFile(
-  workspaceId: string | undefined,
-  filePath: string
-): Promise<boolean> {
+export async function stageGitFile(workspaceId: string | undefined, filePath: string): Promise<boolean> {
   try {
     const ok = (await executeCommand(`git add -- "${filePath}"`, workspaceId)).exitCode === 0;
     invalidateGitStatusCache(workspaceId);
@@ -239,10 +236,7 @@ export async function stageGitFile(
   } catch (_) { invalidateGitStatusCache(workspaceId); return false; }
 }
 
-export async function unstageGitFile(
-  workspaceId: string | undefined,
-  filePath: string
-): Promise<boolean> {
+export async function unstageGitFile(workspaceId: string | undefined, filePath: string): Promise<boolean> {
   try {
     const ok = (await executeCommand(`git restore --staged -- "${filePath}" 2>/dev/null || git reset HEAD -- "${filePath}" 2>/dev/null`, workspaceId)).exitCode === 0;
     invalidateGitStatusCache(workspaceId);
@@ -273,13 +267,8 @@ export async function commitGitChanges(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const cleanSummary = summary.replace(/"/g, '\\"');
-    const descArg = description?.trim()
-      ? ` -m "${description.trim().replace(/"/g, '\\"')}"`
-      : "";
-    const res = await executeCommand(
-      `git commit -m "${cleanSummary}"${descArg}`,
-      workspaceId
-    );
+    const descArg = description?.trim() ? ` -m "${description.trim().replace(/"/g, '\\"')}"` : "";
+    const res = await executeCommand(`git commit -m "${cleanSummary}"${descArg}`, workspaceId);
     invalidateGitStatusCache(workspaceId);
     if (res.exitCode === 0) return { success: true };
     return { success: false, error: res.stdout || "Commit failed" };
@@ -295,7 +284,7 @@ export async function getGitCommitHistory(
 ): Promise<GitCommit[]> {
   try {
     const res = await executeCommand(
-      `branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main"); git log -n ${limit} --pretty=format:"COMMIT_REC|%H|%h|%an|%ae|%at|%s" --shortstat HEAD --remotes="*/$branch"`,
+      `git log -n ${limit} --pretty=format:"COMMIT_REC|%H|%h|%an|%ae|%at|%s" --shortstat HEAD 2>/dev/null`,
       workspaceId
     );
     if (res.exitCode !== 0) return [];
@@ -497,16 +486,9 @@ export async function pushGitRemote(
     const out = ((res.stdout || firstOut) + "").trim();
     const lastLines = out.split(/\r?\n/).filter((l) => l.trim()).slice(-4).join("\n");
     if (/rejected|non-fast-forward|fetch first|behind the remote|failed to push/i.test(out)) {
-      return {
-        success: false,
-        needsPull: true,
-        message:
-          `Push rejected: the remote has commits you don't have yet.\n` +
-          (lastLines ? `\n${lastLines}\n` : ``) +
-          `\nPull first to merge their changes with yours, resolve any ` +
-          `conflicts in the Changes tab, then push again. Your commits are ` +
-          `safe — nothing was lost.`,
-      };
+      const hint = `Push rejected: remote has commits you don't have yet.\n` + (lastLines ? `\n${lastLines}\n` : ``) +
+        `\nPull first to merge changes with yours, resolve any conflicts in Changes tab, then push again.`;
+      return { success: false, needsPull: true, message: hint };
     }
     return { success: false, message: lastLines || "Push failed" };
   } catch (e: any) {

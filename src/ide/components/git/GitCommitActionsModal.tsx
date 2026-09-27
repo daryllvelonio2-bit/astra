@@ -263,12 +263,21 @@ export function GitCommitActionsModal({
               <View style={styles.panelBody}>
                 <Text style={[styles.panelHint, { color: theme.textMuted }]}>
                   {isHead
-                    ? `Undo commit #${shortHash} and return its changes to the Changes tab.`
-                    : `Reset moves the current branch to #${shortHash} (commits after this will be undone).`}
+                    ? `Undo commit #${shortHash}. Choose whether to discard code changes or keep them in the Changes tab.`
+                    : `Reset current branch to #${shortHash}. Choose whether to discard code changes or keep them in the Changes tab.`}
                 </Text>
                 <MenuRow
+                  icon="trash"
+                  label="Hard — discard all changes (revert code to this commit)"
+                  danger
+                  onPress={() => {
+                    actions.reset("hard");
+                    close();
+                  }}
+                />
+                <MenuRow
                   icon="dash"
-                  label={isHead ? "Mixed — uncommit to working changes" : "Mixed — keep working changes"}
+                  label={isHead ? "Mixed — uncommit but keep working code" : "Mixed — keep working code in Changes tab"}
                   onPress={() => {
                     actions.reset("mixed");
                     close();
@@ -276,18 +285,9 @@ export function GitCommitActionsModal({
                 />
                 <MenuRow
                   icon="file"
-                  label={isHead ? "Soft — uncommit but keep staged" : "Soft — keep staged changes"}
+                  label={isHead ? "Soft — uncommit but keep staged" : "Soft — keep code staged in Changes tab"}
                   onPress={() => {
                     actions.reset("soft");
-                    close();
-                  }}
-                />
-                <MenuRow
-                  icon="trash"
-                  label="Hard — discard all changes"
-                  danger
-                  onPress={() => {
-                    actions.reset("hard");
                     close();
                   }}
                 />

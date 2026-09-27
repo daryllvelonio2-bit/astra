@@ -444,7 +444,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
           {visitedTabs.has("git") && (
             <View style={[tabContentStyle, bottomTab !== "git" && styles.hiddenTab]}>
               <PanelErrorBoundary panelName="Git" resetKey={workspace?.id}>
-              <GitHubDesktopView workspaceId={workspace?.id} projectName={workspace?.name} visible={bottomTab === "git"} />
+              <GitHubDesktopView workspaceId={workspace?.id} projectName={workspace?.name} visible={bottomTab === "git"} onSyncWorkspace={refreshWorkspace} />
               </PanelErrorBoundary>
             </View>
           )}

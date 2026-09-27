@@ -7,18 +7,34 @@
  */
 
 import { ShooterPlan, buildShooterPlan } from "./contribShooterPlan";
+import {
+  CELL,
+  CELL_STEP,
+  GAP,
+  PLANE_BOX,
+  ROWS,
+  SKY,
+  type ContribCell,
+  type ContribPoint,
+} from "./contribGrid";
 
-export const ROWS = 7;
-export const CELL = 11;
-export const GAP = 2.5;
-/** Distance between two square origins (square + gap). */
-export const CELL_STEP = CELL + GAP;
-/** Flight lane reserved above the grid for the aircraft. */
-export const SKY = 16;
-/** Sprite box the aircraft is drawn in — also how far off-screen it parks. */
-export const PLANE_BOX = 16;
-export const BULLET_W = 2;
-export const BULLET_H = 6;
+/** Grid geometry + base cell types live in ./contribGrid (leaf module, no cycle). Re-exported here so existing imports keep working. */
+export {
+  BULLET_H,
+  BULLET_W,
+  CELL,
+  CELL_STEP,
+  GAP,
+  PLANE_BOX,
+  ROWS,
+  SKY,
+  cellCenterX,
+  gridWidth,
+  muzzleY,
+  planeTop,
+  rowCenterY,
+} from "./contribGrid";
+export type { ContribCell, ContribPoint } from "./contribGrid";
 
 /**
  * Duration multiplier for the whole animation: 1 is the reference pace, 2
@@ -61,17 +77,6 @@ const PLANE_BUDGET_MS = ms(5200);
 
 export type ContribMode = "snake" | "plane";
 
-export interface ContribPoint {
-  col: number;
-  row: number;
-}
-
-/** A square that carries at least one contribution. */
-export interface ContribCell extends ContribPoint {
-  key: string;
-  color?: string;
-}
-
 /** A square on the grid: the classic snake walks whole cells, never pixels. */
 export interface SnakeStep {
   col: number;
@@ -98,17 +103,6 @@ export type PlanePlan = ShooterPlan;
 export const buildPlanePlan = buildShooterPlan;
 
 export type ContribPlan = SnakePlan | PlanePlan;
-
-export const cellCenterX = (col: number): number => col * CELL_STEP + CELL / 2;
-
-export const rowCenterY = (row: number): number => SKY + row * CELL_STEP + CELL / 2;
-
-export const gridWidth = (cols: number): number => cols * CELL + Math.max(0, cols - 1) * GAP;
-
-/** Bullets leave the plane's belly, right at the top edge of the grid. */
-export const muzzleY = (): number => SKY;
-
-export const planeTop = (): number => SKY / 2 - PLANE_BOX / 2;
 
 const posKey = (col: number, row: number): string => `${col}:${row}`;
 

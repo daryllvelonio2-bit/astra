@@ -1,5 +1,23 @@
 # Project Progress Tracker
 
+### [2026-09-27] - Fix "Reset branch to this commit": clear mode labels, workspace reload & HEAD-only history
+- **User directives:** when resetting branch to a commit, (1) the code didn't reset, and (2) it didn't reflect on history (commit was still there).
+- **Root causes:**
+  1. `getGitCommitHistory` ran `git log ... HEAD --remotes="*/$branch"`. When a local branch was reset to an older commit, `--remotes` kept pulling the remote tracking branch commits (`origin/$branch`), so the undone commits still showed up in the history list.
+  2. The reset menu defaulted to "Mixed — keep working changes", which leaves files on disk intact in Git and moves the diff into uncommitted changes. Users seeking to revert their code to that commit need a Hard reset. Additionally, neither the editor file buffers nor the workspace file tree were refreshed after git resets/checkouts/pulls.
+- **Changes:**
+  - `gitService.ts`: scoped `getGitCommitHistory` to `git log ... HEAD` so local branch history reflects the reset HEAD immediately. Compressed lines to stay under 500 lines (498 lines).
+  - `GitCommitActionsModal.tsx`: clarified reset options with "Hard — discard all changes (revert code to this commit)" at the top, and explicit descriptions for Mixed and Soft ("keep working code in Changes tab").
+  - `useCommitMenuActions.ts`: added `onSyncWorkspace` trigger after reset/undo operations; updated dialog messages to clearly state if code was discarded (hard) or kept in Changes (mixed/soft).
+  - `GitHubDesktopView.tsx` & `useGitOperations.ts`: plumbed `onSyncWorkspace` through to notify `IDELayout` to reload disk files.
+  - `IDELayout.tsx`: wired `onSyncWorkspace={refreshWorkspace}` to `GitHubDesktopView`.
+- **Verification:** `npx tsc --noEmit` exit 0. Headless test confirms `git reset --hard` reverts files to target commit and `git log HEAD` drops undone commits. All files within <= 500 line limits.
+
+### [2026-09-27] - Fix Git panel crash on getCommitMessage ReferenceError
+- **Cause:** `useGitOperations.ts` contained inline un-imported commit menu handlers referencing `getCommitMessage`, `amendCommit`, `resetToCommit`, etc., even though `useCommitMenuActions` hook was already implemented in `useCommitMenuActions.ts`.
+- **Fix:** Switched `useGitOperations.ts` to delegate directly to `useCommitMenuActions(...)` and removed duplicated unimported functions, bringing `useGitOperations.ts` down from 497 lines to 351 lines (< 500 cap).
+- **Verification:** `npx tsc --noEmit` exit 0 (zero TypeScript errors repo-wide).
+
 ### [2026-09-27] - Redo shooting animation: stationary right-side turret + color block explosions
 - **User directives:** (a) shooter should be placed on the right only and shoot the colors instead of moving right-to-left across the screen and repeating, (b) when a color is shot it should explode like a block of that color.
 - **Changes:**
@@ -4724,3 +4742,9 @@
   - On Android (`adjustResize`), the OS shrinks the root window height down to the top of the soft keyboard. By keeping `ExtraKeysBar` in normal flex flow at the bottom of the container, it sits naturally and flush right on top of the keyboard with zero extra offset (no weirdly high gap).
   - The header stays anchored at the top of the screen (`y = 0`), ensuring the terminal UI never goes up when the keyboard is triggered.
 - **Verification:** `tsc --noEmit` 0 errors; all files ≤500 lines (`TerminalView` 399, `useTerminalKeyboardPad` 37). No rebuild required (JS-only).
+
+### [2026-09-27] - Require-cycle fix: contribPlan <-> contribShooterPlan
+- **Warning:** `Require cycle: contribPlan.ts -> contribShooterPlan.ts -> contribPlan.ts` (Metro bundler).
+- **Root cause:** `contribPlan` imported `ShooterPlan`/`buildShooterPlan` from `contribShooterPlan`, while `contribShooterPlan` imported grid geometry (`CELL`, `GAP`, `ROWS`, `SKY`, helpers, `ContribCell`) back from `contribPlan`.
+- **Fix:** extracted the shared leaf module `contribGrid.ts` (geometry consts, `ContribPoint`/`ContribCell`, `cellCenterX`/`rowCenterY`/`gridWidth`/`muzzleY`/`planeTop` — 39 lines). `contribShooterPlan` now imports from `./contribGrid`; `contribPlan` imports + re-exports the grid symbols so all existing consumers (`GitHubContribGraph`, `useContribAnimation`, `contribSnakeAnim`, `contribPlaneAnim`, `ContribAnimOverlay`) keep working unchanged. Dependency direction is now one-way: `contribPlan -> contribShooterPlan -> contribGrid`, no cycle.
+- **Verification:** `tsc --noEmit` shows zero errors in contrib/github files (remaining errors are pre-existing in unrelated `git/useGitOperations.ts`); files under 500-line limit (`contribPlan` 391, `contribShooterPlan` 95, `contribGrid` 39). No rebuild (JS-only, Metro reload).
