@@ -43,10 +43,12 @@ export const REAPPEAR_MS = ms(420);
 export const EXIT_MS = ms(260);
 /** Gap between two strafing passes (the aircraft lines up out of sight). */
 const PASS_GAP_MS = ms(170);
-/** Longest a single animation may run: ~600 steps at cruise before it binds. */
-const MAX_CYCLE_MS = ms(210000);
+/** Longest a single animation may run: multi-batch hunts cruise for minutes. */
+const MAX_CYCLE_MS = ms(600000);
 /** Cruise pace: one deliberate tick per block of the hunt (350ms effective). */
 const SNAKE_MS_PER_CELL = ms(175);
+/** Full grid sweeps chained into one hunt: fewer handoffs, fewer visible stops. */
+const HUNT_BATCHES = 3;
 const SNAKE_MIN_MS = ms(1300);
 /** Classic arcade body: head plus this many trailing segments, in cells. */
 export const SNAKE_BODY_CELLS = 6;
@@ -199,6 +201,7 @@ const DIRS: Array<[number, number]> = [
  */
 function nextStep(
   head: SnakeStep,
+  prev: SnakeStep | null,
   target: ContribPoint,
   occupied: Set<string>,
   tail: SnakeStep | null,
@@ -206,50 +209,53 @@ function nextStep(
   c1: number
 ): SnakeStep {
   const key = (c: number, r: number): string => `${c}:${r}`;
+  const neckKey = prev ? key(prev.col, prev.row) : null;
   const targetKey = key(target.col, target.row);
   if (key(head.col, head.row) === targetKey) return head;
-  // Shortest first step to the target, treating body squares as walls. The
-  // target itself is always enterable.
-  const search = (blocked: (k: string) => boolean): SnakeStep | null => {
-    const prev = new Map<string, SnakeStep | null>();
-    const queue: SnakeStep[] = [{ col: head.col, row: head.row }];
-    prev.set(key(head.col, head.row), null);
-    for (let qi = 0; qi < queue.length; qi++) {
-      const cur = queue[qi];
-      if (key(cur.col, cur.row) === targetKey) {
-        let node = cur;
-        let p = prev.get(key(node.col, node.row));
-        while (p && (p.col !== head.col || p.row !== head.row)) {
-          node = p;
-          p = prev.get(key(p.col, p.row));
-        }
-        return node;
-      }
-      for (const [dc, dr] of DIRS) {
-        const nc = cur.col + dc;
-        const nr = cur.row + dr;
-        if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS) continue;
-        const k = key(nc, nr);
-        if (prev.has(k)) continue;
-        if (k !== targetKey && blocked(k)) continue;
-        prev.set(k, cur);
-        queue.push({ col: nc, row: nr });
-      }
+
+  // Shortest path to target: treat body squares and neck as impassable walls.
+  // Target cannot be entered if it is currently occupied or our neck.
+  const queue: SnakeStep[] = [{ col: head.col, row: head.row }];
+  const prevMap = new Map<string, SnakeStep | null>();
+  prevMap.set(key(head.col, head.row), null);
+
+  let found = false;
+  for (let qi = 0; qi < queue.length; qi++) {
+    const cur = queue[qi];
+    if (key(cur.col, cur.row) === targetKey && targetKey !== neckKey && !occupied.has(targetKey)) {
+      found = true;
+      break;
     }
-    return null;
-  };
-  const step = search((k) => occupied.has(k));
-  if (step) return step;
-  // No free path, but the grid is open ground: boxed in by body, so escape
-  // onto the free neighbor closest to the target, or onto the tail tip (it
-  // vacates as the head arrives, like the game).
+    for (const [dc, dr] of DIRS) {
+      const nc = cur.col + dc;
+      const nr = cur.row + dr;
+      if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS) continue;
+      const k = key(nc, nr);
+      if (prevMap.has(k) || k === neckKey || occupied.has(k)) continue;
+      prevMap.set(k, cur);
+      queue.push({ col: nc, row: nr });
+    }
+  }
+
+  if (found) {
+    let node = target;
+    let p = prevMap.get(key(node.col, node.row));
+    while (p && (p.col !== head.col || p.row !== head.row)) {
+      node = p;
+      p = prevMap.get(key(node.col, node.row));
+    }
+    if (node) return node;
+  }
+
+  // Fallback 1: free in-bounds neighbor that is not neck and not occupied, closest to target.
   let best: SnakeStep | null = null;
   let bestDist = Infinity;
   for (const [dc, dr] of DIRS) {
     const nc = head.col + dc;
     const nr = head.row + dr;
+    if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS) continue;
     const k = key(nc, nr);
-    if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS || occupied.has(k)) continue;
+    if (k === neckKey || occupied.has(k)) continue;
     const d = Math.abs(target.col - nc) + Math.abs(target.row - nr);
     if (d < bestDist) {
       bestDist = d;
@@ -257,20 +263,31 @@ function nextStep(
     }
   }
   if (best) return best;
+
+  // Fallback 2: escape onto tail tip if adjacent (tail vacates as head arrives).
   if (
     tail &&
     Math.abs(tail.col - head.col) + Math.abs(tail.row - head.row) === 1 &&
+    key(tail.col, tail.row) !== neckKey &&
     tail.col >= c0 &&
-    tail.col <= c1
+    tail.col <= c1 &&
+    tail.row >= 0 &&
+    tail.row < ROWS
   ) {
     return { col: tail.col, row: tail.row };
   }
-  // Fully surrounded: one direct stride as the last resort (the route guard
-  // bounds even this).
-  const dx = target.col - head.col;
-  const dy = target.row - head.row;
-  if (Math.abs(dx) >= Math.abs(dy)) return { col: head.col + Math.sign(dx), row: head.row };
-  return { col: head.col, row: head.row + Math.sign(dy) };
+
+  // Fallback 3: any in-bounds neighbor that is NOT neck (never reverse 180° into body).
+  for (const [dc, dr] of DIRS) {
+    const nc = head.col + dc;
+    const nr = head.row + dr;
+    if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS) continue;
+    const k = key(nc, nr);
+    if (k === neckKey) continue;
+    return { col: nc, row: nr };
+  }
+
+  return head;
 }
 /**
  * The classic route: the head walks the grid one cell at a time and eats every
@@ -323,7 +340,8 @@ function buildRoute(
     }
     // The vacating tail tip, for the fully-surrounded escape in nextStep.
     const tail = route.length >= SNAKE_BODY_CELLS + 1 ? route[route.length - SNAKE_BODY_CELLS - 1] : null;
-    head = nextStep(head, target, occupied, tail, c0, c1);
+    const prev = route.length >= 2 ? route[route.length - 2] : null;
+    head = nextStep(head, prev, target, occupied, tail, c0, c1);
     route.push(head);
     eaten.add(at(head));
     if (head.col === target.col && head.row === target.row) next++;
@@ -351,22 +369,22 @@ export function buildSnakePlan(
   });
   const c0 = Math.max(0, lo - 2);
   const c1 = Math.min(Math.max(cols - 1, 0), hi + 2);
-  const fresh = buildRoute(lunch, c0, c1);
-  // Seamless handoff: lay the last hunt's tail ahead of the new walk, so the
-  // head starts exactly where it stopped with its body behind it — no pop, no
-  // teleport. The fresh walk's first cell duplicates the tail tip, counted
-  // once. A carry that doesn't joint (stale grid) is dropped, never jumped.
-  let route = fresh.route;
+  // Long hunts, few handoffs: each hunt chains several full batches, so the
+  // visible stop-and-swap happens every few minutes, not every minute. Every
+  // batch starts where the last ended; only the first lays the carried tail.
+  const route: SnakeStep[] = [];
   let headStart = 0;
-  const tail = carry && carry.length ? carry : null;
-  if (tail) {
-    const tip = tail[tail.length - 1];
-    const first = fresh.route[0];
-    if (first && tip.col === first.col && tip.row === first.row) {
-      route = [...tail, ...fresh.route.slice(1)];
-      // The head resumes ON the tip (not past it) — every step gets walked.
-      headStart = tail.length - 1;
-    }
+  let curStart = start;
+  let curCarry = carry && carry.length ? carry : [];
+  for (let b = 0; b < HUNT_BATCHES; b++) {
+    const lunch = huntOrder(alive, curStart);
+    const seg = buildRoute(lunch, c0, c1, curCarry);
+    // The segment re-lays its carry up front — keep those cells once.
+    route.push(...(route.length === 0 ? seg.route : seg.route.slice(seg.carried)));
+    if (b === 0) headStart = seg.carried > 0 ? seg.carried - 1 : 0;
+    const end = seg.route[seg.route.length - 1];
+    curStart = { col: end.col, row: end.row };
+    curCarry = seg.route.slice(-(SNAKE_BODY_CELLS + 1));
   }
   // One steady tick per cell: a long year costs more than a short one. The
   // floor keeps a bare year readable, the cap a crowded one from crawling.

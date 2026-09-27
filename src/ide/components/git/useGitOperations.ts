@@ -221,7 +221,7 @@ export function useGitOperations(
   // stat); failures and auth issues stay as themed dialogs.
   const reportSyncResult = (
     kind: "fetch" | "pull" | "push",
-    res: { success: boolean; message: string }
+    res: { success: boolean; message: string; needsPull?: boolean }
   ) => {
     const title = kind === "fetch" ? "Fetch" : kind === "pull" ? "Pull" : "Push";
     if (isGitAuthError(res.message)) {
@@ -231,6 +231,18 @@ export function useGitOperations(
         buttons: [
           { text: "Later", style: "cancel" },
           { text: "Add Credentials", onPress: () => setShowCredentialsModal(true) },
+        ],
+      });
+    }
+    // Rejected push (remote ahead): the fix is pull-then-push, so offer it
+    // right here. Reset/revert can't help — they only rewrite local history.
+    if (!res.success && kind === "push" && res.needsPull) {
+      return showAppDialog({
+        title: "Push rejected — pull first",
+        message: res.message,
+        buttons: [
+          { text: "Cancel", style: "cancel" },
+          { text: "Pull First", onPress: () => handlePull() },
         ],
       });
     }

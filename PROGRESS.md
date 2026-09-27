@@ -1,6 +1,17 @@
 # Project Progress Tracker
 
-### [2026-09-27] - README rendering in the repo Code tab (GitHub-style)
+### [2026-09-27] - Fix contribution snake eating colors & prevent reversing into body
+- **User directives:** (a) snake could not eat the colors (colors still present after walking over them), (b) when it ticks, it moved back to where its body of the snake is.
+- **Root causes:**
+  1. `Animated.timing` with `delay: hitAt` started simultaneously for all visits on each cell's `Animated.Value`. In React Native, starting a new animation on an `Animated.Value` immediately stops/cancels any previous animation on that value (`this._animation && this._animation.stop()`). The later visits/delays cancelled earlier bites, and respawn timeouts stopped the surviving ones — preventing squares from fading out.
+  2. In `nextStep`, when a target was in `occupied` (e.g. from previous batch/handoff carry) or BFS found no open path, the fallback directly stepped toward target (`col + Math.sign(dx)`), causing 180° reversals straight into its neck (`route[i-2]`).
+  3. In `buildSnakeNodes`, `progress` was instantiated with `new Animated.Value(0)` instead of `new Animated.Value(plan.headStart)`. On hunt handoffs, the view initially evaluated `progress` at 0 (the tail/body from the previous hunt) before animating from `headStart`, causing the snake to visibly jump back to its body on handoff.
+- **Changes:**
+  - `contribPlan.ts`: `nextStep` tracks `prev` step (neck) and strictly forbids 180° reversals into the neck under all conditions. Target is treated as blocked if currently occupied by body. Fallbacks prioritize legal non-neck non-occupied neighbors, then vacating tail, then any in-bounds non-neck neighbor.
+  - `contribSnakeAnim.ts`: `buildSnakeNodes` initializes `progress` directly to `new Animated.Value(plan.headStart)` so initial render and mount start at `headStart` without jumping back to tail index 0.
+  - `useContribAnimation.ts`: bites are triggered via `setTimeout` at arrival time `t = hitAt`, directly starting `Animated.timing({ toValue: 0, duration: FADE_MS })` with zero competing delayed animations. Unvisited cells remain at full visibility or smoothly fade back if dark.
+- **Verification:** `npx tsc --noEmit` exit 0. Extensive headless test over 100 hunts / 108,463 steps across varying densities: 0 non-unit steps (jumps), 0 reversals into neck, 0 neck collisions, 90/90 seamless handoffs verified. File line limits: `contribPlan.ts` (476), `useContribAnimation.ts` (284), `contribSnakeAnim.ts` (48) — all strictly < 500 lines.
+
 - **User directive:** repo view must show the rendered README below the file
   tree (replacing the recent-commit strip), and `<div align="center">` etc.
   must not leak as raw text.
@@ -23,6 +34,13 @@
   README - zero tag leaks, badge pills decode correctly; on-device
   daryllvelonio2-bit/astra renders centered heading, 5 badge pills, tables,
   no raw markup; tsc exit 0; ReactNativeJS error count 0.
+
+### [2026-09-27] - No visible stop at handoffs; no reversing into body
+- **User directives:** (a) the tick visibly stops, (b) after it the snake turns back into its own body.
+- **Causes:** (a) the next hunt was planned synchronously at handoff — build + render + bridge with no animation running = frozen snake. (b) the fresh walk's body-avoidance window didn't include the carried tail, so it reversed straight into visible body.
+- **Change:** plan chains 3 full sweeps per hunt (~6min, cap raised to 10min) and seeds the walker's body window with the carried tail; driver pre-builds the next hunt 2s before the walk ends, so handoff is only a render swap. Pace still 350ms/step uncapped.
+- **Verify:** `tsc --noEmit` exit 0; files 460/265. Probes: ~1000-step hunts all-joint-exact, cover/sync green, collide rate unchanged (~0.2%, forced tail-tip moves only).
+- **Residual:** a 1–3 frame swap blip may still show at handoffs every ~6min — planning is off the path now, only render+bridge remain.
 
 ### [2026-09-27] - Bites synced under the head, not the tail
 - **User directive:** head should eat everything it covers; tail was eating instead.
@@ -147,6 +165,11 @@
 - **User directive:** clone status must show anywhere in the app (IDE, terminal, any tab) — not inside the profile popup — as plain text at the top-left, no background boxes.
 - **Change:** `repoCloneCoordinator.ts` (new service: module-level clone state + pub/sub, owns clone lifecycle, workspace registration, error dialogs) + `RepoCloneIndicator.tsx` (new app-level overlay, `position:absolute` top-left under the status bar, `pointerEvents:"box-none"`, text only, Cancel link). Mounted once in `App.tsx` above all screens. Popup now just fires `startRepoClone` + closes; the local `useRepoClone` hook was deleted (zero references kept).
 - **Verify:** `tsc --noEmit` exit 0; App.tsx 168 / indicator 52 / coordinator 98 / popup 324 lines; no `useRepoClone` references remain. On-device feel check: clone from the popup, switch to the terminal tab — text stays top-left over everything until done.
+
+### [2026-09-27] - Rejected push now explains itself + offers Pull First
+- **Cause:** `pushGitRemote` read only stdout, but git writes rejections (`[rejected]`, `fetch first`) to stderr — the bridge drops stderr, so users got a bare "Push failed" with no reason. Reset/revert then looked "broken" because they only rewrite local history; a remote-ahead rejection needs pull-then-push, which the app never offered.
+- **Fix:** push/pull capture `2>&1`; rejection detected by pattern → dialog "Push rejected — pull first" with the remote's reason plus a Pull First button. Pull's existing conflict flow (Changes-tab banner, keep yours/theirs) takes it from there; then push again. Nothing is lost: commits stay local throughout.
+- **Verify:** rejection-pattern contract 5/5; `tsc` zero errors in git files.
 
 ### [2026-09-27] - Dynamic terminal tab names (`N: <program>`)
 - **Was:** shell tabs hardcoded `N: sh` forever; `formatTabName` an identity stub. Only task tabs named dynamically.

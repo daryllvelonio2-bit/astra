@@ -479,17 +479,36 @@ export async function pullGitRemote(
 export async function pushGitRemote(
   workspaceId?: string,
   branchName?: string
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string; needsPull?: boolean }> {
+  // NOTE: `2>&1` — git reports rejections ("rejected", "fetch first") on
+  // stderr, and the native bridge only returns stdout. Without this the
+  // user gets a bare "Push failed" with no reason and no recovery path.
   try {
-    let res = await executeCommand("git push", workspaceId);
+    let res = await executeCommand("git push 2>&1", workspaceId);
     if (res.exitCode === 0) {
       invalidateGitStatusCache(workspaceId);
       return { success: true, message: "Pushed commits to remote" };
     }
+    const firstOut = (res.stdout || "").trim();
     const branch = branchName || "main";
-    res = await executeCommand(`git push -u origin "${branch}"`, workspaceId);
+    res = await executeCommand(`git push -u origin "${branch}" 2>&1`, workspaceId);
     invalidateGitStatusCache(workspaceId);
-    return { success: res.exitCode === 0, message: res.exitCode === 0 ? "Pushed commits to remote" : (res.stdout || "Push failed") };
+    if (res.exitCode === 0) return { success: true, message: "Pushed commits to remote" };
+    const out = ((res.stdout || firstOut) + "").trim();
+    const lastLines = out.split(/\r?\n/).filter((l) => l.trim()).slice(-4).join("\n");
+    if (/rejected|non-fast-forward|fetch first|behind the remote|failed to push/i.test(out)) {
+      return {
+        success: false,
+        needsPull: true,
+        message:
+          `Push rejected: the remote has commits you don't have yet.\n` +
+          (lastLines ? `\n${lastLines}\n` : ``) +
+          `\nPull first to merge their changes with yours, resolve any ` +
+          `conflicts in the Changes tab, then push again. Your commits are ` +
+          `safe — nothing was lost.`,
+      };
+    }
+    return { success: false, message: lastLines || "Push failed" };
   } catch (e: any) {
     invalidateGitStatusCache(workspaceId);
     return { success: false, message: e?.message || "Push failed" };

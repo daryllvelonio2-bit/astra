@@ -28,7 +28,7 @@ export function buildSnakeNodes(plan: SnakePlan): SnakeNodes | null {
   const route = plan.route;
   if (route.length < 2) return null;
 
-  const progress = new Animated.Value(0);
+  const progress = new Animated.Value(plan.headStart);
   const inputRange = route.map((_, i) => i);
   const left = (step: SnakeStep): number => cellCenterX(step.col) - CELL / 2;
   const top = (step: SnakeStep): number => rowCenterY(step.row) - CELL / 2;

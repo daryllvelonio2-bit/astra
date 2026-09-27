@@ -35,6 +35,8 @@ import { PlaneNodes, bulletFlight, buildPlaneNodes, planeClockSteps } from "./co
 
 /** How small a square shrinks while it is being eaten. */
 const HIT_SCALE = 0.4;
+/** How early the next hunt is planned before the current walk ends. */
+const PREP_MS = 2000;
 
 export interface CellAnim {
   value: Animated.Value;
@@ -77,6 +79,13 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
   // The last hunt's tail, laid ahead of the next walk so the body carries
   // over pixel-identical instead of collapsing and regrowing.
   const tailCarry = React.useRef<SnakeStep[]>([]);
+  // The next hunt, built before the current walk ends so the handoff never
+  // waits on planning — the snake never visibly stops between hunts.
+  const nextUp = React.useRef<{
+    plan: ContribPlan;
+    snake: SnakeNodes | null;
+    plane: PlaneNodes | null;
+  } | null>(null);
 
   React.useEffect(() => {
     let unmounted = false;
@@ -108,17 +117,29 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
     // A new grid means a new journey: forget where the old one ended.
     lastEnd.current = null;
     tailCarry.current = [];
+    nextUp.current = null;
+    // One hunt's plan plus its sprite nodes, built from the current tail.
+    const buildHunt = () => {
+      const plan: ContribPlan =
+        mode === "snake"
+          ? buildSnakePlan(alive, cols, lastEnd.current ?? undefined, tailCarry.current)
+          : buildPlanePlan(alive, cols);
+      return {
+        plan,
+        snake: plan.mode === "snake" ? buildSnakeNodes(plan) : null,
+        plane: plan.mode === "plane" ? buildPlaneNodes(plan, cols) : null,
+      };
+    };
     const runHunt = () => {
       if (unmounted) return;
       stopCycle();
       huntGen++;
       const gen = huntGen;
-      const plan: ContribPlan =
-        mode === "snake"
-          ? buildSnakePlan(alive, cols, lastEnd.current ?? undefined, tailCarry.current)
-          : buildPlanePlan(alive, cols);
-      const snake = plan.mode === "snake" ? buildSnakeNodes(plan) : null;
-      const plane = plan.mode === "plane" ? buildPlaneNodes(plan, cols) : null;
+      // Prefer the hunt prepared while the last walk was still running, so
+      // the swap never waits on planning. Fallbacks cover the first hunt.
+      const ready = nextUp.current;
+      nextUp.current = null;
+      const { plan, snake, plane } = ready ?? buildHunt();
 
       // Each square falls at every scheduled hit, then fades back on its own
       // after a random dark spell — even across hunt boundaries, so the grid
@@ -127,40 +148,59 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
       cells.forEach((cell, key) => {
         perCell.get(key)?.forEach((anim) => anim.stop());
         cellGen.set(key, gen);
-        const bites: Animated.CompositeAnimation[] = [];
-        perCell.set(key, bites);
+        const cellAnims: Animated.CompositeAnimation[] = [];
+        perCell.set(key, cellAnims);
         // Snake visits a square every time the head walks over it; a strafing
         // pass kills it once.
         const hitAts =
           plan.mode === "snake"
-            ? plan.visitAt.get(key) ?? [plan.cycleMs]
-            : [plan.vanishAt.get(key) ?? plan.cycleMs];
-        hitAts.forEach((hitAt, bi) => {
-          const bite = Animated.timing(cell.value, {
-            toValue: 0,
-            delay: hitAt,
-            duration: FADE_MS,
-            easing: Easing.out(Easing.quad),
+            ? plan.visitAt.get(key) ?? []
+            : (plan.vanishAt.has(key) ? [plan.vanishAt.get(key)!] : []);
+
+        if (!hitAts.length) {
+          // Square not visited in this hunt: ensure it stays/restores to full visibility
+          const back = Animated.timing(cell.value, {
+            toValue: 1,
+            duration: REAPPEAR_MS,
+            easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           });
-          bites.push(bite);
-          bite.start();
-          const darkFor = RESPAWN_MIN_MS + Math.random() * (RESPAWN_MAX_MS - RESPAWN_MIN_MS);
-          // A re-bite landing before this respawn would fire takes over the
-          // square, so this relight is skipped — the later bite brings its own.
-          const nextAt = hitAts[bi + 1] ?? Infinity;
-          if (nextAt <= hitAt + darkFor) return;
+          cellAnims.push(back);
+          back.start();
+          return;
+        }
+
+        hitAts.forEach((hitAt, bi) => {
           timers.push(
             setTimeout(() => {
               if (unmounted || cellGen.get(key) !== gen) return;
-              const back = Animated.timing(cell.value, {
-                toValue: 1,
-                duration: REAPPEAR_MS,
-                easing: Easing.out(Easing.cubic),
+              const bite = Animated.timing(cell.value, {
+                toValue: 0,
+                duration: FADE_MS,
+                easing: Easing.out(Easing.quad),
                 useNativeDriver: true,
               });
-              back.start();
-            }, hitAt + darkFor)
+              cellAnims.push(bite);
+              bite.start();
+
+              const darkFor = RESPAWN_MIN_MS + Math.random() * (RESPAWN_MAX_MS - RESPAWN_MIN_MS);
+              const nextAt = hitAts[bi + 1] ?? Infinity;
+              if (nextAt <= hitAt + darkFor) return;
+
+              timers.push(
+                setTimeout(() => {
+                  if (unmounted || cellGen.get(key) !== gen) return;
+                  const back = Animated.timing(cell.value, {
+                    toValue: 1,
+                    duration: REAPPEAR_MS,
+                    easing: Easing.out(Easing.cubic),
+                    useNativeDriver: true,
+                  });
+                  cellAnims.push(back);
+                  back.start();
+                }, darkFor)
+              );
+            }, hitAt)
           );
         });
       });
@@ -218,7 +258,14 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
         tailCarry.current = plan.route.slice(-(SNAKE_BODY_CELLS + 1));
       }
       // No reset, no beat — the next hunt takes over the instant this walk ends.
+      // It is already planned (built while this walk was running), so the
+      // swap is only a render, never a planning pause.
       timers.push(setTimeout(runHunt, Math.max(1000, walkMs)));
+      timers.push(
+        setTimeout(() => {
+          if (!unmounted && !nextUp.current) nextUp.current = buildHunt();
+        }, Math.max(0, walkMs - PREP_MS))
+      );
     };
     runHunt();
 
