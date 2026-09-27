@@ -247,7 +247,9 @@ function nextStep(
  * paths around the current body (see nextStep), so the head never crosses its
  * own trail and every stride approaches the kill — the walk stays tight like
  * the game instead of jumbling across the grid. The body simply follows the
- * head's footprints: a chain of whole cells winding around.
+ * head's footprints: a chain of whole cells winding around. Kills eaten in
+ * passing are skipped as waypoints, so the head never doubles back onto its
+ * own trail for one.
  */
 function buildRoute(
   lunch: ContribCell[],
@@ -258,11 +260,18 @@ function buildRoute(
   const bites: number[] = [];
   let head = { col: lunch[0].col, row: lunch[0].row };
   route.push(head);
+  const pos = (s: SnakeStep): string => `${s.col}:${s.row}`;
+  // Squares eaten so far (the start square dies under the head at t=0).
+  const eaten = new Set<string>([pos(head)]);
   let next = 1;
   // Fail-safe: the stepper always returns a move, but a corrupt grid must
   // never spin — bail out instead of looping forever.
   const maxSteps = Math.max(500, lunch.length * 50);
   while (next < lunch.length && route.length < maxSteps) {
+    // Skip kills already eaten in passing — the head never doubles back onto
+    // its own trail for a dead waypoint.
+    while (next < lunch.length && eaten.has(pos(lunch[next]))) next++;
+    if (next >= lunch.length) break;
     const target = lunch[next];
     // Cells the visible body covers right now (the tail tip sits just outside
     // this window: it vacates as the head arrives, so it stays enterable).
@@ -274,6 +283,7 @@ function buildRoute(
     const tail = route.length >= SNAKE_BODY_CELLS + 1 ? route[route.length - SNAKE_BODY_CELLS - 1] : null;
     head = nextStep(head, target, occupied, tail, c0, c1);
     route.push(head);
+    eaten.add(pos(head));
     if (head.col === target.col && head.row === target.row) next++;
   }
   const keyAt = new Map<string, number>();

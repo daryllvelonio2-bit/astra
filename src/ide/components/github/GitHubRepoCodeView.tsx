@@ -2,17 +2,28 @@ import React, { useCallback } from "react";
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
-import { fetchContents, fetchCommits } from "../../services/gitHubRepoService";
+import { fetchContents, fetchReadme } from "../../services/gitHubRepoService";
 import { useGitHubResource } from "./useGitHubResource";
 import { EmptyState, ErrorState, LoadingState } from "./GitHubStates";
 import { GitHubRepo } from "../../services/gitHubTypes";
-import { formatStale } from "../../services/gitHubProfileService";
+import { MarkdownView } from "./MarkdownView";
 
 /**
- * Code tab: browse a repo's tree at a chosen ref, open files, and see the
- * latest commit touching the folder. Parent folder is a real row so
- * navigation never traps the user.
+ * Code tab: browse a repo's tree at a chosen ref, open files, and read the
+ * rendered README at the repo root (GitHub layout: tree first, README card
+ * below). Parent folder is a real row so navigation never traps the user.
  */
+
+/** Rewrite relative markdown image/link URLs to raw.githubusercontent.com. */
+function absolutize(md: string, base: string): string {
+  return md.replace(
+    /(!\[[^\]]*\]\()([^)\s]+)(\s+"[^"]*")?\)/g,
+    (_m, pre, url, title) => {
+      if (/^(https?:|data:)/i.test(url)) return `${pre}${url}${title || ""})`;
+      return `${pre}${base}/${url.replace(/^\.\//, "")}${title || ""})`;
+    }
+  );
+}
 
 export function GitHubRepoCodeView({
   repo,
@@ -20,14 +31,12 @@ export function GitHubRepoCodeView({
   path,
   onOpenFile,
   onOpenPath,
-  onOpenCommits,
 }: {
   repo: GitHubRepo;
   refName: string;
   path: string;
   onOpenFile: (filePath: string) => void;
   onOpenPath: (nextPath: string) => void;
-  onOpenCommits: () => void;
 }) {
   const { theme } = useTheme();
 
@@ -35,9 +44,15 @@ export function GitHubRepoCodeView({
     () => fetchContents(repo.owner, repo.name, path, refName),
     [repo.owner, repo.name, path, refName]
   );
-  const latest = useGitHubResource(
-    () => fetchCommits(repo.owner, repo.name, { ref: refName, path: path || undefined, limit: 1 }),
-    [repo.owner, repo.name, refName, path]
+  const readme = useGitHubResource(
+    () => {
+      const raw = `https://raw.githubusercontent.com/${repo.owner}/${repo.name}/${refName}`;
+      return fetchReadme(repo.owner, repo.name, refName).then((res) =>
+        res.ok ? { ok: true as const, data: absolutize(res.data, raw) } : res
+      );
+    },
+    [repo.owner, repo.name, refName],
+    { skip: !!path }
   );
 
   const open = useCallback(
@@ -107,23 +122,17 @@ export function GitHubRepoCodeView({
         </View>
       )}
 
-      {latest.data && latest.data.length > 0 && (
-        <TouchableOpacity
-          style={[styles.lastCommit, { borderTopColor: theme.border }]}
-          onPress={onOpenCommits}
-          activeOpacity={0.7}
-        >
-          <Octicons name="history" size={13} color={theme.textSecondary} />
-          <View style={styles.commitBody}>
-            <Text style={[styles.commitMessage, { color: theme.textPrimary }]} numberOfLines={1}>
-              {latest.data[0].message}
-            </Text>
-            <Text style={[styles.commitMeta, { color: theme.textMuted }]} numberOfLines={1}>
-              {latest.data[0].authorName} · {formatStale(latest.data[0].date)} · {latest.data[0].shortSha}
-            </Text>
+      {!path && (readme.loading && !readme.data ? (
+        <LoadingState />
+      ) : readme.data ? (
+        <View style={[styles.readmeCard, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
+          <View style={[styles.readmeHeader, { borderBottomColor: theme.border }]}>
+            <Octicons name="book" size={13} color={theme.textSecondary} />
+            <Text style={[styles.readmeTitle, { color: theme.textPrimary }]}>README.md</Text>
           </View>
-        </TouchableOpacity>
-      )}
+          <MarkdownView source={readme.data} />
+        </View>
+      ) : null)}
     </ScrollView>
   );
 }
@@ -146,16 +155,19 @@ const styles = StyleSheet.create({
   rowName: { flex: 1, fontSize: 12.5 },
   rowSize: { fontSize: 10 },
   crumb: { fontSize: 10.5, paddingHorizontal: 12, paddingVertical: 6 },
-  lastCommit: {
+  readmeCard: {
+    margin: 12,
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 10,
+  },
+  readmeHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 4,
+    gap: 8,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  commitBody: { flex: 1, gap: 2 },
-  commitMessage: { fontSize: 12, fontWeight: "600" },
-  commitMeta: { fontSize: 10.5 },
+  readmeTitle: { fontSize: 12, fontWeight: "700" },
 });
