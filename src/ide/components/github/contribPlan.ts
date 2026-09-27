@@ -42,14 +42,17 @@ export const EXIT_MS = ms(260);
 const PASS_GAP_MS = ms(170);
 /** Longest a single animation may run before every square is gone. */
 const MAX_CYCLE_MS = ms(9000);
-/** Ms the snake spends on one square, and its cycle floor. */
-const SNAKE_MS_PER_SQUARE = ms(20);
+/** Hunt pace: ms per px travelled, plus the cycle floor. */
+const SNAKE_MS_PER_PX = ms(1.5);
 const SNAKE_MIN_MS = ms(2600);
+/** Body length in px; also how far the hunt streams in and out of the field. */
+export const SNAKE_BODY_PX = 110;
+/** px between curve samples, and how many near squares one hop may reach. */
+const PATH_SPACING = 3;
+const HUNT_REACH = 8;
 /** How hard the head lunges: 0.45 = speed swings between ~55% and ~145%. */
 const LUNGE_DEPTH = 0.45;
 const LUNGE_WAVES = 5;
-/** Resolution used to turn the lunge curve back into exact hit times. */
-const ARRIVAL_SAMPLES = 2048;
 /** Strafing pass bounds, and the budget all passes share. */
 const PASS_MIN_MS = ms(900);
 const PASS_MAX_MS = ms(1400);
@@ -67,10 +70,20 @@ export interface ContribCell extends ContribPoint {
   key: string;
 }
 
+/** A point in the grid's own pixel space. */
+export interface PathPoint {
+  x: number;
+  y: number;
+}
+
 export interface SnakePlan {
   mode: "snake";
-  /** Squares in travel order: the snake's hunt, entrance cell first. */
-  route: ContribPoint[];
+  /** Centre-line of the hunt in grid px, resampled every `spacing` px. */
+  path: PathPoint[];
+  /** px between two neighbouring path points. */
+  spacing: number;
+  /** Total hunt distance in px. */
+  length: number;
   cycleMs: number;
   /** Square key -> ms after cycle start at which the snake eats it. */
   vanishAt: Map<string, number>;
@@ -124,93 +137,151 @@ export function snakeEase(u: number): number {
   return u + (LUNGE_DEPTH / k) * (1 - Math.cos(k * u));
 }
 
-/** Times (ms into the cycle) at which the head reaches each route index. */
-function snakeArrivals(count: number, cycleMs: number): number[] {
-  const arrivals = new Array<number>(count).fill(0);
-  if (count < 2) return arrivals;
-  const last = count - 1;
-  let index = 0;
-  for (let sample = 0; sample <= ARRIVAL_SAMPLES && index < count; sample++) {
-    const reached = snakeEase(sample / ARRIVAL_SAMPLES) * last;
-    while (index <= last && reached >= index) {
-      arrivals[index] = (sample / ARRIVAL_SAMPLES) * cycleMs;
-      index++;
-    }
+/** Moment at which the lunging head has covered `fraction` of the hunt. */
+function arrivalAt(fraction: number, cycleMs: number): number {
+  let low = 0;
+  let high = 1;
+  for (let i = 0; i < 40; i++) {
+    const mid = (low + high) / 2;
+    if (snakeEase(mid) < fraction) low = mid;
+    else high = mid;
   }
-  arrivals[last] = cycleMs;
-  return arrivals;
+  return ((low + high) / 2) * cycleMs;
 }
 
-/** Walks from one cell to the next: diagonal while both axes need it, then straight. */
-function appendStaircase(route: ContribPoint[], from: ContribPoint, to: ContribPoint): void {
-  let col = from.col;
-  let row = from.row;
-  const stepX = Math.sign(to.col - col);
-  const stepY = Math.sign(to.row - row);
-  while (col !== to.col || row !== to.row) {
-    if (col !== to.col) col += stepX;
-    if (row !== to.row) row += stepY;
-    route.push({ col, row });
+/** What one hop costs the snake: the larger of its two axis distances. */
+const hop = (a: ContribPoint, b: ContribPoint): number =>
+  Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row));
+
+/**
+ * The order the snake eats in: it grabs a square at random out of the few
+ * nearest still standing, so it darts off somewhere new every hop instead of
+ * clearing the field lane by lane — without flinging itself across the whole
+ * year, which is what would turn a busy graph into a crawl.
+ */
+function huntOrder(alive: ContribCell[]): ContribCell[] {
+  const left = alive.slice();
+  const order: ContribCell[] = [left.splice(Math.floor(Math.random() * left.length), 1)[0]];
+  while (left.length) {
+    const from = order[order.length - 1];
+    const reach = Math.min(HUNT_REACH, left.length);
+    // Partial selection sort brings the `reach` closest squares to the front.
+    for (let i = 0; i < reach; i++) {
+      let best = i;
+      for (let j = i + 1; j < left.length; j++) {
+        if (hop(left[j], from) < hop(left[best], from)) best = j;
+      }
+      const swap = left[i];
+      left[i] = left[best];
+      left[best] = swap;
+    }
+    order.push(left.splice(Math.floor(Math.random() * reach), 1)[0]);
   }
+  return order;
 }
 
 /**
- * Hunt route: the snake drops in past the newest edge and always strikes the
- * nearest green still standing, so it dashes across the field instead of
- * sweeping it lane by lane. Distance is measured in diagonal steps (the way it
- * actually moves), ties break towards the way it is already heading so it
- * commits to a dash, and any remaining tie goes at random — which is why two
- * snakes in a row never hunt the same way. Empty cells on the way are simply
- * travelled over.
+ * Prolongs the line `toward -> from` past `from`, so the snake is already
+ * travelling when it slides into view and never stops, doubles back or is cut
+ * off at the edge of the field.
  */
-function buildHuntRoute(alive: ContribCell[], cols: number): ContribPoint[] {
-  const route: ContribPoint[] = [{ col: cols, row: 1 + Math.floor(Math.random() * (ROWS - 2)) }];
-  const remaining = alive.map((c) => ({ col: c.col, row: c.row }));
-  let headingX = -1;
-  let headingY = 0;
-  while (remaining.length) {
-    const from = route[route.length - 1];
-    let best = 0;
-    let bestGap = Infinity;
-    let bestAhead = -Infinity;
-    for (let i = 0; i < remaining.length; i++) {
-      const dx = remaining[i].col - from.col;
-      const dy = remaining[i].row - from.row;
-      const gap = Math.max(Math.abs(dx), Math.abs(dy));
-      const ahead = gap === 0 ? 1 : (dx * headingX + dy * headingY) / gap;
-      const better =
-        gap < bestGap ||
-        (gap === bestGap && ahead > bestAhead) ||
-        (gap === bestGap && ahead === bestAhead && Math.random() < 0.5);
-      if (better) {
-        best = i;
-        bestGap = gap;
-        bestAhead = ahead;
-      }
+function stretch(
+  from: PathPoint,
+  toward: PathPoint,
+  px: number,
+  box: { right: number; bottom: number }
+): PathPoint {
+  const dx = from.x - toward.x;
+  const dy = from.y - toward.y;
+  const length = Math.hypot(dx, dy) || 1;
+  return {
+    x: Math.min(box.right, Math.max(-SNAKE_BODY_PX, from.x + (dx / length) * px)),
+    y: Math.min(box.bottom, Math.max(-SNAKE_BODY_PX, from.y + (dy / length) * px)),
+  };
+}
+
+/** Catmull-Rom coordinate at t along the segment b -> c, pulled by a and d. */
+const bend = (a: number, b: number, c: number, d: number, t: number, t2: number, t3: number): number =>
+  0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (3 * b - a - 3 * c + d) * t3);
+
+/**
+ * The curve the head actually follows: it glides *through* its target squares
+ * rather than stopping and cornering on them, which is what makes a snake look
+ * like a snake. `mark[i]` is where in the samples point i landed.
+ */
+function curveThrough(points: PathPoint[]): { dense: PathPoint[]; mark: number[] } {
+  const at = (i: number): PathPoint => points[Math.min(points.length - 1, Math.max(0, i))];
+  const dense: PathPoint[] = [];
+  const mark: number[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = at(i - 1);
+    const p1 = at(i);
+    const p2 = at(i + 1);
+    const p3 = at(i + 2);
+    mark.push(dense.length);
+    const steps = Math.max(2, Math.ceil(Math.hypot(p2.x - p1.x, p2.y - p1.y) / PATH_SPACING));
+    for (let s = 0; s < steps; s++) {
+      const t = s / steps;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      dense.push({
+        x: bend(p0.x, p1.x, p2.x, p3.x, t, t2, t3),
+        y: bend(p0.y, p1.y, p2.y, p3.y, t, t2, t3),
+      });
     }
-    const target = remaining.splice(best, 1)[0];
-    headingX = Math.sign(target.col - from.col);
-    headingY = Math.sign(target.row - from.row);
-    appendStaircase(route, from, target);
   }
-  return route;
+  mark.push(dense.length);
+  dense.push(points[points.length - 1]);
+  return { dense, mark };
+}
+
+/**
+ * The hunt as a centre-line: `path` is the curve resampled at an even spacing,
+ * so turning a travelled distance into a spot on it is one multiplication, and
+ * `bites[i]` is how far along it the snake reaches square i.
+ */
+function buildHunt(order: ContribCell[], cols: number): { path: PathPoint[]; spacing: number; length: number; bites: number[] } {
+  const squares = order.map((c) => ({ x: cellCenterX(c.col), y: rowCenterY(c.row) }));
+  const box = { right: gridWidth(cols) + SNAKE_BODY_PX, bottom: rowCenterY(ROWS - 1) + SNAKE_BODY_PX };
+  const tail = squares.length - 1;
+  const entry = stretch(squares[0], squares[1] || { x: squares[0].x - 120, y: squares[0].y }, SNAKE_BODY_PX + 24, box);
+  const exit = stretch(squares[tail], squares[tail - 1] || squares[0], SNAKE_BODY_PX + 24, box);
+  const { dense, mark } = curveThrough([entry, ...squares, exit]);
+
+  const cum: number[] = [0];
+  for (let i = 1; i < dense.length; i++) {
+    cum[i] = cum[i - 1] + Math.hypot(dense[i].x - dense[i - 1].x, dense[i].y - dense[i - 1].y);
+  }
+  const total = cum[cum.length - 1];
+  const count = Math.max(3, Math.round(total / PATH_SPACING) + 1);
+  const path: PathPoint[] = [];
+  let segment = 0;
+  for (let i = 0; i < count; i++) {
+    const wanted = (i / (count - 1)) * total;
+    while (segment < cum.length - 2 && cum[segment + 1] < wanted) segment++;
+    const span = cum[segment + 1] - cum[segment] || 1;
+    const t = Math.min(1, Math.max(0, (wanted - cum[segment]) / span));
+    path.push({
+      x: dense[segment].x + (dense[segment + 1].x - dense[segment].x) * t,
+      y: dense[segment].y + (dense[segment + 1].y - dense[segment].y) * t,
+    });
+  }
+  // mark[0] is the entry point, so the eaten squares start at mark[1].
+  return { path, spacing: total / (count - 1), length: total, bites: squares.map((_, i) => cum[mark[i + 1]]) };
 }
 
 export function buildSnakePlan(alive: ContribCell[], cols: number): SnakePlan {
-  const route = buildHuntRoute(alive, cols);
-  // Quick enough to feel alive, slow enough to follow; short hunts get a floor
-  // so a nearly empty year still reads as a snake instead of a teleport.
-  const cycleMs = Math.min(MAX_CYCLE_MS, Math.max(SNAKE_MIN_MS, route.length * SNAKE_MS_PER_SQUARE));
-  const arrivals = snakeArrivals(route.length, cycleMs);
-  const keyAtPos = new Map<string, string>();
-  alive.forEach((c) => keyAtPos.set(posKey(c.col, c.row), c.key));
+  if (!alive.length) {
+    return { mode: "snake", path: [], spacing: PATH_SPACING, length: 0, cycleMs: SNAKE_MIN_MS, vanishAt: new Map() };
+  }
+  const order = huntOrder(alive);
+  const hunt = buildHunt(order, cols);
+  // Pace is distance, so a long dash costs more than a short one. The floor
+  // keeps a bare year readable, the cap a crowded one from turning into a crawl.
+  const cycleMs = Math.min(MAX_CYCLE_MS, Math.max(SNAKE_MIN_MS, Math.round(hunt.length * SNAKE_MS_PER_PX)));
   const vanishAt = new Map<string, number>();
-  route.forEach((point, i) => {
-    const key = keyAtPos.get(posKey(point.col, point.row));
-    // First visit eats it; the staircase can cross a square it already ate.
-    if (key && !vanishAt.has(key)) vanishAt.set(key, arrivals[i]);
-  });
-  return { mode: "snake", route, cycleMs, vanishAt };
+  order.forEach((cell, i) => vanishAt.set(cell.key, arrivalAt(hunt.bites[i] / hunt.length, cycleMs)));
+  return { mode: "snake", path: hunt.path, spacing: hunt.spacing, length: hunt.length, cycleMs, vanishAt };
 }
 
 /** Random every cycle, never twice in a row so both animations get seen. */
