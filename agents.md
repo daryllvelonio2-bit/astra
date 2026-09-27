@@ -19,5 +19,6 @@
 13. **Stability & Speed First:** All code implemented or refactored must strictly prioritize application stability and peak execution speed:
     - **Rock-Solid Stability:** Guarantee zero unhandled promise rejections, comprehensive error boundaries, leak-free subscriptions/intervals/timers with mandatory cleanup on unmount, strict adherence to React Rules of Hooks (never call hooks conditionally or after early returns), and safe serialization of concurrent storage operations.
     - **Maximized Speed & Smoothness:** Prevent main-thread blockage; eliminate re-render cascades using `React.memo`, `useCallback`, and `useMemo`; avoid heavy synchronous computations or unconstrained regex scans on keystroke/render paths; virtualize large lists; and ensure I/O and process execution run asynchronously off the critical UI thread.
+14. **Auto-Commit:** Automatically commit changes after completing and verifying each task, phase, or meaningful update. Stage only the relevant changed files (never commit secrets, scratch probes, or unrelated edits) and use a clear, concise commit message.
 
 
