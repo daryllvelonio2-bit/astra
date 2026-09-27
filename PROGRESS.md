@@ -77,6 +77,11 @@
 - **Change:** `repoCloneCoordinator.ts` (new service: module-level clone state + pub/sub, owns clone lifecycle, workspace registration, error dialogs) + `RepoCloneIndicator.tsx` (new app-level overlay, `position:absolute` top-left under the status bar, `pointerEvents:"box-none"`, text only, Cancel link). Mounted once in `App.tsx` above all screens. Popup now just fires `startRepoClone` + closes; the local `useRepoClone` hook was deleted (zero references kept).
 - **Verify:** `tsc --noEmit` exit 0; App.tsx 168 / indicator 52 / coordinator 98 / popup 324 lines; no `useRepoClone` references remain. On-device feel check: clone from the popup, switch to the terminal tab — text stays top-left over everything until done.
 
+### [2026-09-27] - Dynamic terminal tab names (`N: <program>`)
+- **Was:** shell tabs hardcoded `N: sh` forever; `formatTabName` an identity stub. Only task tabs named dynamically.
+- **Now:** `terminalTabName.ts` (parse/truncate/fold, 91 lines) + `useTerminalTabNames.ts` (hook, 66 lines). Typed input tracked per session until Enter (arrows/TUI escape bytes taint the line so vim/opencode keystrokes never misname; Ctrl+C/Ctrl+U discard; programmatic `^Uclear+Enter` can't misname); legacy-mode full commands rename directly. Restart resets to `N: sh`; close drops the buffer; new-tab numbering is max+1 (length+1 collided). Task/Run tabs untouched. `tsc`: zero errors in terminal files (only pre-existing unrelated MarkdownParser breakage remains). Contract: 20/20.
+- **Note:** `MarkdownParser.tsx` has someone else's in-progress badge/image edit, currently unparseable — left untouched.
+
 ### [2026-09-27] - Token sign-in now saves the API session (fixes ghost signed-out)
 - **Cause:** all three token entry points (Git credentials modal, clone modal, onboarding) only wrote git-level `~/.git-credentials`, never the app's API token/username. Public views (profiles, repos) worked unauthenticated while Home identity, session, notifications and GraphQL 401'd — suite looked signed out and funneled to browser OAuth.
 - **Fix:** all three route through `completeGitHubLogin(token)` — validates via `/user`, wires git creds, saves token+username+email+avatar, clears the token cache. `tsc` clean. Healing: re-paste the token once in the Git tab.

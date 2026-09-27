@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ScrollView } from "react-native";
 import { useTerminalHistory, useTerminalClipboard } from "./terminalHistory";
+import { useTerminalTabNames } from "./useTerminalTabNames";
+import { nextShellIndex } from "./terminalTabName";
 import {
   startTerminalSession,
   startPtySession,
@@ -51,8 +53,6 @@ async function startShellSession(sessionId: string, workspaceId?: string) {
   }
 }
 
-const formatTabName = (name: string) => name;
-
 const formatTaskTabName = (cmd: string) => {
   const clean = (cmd || "Task")
     .replace(/^(?:nohup|sudo|bash\s+-c)\s*/i, "")
@@ -87,6 +87,10 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
 
   const { recordCommand, navigateHistory } = useTerminalHistory();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // Dynamic tab names (`N: <program>`); the hook owns the per-session
+  // half-typed line buffers, this file just feeds it bytes + commands.
+  const { trackTypedInput, renameForCommand, renameShellTab, dropTracked } =
+    useTerminalTabNames(setSessions);
 
   const scrollRef = useRef<ScrollView>(null);
   const isAutoScrollEnabled = useRef<boolean>(true);
@@ -297,8 +301,10 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
       }
 
       writeTerminalInput(targetId || activeSessionId, finalData);
+      // Dynamic tab name: fold typed bytes so Enter renames `N: sh`.
+      trackTypedInput(targetId || activeSessionId, finalData);
     },
-    [activeSessionId, isCtrlActive, isAltActive]
+    [activeSessionId, isCtrlActive, isAltActive, trackTypedInput]
   );
 
   const runCommandDirectly = useCallback(
@@ -308,6 +314,8 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
 
       const sid = targetId || activeSessionId;
       recordCommand(trimmed);
+      // Legacy pipe mode knows the full command: rename the tab from it.
+      renameForCommand(sid, trimmed);
 
       // Append command with newline to session display buffer so it stays visible
       setSessionOutputs((prev) => {
@@ -322,7 +330,7 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
       writeTerminalInput(sid, `${trimmed}\n`);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 30);
     },
-    [activeSessionId, recordCommand]
+    [activeSessionId, recordCommand, renameForCommand]
   );
 
   const { copyActiveOutput, copyXtermSelection, pasteFromClipboard } = useTerminalClipboard(
@@ -348,7 +356,8 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
   }, []);
 
   const addNewSession = useCallback(async () => {
-    const nextIdx = sessions.length + 1;
+    // Max existing shell number + 1: close-safe (length+1 collided).
+    const nextIdx = nextShellIndex(sessions.map((s) => s.name));
     const newId = `session-${Date.now()}`;
     const newTab: TerminalTab = {
       id: newId,
@@ -383,6 +392,7 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
 
       const remaining = sessions.filter((s) => s.id !== idToClose);
       setSessions(remaining);
+      dropTracked(idToClose);
       setSessionOutputs((prev) => {
         const copy = { ...prev };
         delete copy[idToClose];
@@ -394,7 +404,7 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
         setActiveSessionId(remaining[0]?.id || "session-1");
       }
     },
-    [sessions, activeSessionId, showToast]
+    [sessions, activeSessionId, showToast, dropTracked]
   );
 
   const restartActiveSession = useCallback(async () => {
@@ -418,10 +428,13 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
     setSessionOutputs((prev) => ({ ...prev, [activeSessionId]: getBanner(workspaceId) }));
     seenNativeLen.current[activeSessionId] = 0;
     delete exportedFgBgRef.current[activeSessionId];
+    dropTracked(activeSessionId);
+    // Fresh shell: reset a stale program name back to `N: sh`.
+    renameShellTab(activeSessionId, "sh");
     await startShellSession(activeSessionId, workspaceId);
     syncThemeEnv(appTheme.isDark);
     showToast("Session restarted");
-  }, [activeSessionId, workspaceId, appTheme.isDark, syncThemeEnv, showToast]);
+  }, [activeSessionId, workspaceId, appTheme.isDark, syncThemeEnv, showToast, dropTracked, renameShellTab]);
 
   const clearActiveSession = useCallback(() => {
     if (activeSessionId.startsWith("task-")) {

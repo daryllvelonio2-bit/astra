@@ -1,23 +1,15 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { useTheme, ThemeColors } from "../../../theme/themeContext";
 import { normalizeReadmeHtml } from "./markdownHtml";
-import { MarkdownBlock, parseMarkdown, renderInline } from "./MarkdownParser";
+import { MarkdownBlock, parseMarkdown, renderInline, SafeImage } from "./MarkdownParser";
 
 /**
  * Renders a GitHub README: normalizes HTML (div-align, raw img/kbd/br) into
  * markdown blocks, then lays them out. Centered groups for badge strips,
  * collapsible <details>, width-sized images, and horizontal badge rows.
  */
-
-const IMG = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g;
-const IMG_ONLY = /^(!\[[^\]]*\]\([^)\s]+(?:\s+"[^"]*")?\)\s*)+$/;
-
-function imgWidth(title?: string): number | undefined {
-  const w = /^w=(\d+)$/.exec(title || "")?.[1];
-  return w ? Number(w) : undefined;
-}
 
 function badgeHeight(w: number): number {
   return Math.max(18, Math.min(48, Math.round(w * 0.24)));
@@ -33,8 +25,8 @@ function ImageBlock({
   align?: "center";
 }) {
   return (
-    <Image
-      source={{ uri: src }}
+    <SafeImage
+      uri={src}
       style={[
         width && width <= 200
           ? { width, height: badgeHeight(width) }
@@ -42,7 +34,6 @@ function ImageBlock({
         mdStyles.image,
         align === "center" && { alignSelf: "center" },
       ]}
-      resizeMode="contain"
     />
   );
 }

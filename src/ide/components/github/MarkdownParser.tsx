@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, Image } from "react-native";
+import { Text, Image, ImageStyle, StyleProp } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { ThemeColors } from "../../../theme/themeContext";
 
@@ -24,7 +24,7 @@ export type MarkdownBlock =
   | { type: "group"; align: "center"; children: MarkdownBlock[] }
   | { type: "details"; summary: string; children: MarkdownBlock[] };
 
-const OPEN = /^<(p|div|center|details|summary)\b([^>]*)>/i;
+const OPEN = /^<(p|div|center)\b([^>]*)>/i;
 const CLOSE = /^<\/(p|div|center|details|summary)>/i;
 const ALIGNED_OPEN = /^<(p|div|center)\b[^>]*align\s*=\s*["']?center["']?[^>]*>/i;
 
@@ -44,6 +44,21 @@ function findClose(lines: string[], start: number, tag: string): number {
 
 export function parseMarkdown(src: string): MarkdownBlock[] {
   return parseBlocks(src.replace(/\r\n/g, "\n").split("\n"));
+}
+
+/** <Image> that renders nothing on load failure (RN cannot decode SVG —
+ *  shields.io badges are SVG by default; a broken-image box is worse than
+ *  blank space). */
+export function SafeImage({
+  uri,
+  style,
+}: {
+  uri: string;
+  style?: ImageStyle;
+}) {
+  const [failed, setFailed] = React.useState(false);
+  if (failed || !uri || !/^https?:/i.test(uri)) return null;
+  return <Image source={{ uri }} style={style} resizeMode="contain" onError={() => setFailed(true)} />;
 }
 
 /** Parse one line-range into blocks. Used recursively for containers. */
@@ -237,45 +252,69 @@ function parseBlocks(lines: string[], opts?: { align?: "center" }): MarkdownBloc
   return out;
 }
 
-/** Inline markdown -> React <Text> children (bold/italic/code/links/images). */
+/** Inline markdown -> React children: bold/italic/code/links, and inline
+ *  images — including linked badges [![img](src)](href), which render as a
+ *  tappable nested <Text><Image/></Text> (RN centers inline content). */
 export function renderInline(text: string, theme: ThemeColors, key: string): React.ReactNode {
   const nodes: React.ReactNode[] = [];
+  const clean = (s: string) => s.replace(/\\([`*_~\[\]])/g, "$1");
+  const badge = (uri: string, width: number | undefined, href?: string, k?: string) => {
+    const img = (
+      <SafeImage
+        key={k}
+        uri={uri}
+        style={width && width <= 240 ? { width, height: Math.max(16, Math.round(width * 0.22)) } : { width: "100%", height: 150 }}
+      />
+    );
+    return href ? (
+      <Text key={k} onPress={() => void WebBrowser.openBrowserAsync(href.startsWith("http") ? href : `https://${href}`)}>
+        {img}
+      </Text>
+    ) : img;
+  };
+
+  // linked-badge -> sentinel, stashed so the plain-link regex never splits it
+  const stashed: React.ReactNode[] = [];
+  const scan = text.replace(
+    /\[!\[([^\]]*)\]\(([^)\s]+)(?:\s+"w=(\d+)")?\)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+    (_m, _alt, src, w, href) => {
+      stashed.push(badge(src, w ? Number(w) : undefined, href, `lb${stashed.length}`));
+      return `\u0001${stashed.length - 1}\u0001`;
+    }
+  );
+
   const re = /(!?\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\))|(`[^`]+`)|(\*\*([^*_]+)\*\*)|(__([^_]+)__)|(~~([^~]+)~~)|(\*([^*\s][^*]*)\*)|(_([^_\s][^_]*)_)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let n = 0;
-  const clean = (s: string) => s.replace(/\\([`*_~\[\]])/g, "$1");
 
-  while ((m = re.exec(text))) {
-    if (m.index > last) nodes.push(<Text key={`${key}-t${n++}`}>{clean(text.slice(last, m.index))}</Text>);
+  const pushText = (chunk: string) => {
+    // split sentinel out of plain text runs
+    const parts = chunk.split(/\u0001(\d+)\u0001/);
+    for (let k = 0; k < parts.length; k++) {
+      if (k % 2 === 1) {
+        nodes.push(stashed[Number(parts[k])]);
+      } else if (parts[k]) {
+        nodes.push(<Text key={`${key}-t${n++}`}>{clean(parts[k])}</Text>);
+      }
+    }
+  };
+
+  while ((m = re.exec(scan))) {
+    if (m.index > last) pushText(scan.slice(last, m.index));
     if (m[1]) {
       const isImg = m[1].startsWith("!");
-      const label = m[2];
-      const url = m[3];
-      const title = m[4];
-      const w = /^w=(\d+)$/.exec(title || "")?.[1];
+      const w = /^w=(\d+)$/.exec(m[4] || "")?.[1];
       if (isImg) {
-        const width = w ? Number(w) : undefined;
-        nodes.push(
-          <Image
-            key={`${key}-img${n++}`}
-            source={{ uri: url }}
-            style={
-              width && width <= 200
-                ? { width, height: Math.max(18, Math.min(48, Math.round(width * 0.24))) }
-                : { width: "100%", height: 150 }
-            }
-            resizeMode="contain"
-          />
-        );
+        nodes.push(badge(m[3], w ? Number(w) : undefined, undefined, `im${n++}`));
       } else {
         nodes.push(
           <Text
             key={`${key}-a${n++}`}
             style={{ color: theme.accent }}
-            onPress={() => void WebBrowser.openBrowserAsync(url.startsWith("http") ? url : `https://${url}`)}
+            onPress={() => void WebBrowser.openBrowserAsync(m[3].startsWith("http") ? m[3] : `https://${m[3]}`)}
           >
-            {label || url}
+            {m[2] || m[3]}
           </Text>
         );
       }
@@ -298,6 +337,6 @@ export function renderInline(text: string, theme: ThemeColors, key: string): Rea
     }
     last = m.index + m[0].length;
   }
-  if (last < text.length) nodes.push(<Text key={`${key}-t${n++}`}>{clean(text.slice(last))}</Text>);
+  if (last < scan.length) pushText(scan.slice(last));
   return nodes;
 }

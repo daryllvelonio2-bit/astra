@@ -16,13 +16,10 @@ import { MarkdownView } from "./MarkdownView";
 
 /** Rewrite relative markdown image/link URLs to raw.githubusercontent.com. */
 function absolutize(md: string, base: string): string {
-  return md.replace(
-    /(!\[[^\]]*\]\()([^)\s]+)(\s+"[^"]*")?\)/g,
-    (_m, pre, url, title) => {
-      if (/^(https?:|data:)/i.test(url)) return `${pre}${url}${title || ""})`;
-      return `${pre}${base}/${url.replace(/^\.\//, "")}${title || ""})`;
-    }
-  );
+  const fix = (u: string) => (/^(https?:|data:)/i.test(u) ? u : `${base}/${u.replace(/^\.\//, "")}`);
+  return md
+    .replace(/(!\[[^\]]*\]\()([^)\s]+)(\s+"[^"]*")?\)/g, (_m, pre, url, title) => `${pre}${fix(url)}${title || ""})`)
+    .replace(/(\bsrc\s*=\s*["'])([^"'\s]+)(["'])/gi, (_m, pre, url, post) => `${pre}${fix(url)}${post}`);
 }
 
 export function GitHubRepoCodeView({
