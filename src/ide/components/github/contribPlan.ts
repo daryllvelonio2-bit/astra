@@ -283,17 +283,26 @@ function nextStep(
  * footprints: a chain of whole cells winding around, so bites always land
  * under the head, never under the body. Kills eaten in passing are skipped as
  * waypoints, so the head never doubles back onto its own trail for one.
+ *
+ * A carried tail from the previous hunt lays ahead of the walk, so the first
+ * steps route around the visible body instead of reversing straight into it.
  */
 function buildRoute(
   lunch: ContribCell[],
   c0: number,
-  c1: number
-): { route: SnakeStep[]; bites: number[] } {
-  const route: SnakeStep[] = [];
-  const bites: number[] = [];
-  let head = { col: lunch[0].col, row: lunch[0].row };
-  route.push(head);
+  c1: number,
+  carry?: SnakeStep[]
+): { route: SnakeStep[]; carried: number } {
   const at = (s: SnakeStep): string => `${s.col}:${s.row}`;
+  // The carry joints only when its tip is the start cell; a stale carry is
+  // dropped, never jumped to.
+  const tail = carry && carry.length ? carry : null;
+  const first = lunch[0];
+  const joint = tail && first && tail[tail.length - 1].col === first.col && tail[tail.length - 1].row === first.row;
+  const route: SnakeStep[] = joint && tail ? [...tail] : [];
+  let head = { col: first.col, row: first.row };
+  // Jointed: the tip is already laid as the last carry cell. Fresh: lay it.
+  if (!route.length) route.push(head);
   // Squares eaten so far (the start square dies under the head at t=0).
   const eaten = new Set<string>([at(head)]);
   let next = 1;
@@ -319,14 +328,7 @@ function buildRoute(
     eaten.add(at(head));
     if (head.col === target.col && head.row === target.row) next++;
   }
-  const keyAt = new Map<string, number>();
-  lunch.forEach((cell, i) => keyAt.set(`${cell.col}:${cell.row}`, i));
-  route.forEach((step, i) => {
-    const target = keyAt.get(`${step.col}:${step.row}`);
-    // First visit eats it; the walk can cross a square it already ate.
-    if (target !== undefined && bites[target] === undefined) bites[target] = i;
-  });
-  return { route, bites };
+  return { route, carried: joint && tail ? tail.length : 0 };
 }
 
 export function buildSnakePlan(
@@ -380,7 +382,9 @@ export function buildSnakePlan(
     if (j < headStart) return;
     const key = coordToKey.get(`${s.col}:${s.row}`);
     if (!key) return;
-    const t = (j / span) * cycleMs;
+    // Timed from the walk's start: the head stands on headStart at t=0, so
+    // step j is reached (j - headStart) ticks in — the bite fires under it.
+    const t = ((j - headStart) / span) * cycleMs;
     const arr = visitAt.get(key);
     if (arr) arr.push(t);
     else visitAt.set(key, [t]);

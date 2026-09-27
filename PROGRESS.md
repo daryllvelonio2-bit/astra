@@ -24,6 +24,12 @@
   daryllvelonio2-bit/astra renders centered heading, 5 badge pills, tables,
   no raw markup; tsc exit 0; ReactNativeJS error count 0.
 
+### [2026-09-27] - Bites synced under the head, not the tail
+- **User directive:** head should eat everything it covers; tail was eating instead.
+- **Cause:** later hunts start mid-route but animated over the full cycle time, so the head ran ~6 steps ahead of the bite schedule — squares died ~2s later, under the tail. Linear-only duration scaling can't fix a mid-route start; bite times had to shift too.
+- **Change:** plan times each bite from the walk's start (`(j - headStart)` ticks); driver runs the walk over the matching cycle slice (`walkMs`) and hands off on walk end. Head lands on each step exactly when its bite fires (probe-verified numerically).
+- **Verify:** `tsc --noEmit` exit 0. Seam probe: syncOk 4/4, cover/seam/eat still green. Full probe 6/6, 350ms pace.
+
 ### [2026-09-27] - Snake bites every walk over a green, revisits included
 - **User directive:** snake walked over newly spawned squares without eating them.
 - **Cause:** one pre-scheduled bite per square per hunt — a respawned square re-crossed later had no bite left.

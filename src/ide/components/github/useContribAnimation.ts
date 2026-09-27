@@ -165,6 +165,16 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
         });
       });
 
+      // The walk covers headStart -> end, so it runs the matching slice of the
+      // cycle: with linear easing the head then lands on each step exactly
+      // when its bite fires — eating visibly happens under the head, never
+      // seconds later under the tail.
+      const walkMs =
+        plan.mode === "snake"
+          ? (plan.cycleMs * (plan.route.length - 1 - plan.headStart)) /
+            Math.max(1, plan.route.length - 1)
+          : plan.cycleMs;
+
       if (snake) {
         // The head resumes mid-walk on later hunts (headStart), so the body
         // never collapses — only the first hunt starts at zero.
@@ -180,7 +190,7 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
         track(
           Animated.timing(snake.progress, {
             toValue: snake.end,
-            duration: plan.cycleMs,
+            duration: walkMs,
             // Steady cruise: one cell per tick, like the game.
             easing: snakeEase,
             useNativeDriver: true,
@@ -207,8 +217,8 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
         lastEnd.current = end ? { col: end.col, row: end.row } : null;
         tailCarry.current = plan.route.slice(-(SNAKE_BODY_CELLS + 1));
       }
-      // No reset, no beat — the next hunt takes over the instant this one ends.
-      timers.push(setTimeout(runHunt, plan.cycleMs));
+      // No reset, no beat — the next hunt takes over the instant this walk ends.
+      timers.push(setTimeout(runHunt, Math.max(1000, walkMs)));
     };
     runHunt();
 
