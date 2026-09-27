@@ -112,7 +112,7 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
         Animated.timing(snake.progress, {
           toValue: snake.end,
           duration: plan.cycleMs,
-          // Lunge profile: the head swells and eases instead of sliding.
+          // Steady cruise: one cell per tick, like the game.
           easing: snakeEase,
           useNativeDriver: true,
         })

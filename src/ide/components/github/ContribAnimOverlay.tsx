@@ -1,7 +1,7 @@
 import React from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useTheme } from "../../../theme/themeContext";
-import { BULLET_H, BULLET_W, PLANE_BOX, muzzleY } from "./contribPlan";
+import { BULLET_H, BULLET_W, CELL, PLANE_BOX, muzzleY } from "./contribPlan";
 import { ContribAnimationState } from "./useContribAnimation";
 
 /**
@@ -24,13 +24,7 @@ export function ContribAnimOverlay({ anim }: { anim: ContribAnimationState }) {
               key={`seg${i}`}
               style={[
                 styles.segment,
-                {
-                  width: segment.size,
-                  height: segment.size,
-                  borderRadius: segment.size / 2,
-                  backgroundColor: theme.accentGreen,
-                  opacity: segment.opacity,
-                },
+                { backgroundColor: theme.accentGreen, opacity: i === 0 ? 1 : 0.72 },
                 { transform: [{ translateX: segment.x }, { translateY: segment.y }] },
               ]}
             />
@@ -68,7 +62,7 @@ export function ContribAnimOverlay({ anim }: { anim: ContribAnimationState }) {
 
 const styles = StyleSheet.create({
   layer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
-  segment: { position: "absolute", left: 0, top: 0 },
+  segment: { position: "absolute", left: 0, top: 0, width: CELL, height: CELL, borderRadius: 3 },
   plane: { position: "absolute", left: 0, top: 0, width: PLANE_BOX, height: PLANE_BOX },
   fuselage: { position: "absolute", left: 1, top: 6.5, width: 13, height: 3, borderRadius: 1.5 },
   wing: { position: "absolute", left: 6, top: 2.5, width: 3, height: 11, borderRadius: 1.5 },

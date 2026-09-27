@@ -4,27 +4,23 @@ import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { GitHubUserDetail } from "../../services/gitHubTypes";
 import { fetchUserProfile, fetchNotifications } from "../../services/gitHubAccountService";
-import { fetchMyRepos, fetchStarredRepos } from "../../services/gitHubRepoService";
+import { fetchStarredRepos } from "../../services/gitHubRepoService";
 import { useGitHubResource } from "./useGitHubResource";
 import { ErrorState, LoadingState } from "./GitHubStates";
 import { GitHubSearchBar } from "./GitHubControls";
 import { GitHubNavigation } from "./useGitHubNavigation";
-import { formatStale } from "../../services/gitHubProfileService";
 
 /**
  * Landing screen of the GitHub surface: identity block, live counters,
- * quick actions, and the most recently touched repositories. Everything
- * here is one tap from the deeper screens.
+ * and quick actions. Everything here is one tap from the deeper screens.
  */
 
 export function GitHubHomeView({
   nav,
-  onCloneRepo,
   onSignOut,
   signedIn,
 }: {
   nav: GitHubNavigation;
-  onCloneRepo: (fullName: string) => void;
   onSignOut?: () => void;
   signedIn: boolean;
 }) {
@@ -33,11 +29,6 @@ export function GitHubHomeView({
 
   const profile = useGitHubResource<GitHubUserDetail>(
     () => fetchUserProfile(),
-    [],
-    { skip: !signedIn }
-  );
-  const repos = useGitHubResource(
-    () => fetchMyRepos("updated", 6),
     [],
     { skip: !signedIn }
   );
@@ -137,42 +128,6 @@ export function GitHubHomeView({
               <Action icon="sign-out" label="Sign out of GitHub" destructive onPress={onSignOut} />
             )}
           </Section>
-
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>RECENT REPOSITORIES</Text>
-            <TouchableOpacity onPress={() => nav.push({ name: "myRepos" })}>
-              <Text style={[styles.sectionLink, { color: theme.accent }]}>See all</Text>
-            </TouchableOpacity>
-          </View>
-
-          {repos.loading && !repos.data ? (
-            <LoadingState />
-          ) : repos.error && !repos.data ? (
-            <ErrorState error={repos.error} onRetry={repos.refresh} compact />
-          ) : (repos.data || []).length === 0 ? (
-            <Text style={[styles.note, { color: theme.textMuted }]}>No repositories yet.</Text>
-          ) : (
-            (repos.data || []).map((repo) => (
-              <TouchableOpacity
-                key={repo.id}
-                style={[styles.recentRow, { borderBottomColor: theme.border }]}
-                onPress={() => nav.push({ name: "repo", owner: repo.owner, repo: repo.name })}
-                onLongPress={() => onCloneRepo(repo.fullName)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.recentBody}>
-                  <Text style={[styles.recentName, { color: theme.textPrimary }]} numberOfLines={1}>
-                    {repo.name}
-                  </Text>
-                  <Text style={[styles.recentMeta, { color: theme.textMuted }]} numberOfLines={1}>
-                    {repo.language || "—"} · updated {formatStale(repo.updatedAt)}
-                    {repo.isPrivate ? " · private" : ""}
-                  </Text>
-                </View>
-                <Octicons name="chevron-right" size={13} color={theme.textMuted} />
-              </TouchableOpacity>
-            ))
-          )}
         </>
       )}
     </ScrollView>
@@ -254,7 +209,6 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   sectionTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 0.6 },
-  sectionLink: { fontSize: 11.5, fontWeight: "700" },
   note: { fontSize: 12, lineHeight: 17, paddingHorizontal: 12, paddingVertical: 8 },
   identity: {
     flexDirection: "row",
@@ -283,15 +237,4 @@ const styles = StyleSheet.create({
   },
   actionLabel: { flex: 1, fontSize: 12.5 },
   actionBadge: { fontSize: 11, fontWeight: "800" },
-  recentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  recentBody: { flex: 1, gap: 2 },
-  recentName: { fontSize: 13, fontWeight: "700" },
-  recentMeta: { fontSize: 10.5 },
 });

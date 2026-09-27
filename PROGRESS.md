@@ -1,5 +1,10 @@
 # Project Progress Tracker
 
+### [2026-09-27] - GitHub Home: recent repositories section removed
+- **User directive:** remove Recent Repositories from the GitHub Home tab.
+- **Change:** `GitHubHomeView.tsx` 297→239 — deleted the RECENT REPOSITORIES header + list block, the `fetchMyRepos("updated", 6)` resource, `onCloneRepo` prop, `fetchMyRepos`/`formatStale` imports, and the orphaned `sectionLink`/`recentRow`/`recentBody`/`recentName`/`recentMeta` styles. `GitHubSuiteView.tsx` home route no longer passes `onCloneRepo`. Home now ends at Quick actions; repos stay reachable via search bar, My/Starred actions, and counters.
+- **Verify:** `tsc --noEmit` shows zero errors in both touched files (repo-wide errors are pre-existing in dirty `contribPlan.ts`/`contribSnakeAnim.ts`, untouched here); grep confirms zero `onCloneRepo`/`recentRow`/`fetchMyRepos`/`formatStale` references left in `GitHubHomeView.tsx`; both files <500 lines. JS-only — Metro reload is enough, no APK rebuild.
+
 ### [2026-09-27] - Contribution animation: half speed (PACE = 2)
 - **User directive:** "the animation is too fast reduce to 50%".
 - **Change (`contribPlan.ts`, one place):** added `PACE` + an `ms(base)` helper at the top of the module and wrapped every duration through it, so pacing is a single number instead of a scatter of literals — snake pace/floor/ceiling (20ms→40ms per square, 2.6s→5.2s floor, 9s→18s cap), strafing pass bounds (900-1400ms→1800-2800ms) and the shared pass budget (5.2s→10.4s), pass gap, bullet flight, square fade, empty hold, refill, rest, snake exit. Every phase stays in proportion.

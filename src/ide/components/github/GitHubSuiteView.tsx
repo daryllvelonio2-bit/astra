@@ -203,7 +203,7 @@ interface RenderCtx {
 function renderRoute(route: GitHubRoute, nav: ReturnType<typeof useGitHubNavigation>, ctx: RenderCtx): React.ReactNode {
   switch (route.name) {
     case "home":
-      return <GitHubHomeView nav={nav} onCloneRepo={ctx.onCloneRepo} signedIn={!!ctx.session} onSignOut={ctx.signOut} />;
+      return <GitHubHomeView nav={nav} signedIn={!!ctx.session} onSignOut={ctx.signOut} />;
     case "search":
       return (
         <GitHubSearchView
