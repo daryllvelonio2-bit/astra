@@ -3,7 +3,8 @@
 ### [2026-09-27] - Snake hunts randomly instead of mowing columns
 - **User directive:** snake went up and down; make it move dynamically — random, not nearest.
 - **Cause:** the route chased a fixed left-to-right, top-to-bottom target list, so in dense weeks it mowed each column vertically — repeated up-down runs. (Nearest-neighbor was tried first and still read as repetitive; user corrected to random.)
-- **Change (`contribPlan.ts`, plan-only):** new `huntOrder` — starts at the newest week (in view, scroller pins to the recent end), then chases the remaining greens in Fisher-Yates-shuffled order, rebuilt fresh every cycle so no two runs trace the same path. `buildRoute`/`vanishAt`/pacing/animation nodes untouched, so bite sync and the single native-driven progress value are unchanged.
+- **Change (`contribPlan.ts`, plan-only):** new `huntOrder` — starts at the newest week (in view, scroller pins to the recent end), then each kill is a random pick among the 3 closest uneaten squares (`HUNT_WIDTH`), rebuilt fresh every cycle so no two runs trace the same trail while hops stay short. `buildRoute`/`vanishAt`/animation nodes untouched, so bite sync and the single native-driven progress value are unchanged.
+- **Pace fix:** per-step crushed to ~14ms by the old cap on long random walks; retuned to a steady cruise — `SNAKE_MS_PER_CELL` ms(20)→ms(30) (60ms/step effective), cap ms(15000)→ms(22500) (45s), floor ms(2600)→ms(1300) (2.6s). Measured: typical year ~300 steps/20s, full year ~600 steps/37s uncapped, sparse 6 greens 2.6s.
 - **Verify:** `tsc --noEmit` exit 0 repo-wide; **5/5 contract checks on the real compiled module** (5 fresh cycles all valid: unit Manhattan steps, every green eaten once inside the cycle; cycles differ across runs; every cycle starts at newest week; empty/single safe); temp probe + compiled output deleted after green.
 
 ### [2026-09-27] - GitHub Home: recent repositories section removed

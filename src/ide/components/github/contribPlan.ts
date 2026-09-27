@@ -41,9 +41,9 @@ export const EXIT_MS = ms(260);
 /** Gap between two strafing passes (the aircraft lines up out of sight). */
 const PASS_GAP_MS = ms(170);
 /** Longest a single animation may run before every square is gone. */
-const MAX_CYCLE_MS = ms(15000);
-/** Cruise pace: one steady tick per cell of the winding walk. */
-const SNAKE_MS_PER_CELL = ms(20);
+const MAX_CYCLE_MS = ms(22500);
+/** Cruise pace: one steady tick per cell of the hunt. */
+const SNAKE_MS_PER_CELL = ms(30);
 const SNAKE_MIN_MS = ms(1300);
 /** Classic arcade body: head plus this many trailing segments, in cells. */
 export const SNAKE_BODY_CELLS = 6;
