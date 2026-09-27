@@ -72,7 +72,6 @@ export interface SnakeStep {
   col: number;
   row: number;
 }
-
 export interface SnakePlan {
   mode: "snake";
   /** The head's walk in travel order: every cell entered, one grid step apart. */
@@ -80,6 +79,14 @@ export interface SnakePlan {
   cycleMs: number;
   /** Square key -> ms after cycle start at which the snake eats it. */
   vanishAt: Map<string, number>;
+  /** Square key -> every ms after cycle start at which the head walks over it. */
+  visitAt: Map<string, number[]>;
+  /**
+   * Route index where the head begins this hunt: the tip of the carried tail,
+   * so the head resumes exactly where it stopped with its body behind it —
+   * handoffs are invisible. Zero on the first hunt.
+   */
+  headStart: number;
 }
 
 export interface PlanePass {
@@ -139,16 +146,29 @@ const HUNT_WIDTH = 3;
  * Hops stay short (no cross-grid dashes), which keeps the walk — and the pace
  * below — bounded no matter how the shuffle lands.
  */
-function huntOrder(alive: ContribCell[]): ContribCell[] {
+function huntOrder(alive: ContribCell[], start?: ContribPoint): ContribCell[] {
   const remaining = new Map<string, ContribCell>();
   alive.forEach((c) => remaining.set(c.key, c));
-  // First kill is the start cell itself, so the head always appears in view.
-  const start = alive.reduce((best, c) =>
+  // First kill is the start cell itself, so the head always appears in view
+  // on the first hunt — and exactly where the last hunt ended on later ones.
+  const newest = alive.reduce((best, c) =>
     c.col > best.col || (c.col === best.col && c.row < best.row) ? c : best
   );
-  remaining.delete(start.key);
-  const order: ContribCell[] = [start];
-  let head: ContribPoint = { col: start.col, row: start.row };
+  // Match the start by coordinates, not key: keys are date strings, so a
+  // key lookup by "col:row" would miss every time and drop back to newest.
+  let first: ContribCell | undefined;
+  if (start) {
+    for (const c of remaining.values()) {
+      if (c.col === start.col && c.row === start.row) {
+        first = c;
+        break;
+      }
+    }
+  }
+  first ??= newest;
+  remaining.delete(first.key);
+  const order: ContribCell[] = [first];
+  let head: ContribPoint = { col: first.col, row: first.row };
   while (remaining.size) {
     const byDist = Array.from(remaining.values())
       .map((c) => ({ c, d: Math.abs(c.col - head.col) + Math.abs(c.row - head.row) }))
@@ -309,11 +329,16 @@ function buildRoute(
   return { route, bites };
 }
 
-export function buildSnakePlan(alive: ContribCell[], cols: number): SnakePlan {
+export function buildSnakePlan(
+  alive: ContribCell[],
+  cols: number,
+  start?: ContribPoint,
+  carry?: SnakeStep[]
+): SnakePlan {
   if (!alive.length) {
-    return { mode: "snake", route: [], cycleMs: SNAKE_MIN_MS, vanishAt: new Map() };
+    return { mode: "snake", route: [], cycleMs: SNAKE_MIN_MS, vanishAt: new Map(), visitAt: new Map(), headStart: 0 };
   }
-  const lunch = huntOrder(alive);
+  const lunch = huntOrder(alive, start);
   // Keep the pathfinder on the greens' turf (plus a little margin) so the
   // head routes around its body instead of detouring across empty grid.
   let lo = cols;
@@ -324,14 +349,45 @@ export function buildSnakePlan(alive: ContribCell[], cols: number): SnakePlan {
   });
   const c0 = Math.max(0, lo - 2);
   const c1 = Math.min(Math.max(cols - 1, 0), hi + 2);
-  const { route, bites } = buildRoute(lunch, c0, c1);
+  const fresh = buildRoute(lunch, c0, c1);
+  // Seamless handoff: lay the last hunt's tail ahead of the new walk, so the
+  // head starts exactly where it stopped with its body behind it — no pop, no
+  // teleport. The fresh walk's first cell duplicates the tail tip, counted
+  // once. A carry that doesn't joint (stale grid) is dropped, never jumped.
+  let route = fresh.route;
+  let headStart = 0;
+  const tail = carry && carry.length ? carry : null;
+  if (tail) {
+    const tip = tail[tail.length - 1];
+    const first = fresh.route[0];
+    if (first && tip.col === first.col && tip.row === first.row) {
+      route = [...tail, ...fresh.route.slice(1)];
+      // The head resumes ON the tip (not past it) — every step gets walked.
+      headStart = tail.length - 1;
+    }
+  }
   // One steady tick per cell: a long year costs more than a short one. The
   // floor keeps a bare year readable, the cap a crowded one from crawling.
   const cycleMs = Math.min(MAX_CYCLE_MS, Math.max(SNAKE_MIN_MS, route.length * SNAKE_MS_PER_CELL));
-  const vanishAt = new Map<string, number>();
   const span = Math.max(1, route.length - 1);
-  lunch.forEach((cell, i) => vanishAt.set(cell.key, ((bites[i] ?? span) / span) * cycleMs));
-  return { mode: "snake", route, cycleMs, vanishAt };
+  // Every walk over a green eats it — first visits and revisits alike — so a
+  // square that respawned behind the head dies again when walked over. The
+  // carried tail ahead of headStart is body layout, never re-walked.
+  const coordToKey = new Map<string, string>();
+  alive.forEach((c) => coordToKey.set(`${c.col}:${c.row}`, c.key));
+  const visitAt = new Map<string, number[]>();
+  route.forEach((s, j) => {
+    if (j < headStart) return;
+    const key = coordToKey.get(`${s.col}:${s.row}`);
+    if (!key) return;
+    const t = (j / span) * cycleMs;
+    const arr = visitAt.get(key);
+    if (arr) arr.push(t);
+    else visitAt.set(key, [t]);
+  });
+  const vanishAt = new Map<string, number>();
+  visitAt.forEach((times, key) => vanishAt.set(key, times[0]));
+  return { mode: "snake", route, cycleMs, vanishAt, visitAt, headStart };
 }
 
 export function buildPlanePlan(alive: ContribCell[], cols: number): PlanePlan {

@@ -24,6 +24,25 @@
   daryllvelonio2-bit/astra renders centered heading, 5 badge pills, tables,
   no raw markup; tsc exit 0; ReactNativeJS error count 0.
 
+### [2026-09-27] - Snake bites every walk over a green, revisits included
+- **User directive:** snake walked over newly spawned squares without eating them.
+- **Cause:** one pre-scheduled bite per square per hunt — a respawned square re-crossed later had no bite left.
+- **Change:** plan records `visitAt` (every head step over a green, firsts + revisits); driver schedules a bite per visit, each with its own respawn — a relight is skipped only when a later bite takes over first. Handoff-safe via per-hunt generations + stopping all live bites per square.
+- **Verify:** `tsc --noEmit` exit 0. Seam probe: 155–170 bites for 111 greens, every green step covered exactly on arrival, joints still exact. Full probe 6/6, 350ms pace.
+
+### [2026-09-27] - True continuity: production key bug + seamless handoff
+- **User directive:** still reset after the first batch — remove the reset, make it continuous.
+- **Root cause (real one):** `huntOrder` looked up the handoff start with `remaining.get("col:row")`, but production square keys are date strings — the lookup missed every time, fell back to newest-week, and teleported the head to the top on every handoff. Probes never caught it because they used `col:row` keys.
+- **Change (`contribPlan.ts`):** start matched by coordinates; `buildSnakePlan` takes the last hunt's 7-step tail and lays it ahead of the fresh walk, head resumes ON the tip (`headStart`), bite times shift into the combined walk. Driver carries the tail ref + starts progress at `headStart`, so all seven segments resume pixel-identical — no teleport, no body pop, every step walked.
+- **Verify:** `tsc --noEmit` exit 0. Seam probe with production-shaped date keys: 4/4 hunts joint-exact, unit steps, every green timed in-cycle. Full probe 6/6, 350ms pace.
+- **Lesson:** probes must use production-shaped keys (date strings), never `col:row`.
+
+### [2026-09-27] - Hunts chain positionally, no teleport back to top
+- **User directive:** snake reset to the top after every batch and never ate respawns on the way.
+- **Cause:** every hunt rebuilt from the newest week, so the head teleported there at each handoff.
+- **Change:** `huntOrder`/`buildSnakePlan` take an optional start; driver keeps `lastEnd` ref — first hunt opens newest-week (in view), every later hunt starts exactly where the head stopped. New spawns are just greens, so the passing snake eats them like any other kill.
+- **Verify:** `tsc --noEmit` exit 0. Chain probe 4/4 hunts start on previous end; full probe 6/6 green.
+
 ### [2026-09-27] - Hunt reset removed
 - **User directive:** the snake shouldn't reset.
 - **Change (`useContribAnimation.ts`):** exit fade and reset beat reverted; hunts chain instantly again, and only the very first appearance fades in — later hunts take over with the snake already visible.
