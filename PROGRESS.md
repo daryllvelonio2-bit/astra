@@ -1,5 +1,11 @@
 # Project Progress Tracker
 
+### [2026-09-27] - Contribution animation: half speed (PACE = 2)
+- **User directive:** "the animation is too fast reduce to 50%".
+- **Change (`contribPlan.ts`, one place):** added `PACE` + an `ms(base)` helper at the top of the module and wrapped every duration through it, so pacing is a single number instead of a scatter of literals — snake pace/floor/ceiling (20ms→40ms per square, 2.6s→5.2s floor, 9s→18s cap), strafing pass bounds (900-1400ms→1800-2800ms) and the shared pass budget (5.2s→10.4s), pass gap, bullet flight, square fade, empty hold, refill, rest, snake exit. Every phase stays in proportion.
+- **Now:** full-year snake ≈ 14.8s (was 7.4s), full-year aircraft ≈ 14.6s over up to 7 passes (was 7.3s), bullet fall 480ms, empty hold 1.7s, refill 840ms, rest before the next random mode 1.5s — roughly a 18.5s cycle.
+- **Verify:** `tsc --noEmit` exit 0; **25/25 contract checks** on the real bundled module, including four new pace assertions (all six exported durations exactly doubled, ~40ms per square, bounded cycle) and the unchanged correctness set.
+
 ### [2026-09-27] - Contribution graph: snake + aircraft animations (random per cycle)
 - **User directive:** make the contribution graph animated and dynamic — a snake that eats the greens, plus a shooting aircraft whose shots make the contributions vanish until none are left, then they reappear; pick between the two at random.
 - **Pure planning (`contribPlan.ts`, new 201 lines):** grid geometry (cell centre/row centre, lane heights, grid width/clamps) + `buildSnakePlan` (serpentine route over every square, newest week first so the snake starts in view, one hit time per green as the head arrives) + `buildPlanePlan` (passes clear the top-most surviving square per column, so pass count = tallest column and empty passes never happen; each square's death = bullet fire time + flight; aircraft flies right→left so a column's x decides when the plane is overhead) + `pickContribMode` (random, never twice in a row). No React/Animated.

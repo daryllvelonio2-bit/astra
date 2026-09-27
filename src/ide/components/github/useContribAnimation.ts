@@ -12,6 +12,7 @@ import {
   buildPlanePlan,
   buildSnakePlan,
   pickContribMode,
+  snakeEase,
 } from "./contribPlan";
 import { SnakeNodes, buildSnakeNodes } from "./contribSnakeAnim";
 import { PlaneNodes, bulletFlight, buildPlaneNodes, planeClockSteps } from "./contribPlaneAnim";
@@ -111,7 +112,8 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
         Animated.timing(snake.progress, {
           toValue: snake.end,
           duration: plan.cycleMs,
-          easing: Easing.linear,
+          // Lunge profile: the head swells and eases instead of sliding.
+          easing: snakeEase,
           useNativeDriver: true,
         })
       );
