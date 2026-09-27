@@ -52,21 +52,21 @@ export function buildPlaneNodes(plan: PlanePlan, _cols: number): PlaneNodes | nu
   const time = new Animated.Value(0);
   const turretX = plan.turretX;
 
-  // Build smooth continuous keyframes for the turret's vertical tracking
+  // Build smooth continuous keyframes for the jet's vertical tracking
   const timeKeyframes: [number, number][] = [];
-  const y0 = plan.shots[0].targetY - 8;
+  const y0 = plan.shots[0].targetY - 9;
   timeKeyframes.push([0, y0]);
 
   const AIM_HOLD_MS = 250;
 
   for (let i = 0; i < plan.shots.length; i++) {
     const curShot = plan.shots[i];
-    const curY = curShot.targetY - 8;
+    const curY = curShot.targetY - 9;
     timeKeyframes.push([curShot.fireAt, curY]);
 
     if (i < plan.shots.length - 1) {
       const nextShot = plan.shots[i + 1];
-      const nextY = nextShot.targetY - 8;
+      const nextY = nextShot.targetY - 9;
       const moveStart = curShot.fireAt + curShot.flightMs + 120;
       const moveEnd = nextShot.fireAt - AIM_HOLD_MS;
       const dt = moveEnd - moveStart;
@@ -81,7 +81,7 @@ export function buildPlaneNodes(plan: PlanePlan, _cols: number): PlaneNodes | nu
       }
     }
   }
-  timeKeyframes.push([plan.cycleMs, plan.shots[plan.shots.length - 1].targetY - 8]);
+  timeKeyframes.push([plan.cycleMs, plan.shots[plan.shots.length - 1].targetY - 9]);
 
   // Deduplicate and filter any non-strictly-increasing timestamps
   const inputRange: number[] = [];

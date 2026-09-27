@@ -1,5 +1,77 @@
 # Project Progress Tracker
 
+### [2026-09-27] - Repo header: ⋯ moved up beside Watch, Clone folded into the ⋯ menu
+- **Ask:** put the 3-dot button beside the watch button as the last item in that cluster, and move Clone into the ⋯ menu too.
+- **`GitHubRepoView.tsx` (421):** the top-right cluster beside the repo name is now `[★ n] [⑂ n] [👁] [⋯]` (⋯ last), so the overflow sits with the other repo actions instead of on its own row. Clone's header button is gone; the header action row now renders **only** the Follow button, and only when viewing someone else's repo — on your own repos that whole row and its height disappear.
+- **`GitHubRepoMenu.tsx` (120):** `openRepoMenu` now takes `onClone`; "Clone" is the first row (hint: "Copy this repository into the current workspace", wired to `onCloneRepo(fullName)`), followed by Commits / Releases / Contributors / Settings.
+- **Cleanup:** `SmallBtn` lost its now-unused `accent` and optional-label/icon-only branches (no callers left) and the dead `smallBtnIconOnly` style was removed.
+- **Verification:** `npx tsc --noEmit` → No errors found; 421 / 120 lines, both under 500. JS-only (Metro reload).
+
+### [2026-09-28] - Commit detail "Changes" now shows real +additions / -deletions (was a static 0)
+- **Ask:** in the GitHub repo → Commits → a commit's Changes, the added/deleted counts don't display — they're stuck at 0.
+- **Root cause:** `GitHubHistoryViews.tsx` built the commit diff row with a hardcoded literal — `file={{ filename: "Changes", status: "modified", additions: 0, deletions: 0, changes: 0, patch: c.patch }}` — so `GitHubFileDiff`'s header always rendered `+0 -0`. The real numbers were already in the API response (`stats.additions/deletions` and every `files[].additions/deletions`) but `fetchCommit` threw them away, returning only a concatenated patch string + file count.
+- **Changes:**
+  - `gitHubTypes.ts` (301 → 310): new `GitHubCommitDetail extends GitHubCommitSummary` carrying `patch`, `files`, `additions`, `deletions` — replaces the anonymous intersection type on `fetchCommit`.
+  - `gitHubRepoService.ts` (318 → 335): `commitLineStats(json, files)` reads the API `stats` block, falling back to the per-file sums when `stats` is `null` (merge commits); `fetchCommit` returns those totals. Nothing is counted client-side.
+  - `GitHubHistoryViews.tsx` (162 → 184): the diff row gets the real counts, and the header meta line now reads like github.com — `Showing N changed files with X additions and Y deletions` (singular/plural handled, green/red on the counts) replacing the old duplicate `N files` suffix.
+- **Verification:** `npx tsc --noEmit` → "No errors found" (exit 0). Headless probe sliced the real `commitLineStats` out of the shipped file and fed it live `api.github.com` payloads: stats path `+1 -1`, stats==sum(files), `stats: null` merge fallback `+1 -1` (non-zero, not 0), and empty/undefined/partial inputs → `+0 -0` / `+3 -2` with no throw; plus a regression guard asserting the hardcoded `additions: 0, deletions: 0` literal is gone. Probe deleted after green. All touched files ≤ 335 lines (cap 500). JS-only (Metro reload).
+- **Note:** the commit detail still renders all changed files as one concatenated "Changes" block; per-file rows (each with its own +N/-N, like github.com) are the natural next step if wanted.
+
+### [2026-09-27] - Repo header: branch moved into the code toolbar, 4 actions collapsed into a ⋯ menu
+- **Ask:** the header's horizontally scrollable button strip (Clone, branch, Follow, Commits, Releases, Contributors, Settings) had too many items; put them somewhere better and reduce the count.
+- **Branch → code toolbar.** `RepoCodeHeader` is now a real toolbar: a branch chip (`🌿 main ▾`, tap → branch list) on the left, divider, then the latest-commit area. The branch is a property of the tree it switches, exactly where github.com keeps it. New `onOpenBranches` prop, passed down from `GitHubRepoView`; the old `(ref: string) => void` signature was simplified to `() => void` since the branches route ignores the ref.
+- **4 buttons → 1 ⋯ menu.** New `GitHubRepoMenu.tsx` (108): `openRepoMenu()` shows Commits / Releases / Contributors / Settings as labelled rows with hints, rendered through the shared `showAppDialog` content slot (no second modal implementation) and dismissing itself before navigating.
+- **`GitHubRepoView.tsx` (422):** the action ScrollView is gone — the row is now three fixed buttons: `Clone` (accent), Follow (icon-only, only when viewing someone else), `⋯`. `SmallBtn` gained an optional `label` and renders icon-only at 30×24px with an `accessibilityLabel`; the dead `actionScroll` style was removed.
+- **Effect:** header row 7 scrollable items → 3 static; nothing hides off-screen, and the header loses another row height. The branch switcher is only reachable from the Code tab, which matches github.com.
+- **Verification:** `npx tsc --noEmit` → No errors found; files 422 / 222 / 166 / 161 / 108 lines (all under 500). JS-only (Metro reload).
+
+### [2026-09-27] - GitHub code tab: per-row "last commit" line (message + age) like github.com
+- **Ask:** github.com's file/folder list shows each entry's last commit title and when it was updated; Astra's list showed only name/size.
+- **Approach:** REST needs one `/commits?path=` call per row, so instead added GraphQL support (`ghGraphQL` in `gitHubApi.ts`) and used `Commit.history(first: 1, path:)`, which filters commits touching a path — **one aliased query covers the whole folder** (40 paths/request).
+- **New files:** `src/ide/services/gitHubTreeCommitService.ts` (157) — builds the aliased query, maps `messageHeadline`/`committedDate`/`oid`/author, memoizes results per `repo@ref:path` (120s TTL, 600-entry LRU-ish cap), and exports `invalidateTreeCommitCache()`. Guard rails: max 160 paths and 4 parallel requests so a 1000-entry root can't fire dozens of calls on mobile. `src/ide/components/github/useTreeCommits.ts` (30) — thin hook over the service; failures are silent in the UI and logged once for Metro.
+- **`GitHubRepoCodeView.tsx` (220):** entries sorted once via `useMemo`, each row is now two lines — name, then `<commit title> · 3h ago` in 9.5pt muted text (author stays on the banner, matching github.com's list). Row padding tightened to 8→kept, icon top-aligned.
+- **`GitHubFileEditor.tsx`:** `commitFileEdit` drops the memo on success so a fresh commit isn't hidden behind cached row info.
+- **Verification:** `npx tsc --noEmit` → No errors found. GraphQL document extracted from the **shipped source** via esbuild and parse-checked with graphql@16 at 1/2/40 aliases (variables and path args wired correctly, 10,966 bytes at 40 paths).
+- **Not verified:** live schema/response shape — no GitHub token on this machine. If the field names were wrong the row line would simply not appear; check the Metro log for `[github] tree commit info unavailable` to tell the difference between "no data" and "query rejected".
+
+### [2026-09-27] - GitHub repo header compacted (~35% shorter) for more content space
+- **Ask:** the repo view's second header (avatar, name, star/fork/watch, secondary actions) took too much room; make it compact and better arranged, ~30% smaller so files/README get more space.
+- **Arrangement:** three stacked rows (stats row + two wrapped action rows) collapsed to two. Star/Fork/Watch moved up beside the repo name as compact icon+count `StatBtn`s; the secondary actions (Clone, branch, Follow, Commits, Releases, Contributors, Settings) now share one horizontally scrollable row instead of wrapping onto a second line. `homepage` folded into the meta line (was its own row). Topics became a single-line horizontal scroll instead of a wrapping block.
+- **Metrics:** avatar 30→24, header padding 10/8→7/6, row gaps 8→5, action chips 28→24 high, `smallBtn` 24→22→kept 24 but unified with a bordered chip look, description clamped 3→2 lines, language bar 4→3 with tighter wrapper, tabs 8→6 padding and 6→4 margin, meta text 10→9.5. Content side tightened too: tree rows 10→8, commit banner 9→7, breadcrumb 6→5.
+- **`CountChip` removed**, replaced by `StatBtn`; `SmallBtn` gained `accent` (Clone) and now renders as a bordered/bg'd chip like the stats.
+- **Measured effect:** header block 293px → ~188px (≈36% shorter) with a 2-line description; ≈31% with a 3-line description. All chips/tabs shrink proportionally.
+- **Tradeoffs (flagged, not hidden):** descriptions longer than 2 lines now truncate; stat/action chips are 24px tall, below Android's 48dp tap-target guidance — intentional for the compact look, say the word and I'll bump padding back.
+- **Verification:** `npx tsc --noEmit` → No errors found; `GitHubRepoView.tsx` 358, `GitHubRepoCodeView.tsx` 192, `GitHubRepoCodeHeader.tsx` 128 lines (all under 500). JS-only (Metro reload).
+
+### [2026-09-27] - GitHub UI phase 2: file-level commit banner + repo header topics/pushed
+- **`GitHubFileView.tsx`:** the plain "History for this file" row is replaced by `RepoCodeHeader` scoped to the file's own path, so the viewer now opens with the last commit that touched that file (avatar, commit title, author, "authored X ago", short SHA) exactly like github.com; tapping it still opens the path-scoped commits list. `onOpenCommits` retained as the banner's handler.
+- **`GitHubRepoCodeHeader.tsx`:** `onOpenCommits` is now optional (banner renders read-only and non-pressable when absent), so the same component serves the tree and the file view.
+- **`GitHubRepoView.tsx` (304 → 345 lines):** repo header now shows `updated <stale>` plus a separate `pushed <stale>` line when the two differ, and renders the repo's topics as accent pills (first 6, then "+N") between the description and the action chips. New `topicRow`/`topic` styles.
+- **Verification:** `npx tsc --noEmit` → No errors found; files 143 / 345 / 128 lines, all under the 500 cap. JS-only (Metro reload).
+
+### [2026-09-27] - GitHub UI: latest-commit banner on repo code tab + sort/activity header on My repositories
+- **Goal:** make the GitHub surface match github.com more closely on the "My repositories" list and inside an opened repo's Code tab.
+- **New file** `src/ide/components/github/GitHubRepoCodeHeader.tsx` (128 lines): `RepoCodeHeader` shows the single latest commit for the current path at the current ref. Author avatar, first line of commit message ("title"), author login, "authored X ago", short SHA on the right. Tap pushes `commits` route scoped to that ref/path. Exposes `useLatestCommit()` hook so views stay dumb.
+- **`GitHubRepoCodeView.tsx` (170 → 192 lines):** renders `RepoCodeHeader` at the top — always, including inside subfolders (refetch keyed on path). Adds a proper breadcrumb pill (`owner/repo · some/path`) when `path` is set, replacing the old plain-text crumb. Accepts new required `nav: GitHubNavigation` prop.
+- **`GitHubRepoView.tsx`:** passes `nav={nav}` into `GitHubRepoCodeView` (one-line wiring).
+- **`GitHubRow.tsx`:** replaces glyph text `★`/`⑂` with real `Octicons` chips (`star`, `repo-forked`). "Updated 3h ago" prefix so the meta line reads like github.com. Topics render as accent pills (first 4, then "+N"). Adds `metaChip`, `topicRow`, `topic` styles.
+- **`GitHubRepoListView.tsx` (75 → 166 lines):** adds a 3-option sort chip row for `mode === "mine"` (Last updated / Recently pushed / Name — maps to `updated`/`pushed`/`full_name` in `fetchMyRepos`). Adds a "Latest activity on \<repo\> · Xh ago" banner under the header. Count is now pinned at the top.
+- **Verification:** `npx tsc --noEmit` → "No errors found"; all touched files well under the 500-line cap (max: `GitHubRow.tsx` at 303).
+- **Phasing:** Phase 1 of the GitHub UI polish. No APK rebuilt (JS-only, Metro reload picks it up).
+
+### [2026-09-27] - Redesign contribution shooter into a sleek mini starfighter jet
+- **User directives:** improve the jet that was shooting, its bad looking.
+- **Changes:**
+  - `ContribAnimOverlay.tsx`: replaced crude blocky rectangles with a detailed mini starfighter jet facing left towards the targets:
+    - Sleek fuselage body (`theme.accentCyan`) with forward needle nose emitter (`theme.textPrimary`).
+    - Swept-back angled delta wings (`theme.accent`, rotated $\pm 28^\circ$) with wingtip cannon pods (`theme.accentGold`).
+    - Tinted cockpit canopy bubble (`theme.accentGold`) with a white glint highlight.
+    - Rear vertical stabilizer fins (`theme.accentCyan`).
+    - Twin engine afterburner exhaust nozzle with glowing red thruster flame plume (`theme.accentRed`).
+  - `contribShooterPlan.ts`: expanded `SHOOTER_SPACE` to 28px to comfortably fit the jet wings and afterburner flame.
+  - `contribPlaneAnim.ts`: recalibrated vertical centering offset (`targetY - 9`) to perfectly align the nose cannon with the laser bolt path.
+- **Verification:** `npx tsc --noEmit` exit 0 (0 errors). All touched files $\le 284$ lines (well under 500-line cap).
+
 ### [2026-09-27] - Update contribution shooter pace to 1 shot per 2 seconds
 - **User directives:** make shooting delay 1 shoot per 2 second.
 - **Changes:**
@@ -4793,3 +4865,8 @@
 - **Root cause:** `contribPlan` imported `ShooterPlan`/`buildShooterPlan` from `contribShooterPlan`, while `contribShooterPlan` imported grid geometry (`CELL`, `GAP`, `ROWS`, `SKY`, helpers, `ContribCell`) back from `contribPlan`.
 - **Fix:** extracted the shared leaf module `contribGrid.ts` (geometry consts, `ContribPoint`/`ContribCell`, `cellCenterX`/`rowCenterY`/`gridWidth`/`muzzleY`/`planeTop` — 39 lines). `contribShooterPlan` now imports from `./contribGrid`; `contribPlan` imports + re-exports the grid symbols so all existing consumers (`GitHubContribGraph`, `useContribAnimation`, `contribSnakeAnim`, `contribPlaneAnim`, `ContribAnimOverlay`) keep working unchanged. Dependency direction is now one-way: `contribPlan -> contribShooterPlan -> contribGrid`, no cycle.
 - **Verification:** `tsc --noEmit` shows zero errors in contrib/github files (remaining errors are pre-existing in unrelated `git/useGitOperations.ts`); files under 500-line limit (`contribPlan` 391, `contribShooterPlan` 95, `contribGrid` 39). No rebuild (JS-only, Metro reload).
+
+### [2026-09-27] - Repo language legend gets color dots
+- **User report:** language percentages (e.g. TypeScript 93%) had no color dot showing which color is which language.
+- **Fix (`GitHubRepoView.tsx`, 359 -> 423 lines):** legend row now renders an 8px color dot before each `name %` entry, using the same color as that language's bar segment. Added GitHub linguist color map (TypeScript #3178c6, Python, Go, Rust, etc.); unknown languages fall back to the old accent/shade rotation.
+- **Verification:** `tsc --noEmit` zero errors in `GitHubRepoView`; file under 500-line limit. No rebuild (JS-only, Metro reload).

@@ -1,6 +1,7 @@
 import { ghGet, ghGetText, ghList, GitHubResult } from "./gitHubApi";
 import {
   GitHubBranchInfo,
+  GitHubCommitDetail,
   GitHubCommitSummary,
   GitHubContentEntry,
   GitHubFileText,
@@ -238,11 +239,27 @@ export async function fetchCommits(
   return { ok: true, data: res.data.map(mapCommit) };
 }
 
+/** Real line counts for a commit: the API `stats` block when present
+ *  (null on merge commits), else the sum of the per-file counts. */
+function commitLineStats(json: any, files: any[]): { additions: number; deletions: number } {
+  const stats = json?.stats;
+  if (typeof stats?.additions === "number" && typeof stats?.deletions === "number") {
+    return { additions: stats.additions, deletions: stats.deletions };
+  }
+  let additions = 0;
+  let deletions = 0;
+  for (const f of files) {
+    if (typeof f?.additions === "number") additions += f.additions;
+    if (typeof f?.deletions === "number") deletions += f.deletions;
+  }
+  return { additions, deletions };
+}
+
 export async function fetchCommit(
   owner: string,
   repo: string,
   sha: string
-): Promise<GitHubResult<GitHubCommitSummary & { patch: string; files: number }>> {
+): Promise<GitHubResult<GitHubCommitDetail>> {
   const res = await ghGet<any>(`/repos/${owner}/${repo}/commits/${sha}`);
   if (!res.ok) return res;
   const base = mapCommit(res.data);
@@ -250,7 +267,8 @@ export async function fetchCommit(
   const patch = files
     .map((f: any) => `--- ${f.filename}\n${f.patch || "(binary or too large)"}`)
     .join("\n\n");
-  return { ok: true, data: { ...base, patch, files: files.length } };
+  const { additions, deletions } = commitLineStats(res.data, files);
+  return { ok: true, data: { ...base, patch, files: files.length, additions, deletions } };
 }
 
 export async function fetchReleases(

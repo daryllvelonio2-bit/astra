@@ -48,16 +48,47 @@ export function RepoRow({
           )}
           <View style={rowStyles.meta}>
             {!!repo.language && <Text style={[rowStyles.metaText, { color: theme.accent }]}>{repo.language}</Text>}
-            {repo.stars > 0 && <Text style={[rowStyles.metaText, { color: theme.textMuted }]}>★ {repo.stars}</Text>}
-            {repo.forks > 0 && <Text style={[rowStyles.metaText, { color: theme.textMuted }]}>⑂ {repo.forks}</Text>}
+            {repo.stars > 0 && (
+              <View style={rowStyles.metaChip}>
+                <Octicons name="star" size={9} color={theme.textMuted} />
+                <Text style={[rowStyles.metaText, { color: theme.textMuted }]}>{repo.stars}</Text>
+              </View>
+            )}
+            {repo.forks > 0 && (
+              <View style={rowStyles.metaChip}>
+                <Octicons name="repo-forked" size={9} color={theme.textMuted} />
+                <Text style={[rowStyles.metaText, { color: theme.textMuted }]}>{repo.forks}</Text>
+              </View>
+            )}
             {repo.openIssues > 0 && (
               <Text style={[rowStyles.metaText, { color: theme.textMuted }]}>{repo.openIssues} issues</Text>
             )}
             {repo.isArchived && <Text style={[rowStyles.metaText, { color: theme.accentGold }]}>archived</Text>}
             {!!repo.updatedAt && (
-              <Text style={[rowStyles.metaText, { color: theme.textMuted }]}>{formatStale(repo.updatedAt)}</Text>
+              <Text style={[rowStyles.metaText, { color: theme.textMuted }]}>
+                Updated {formatStale(repo.updatedAt)}
+              </Text>
             )}
           </View>
+          {repo.topics && repo.topics.length > 0 && (
+            <View style={rowStyles.topicRow}>
+              {repo.topics.slice(0, 4).map((t) => (
+                <Text
+                  key={t}
+                  style={[
+                    rowStyles.topic,
+                    { color: theme.accent, backgroundColor: `${theme.accent}18`, borderColor: `${theme.accent}35` },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {t}
+                </Text>
+              ))}
+              {repo.topics.length > 4 && (
+                <Text style={[rowStyles.topic, { color: theme.textMuted }]}>+{repo.topics.length - 4}</Text>
+              )}
+            </View>
+          )}
         </View>
         {trailing}
         {onClone && (
@@ -243,7 +274,17 @@ export const rowStyles = StyleSheet.create({
   title: { fontSize: 13, fontWeight: "700" },
   sub: { fontSize: 11.5, lineHeight: 15 },
   meta: { flexDirection: "row", gap: 10, flexWrap: "wrap", marginTop: 1, alignItems: "center" },
+  metaChip: { flexDirection: "row", alignItems: "center", gap: 3 },
   metaText: { fontSize: 10.5 },
+  topicRow: { flexDirection: "row", gap: 6, flexWrap: "wrap", marginTop: 4, alignItems: "center" },
+  topic: {
+    fontSize: 9.5,
+    fontWeight: "700",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   labelRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 3 },
   label: { fontSize: 10, fontWeight: "700" },
   chip: {

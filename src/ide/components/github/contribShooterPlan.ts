@@ -6,8 +6,8 @@ import {
   rowCenterY,
 } from "./contribGrid";
 
-/** Dedicated space on the right edge of the grid for the shooter turret. */
-export const SHOOTER_SPACE = 24;
+/** Dedicated space on the right edge of the grid for the shooter jet. */
+export const SHOOTER_SPACE = 28;
 /** Flight duration for a laser bolt from the turret to a target (fast by default). */
 export const LASER_FLIGHT_MS = 130;
 /** Duration of the block fragment explosion. */

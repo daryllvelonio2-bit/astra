@@ -4,6 +4,7 @@ import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { useKeyboardMouseMode } from "../../context/KeyboardMouseContext";
 import { ghPut, GitHubResult } from "../../services/gitHubApi";
+import { invalidateTreeCommitCache } from "../../services/gitHubTreeCommitService";
 
 /**
  * Commit a file edit straight to GitHub, the way the web editor does:
@@ -29,6 +30,9 @@ export async function commitFileEdit(
     ...(payload.newBranch ? { branch: payload.newBranch } : {}),
   });
   if (!res.ok) return { ok: false, error: res.error };
+  // The tree's per-row "last commit" lines are memoized; a fresh commit
+  // makes them stale, so drop the memo before the code tab re-reads.
+  invalidateTreeCommitCache();
   return { ok: true, data: { commitSha: res.data?.commit?.sha || "" } };
 }
 

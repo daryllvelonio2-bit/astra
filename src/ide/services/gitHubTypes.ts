@@ -54,6 +54,16 @@ export interface GitHubRepo {
   sizeKb: number;
 }
 
+export interface GitHubTreeCommit {
+  /** First line of the commit message — the "title" github.com shows. */
+  messageHeadline: string;
+  committedDate: string;
+  oid: string;
+  authorLogin: string;
+  authorAvatar: string;
+  authorName: string;
+}
+
 export interface GitHubContentEntry {
   name: string;
   path: string;
@@ -88,6 +98,15 @@ export interface GitHubCommitSummary {
   authorAvatar: string;
   date: string;
   htmlUrl: string;
+}
+
+/** A single commit plus its diff. Line counts come from the API's `stats`
+ *  (falling back to the per-file sums) — never counted client-side. */
+export interface GitHubCommitDetail extends GitHubCommitSummary {
+  patch: string;
+  files: number;
+  additions: number;
+  deletions: number;
 }
 
 export interface GitHubRelease {

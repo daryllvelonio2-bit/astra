@@ -196,6 +196,19 @@ export function ghDelete<T>(path: string, body?: unknown): Promise<GitHubResult<
   return request<T>("DELETE", path, body !== undefined ? { body } : undefined);
 }
 
+/**
+ * GraphQL v4. Used where REST would need one request per item (e.g. the
+ * last commit for every row in a folder) — aliases collapse that into a
+ * single call. A 200 response can still carry `errors`, so callers must
+ * check the payload shape instead of trusting `ok` alone.
+ */
+export function ghGraphQL<T>(
+  query: string,
+  variables?: Record<string, unknown>
+): Promise<GitHubResult<T>> {
+  return request<T>("POST", "/graphql", { body: { query, variables: variables || {} } });
+}
+
 /** Follow `Link: rel="next"` up to `maxPages`; returns everything collected. */
 export async function ghListAll<T>(
   path: string,

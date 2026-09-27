@@ -7,12 +7,14 @@ import { ghGet } from "../../services/gitHubApi";
 import { useGitHubResource } from "./useGitHubResource";
 import { ErrorState, LoadingState } from "./GitHubStates";
 import { formatBytes } from "./GitHubRepoCodeView";
+import { RepoCodeHeader } from "./GitHubRepoCodeHeader";
 
 /**
  * Read-only file viewer. Shows the raw source with line numbers, plus the
- * commit that last touched the file. Editing a file on GitHub is a commit
- * workflow, so the editor sheet (with its own commit message) lives in
- * GitHubFileEditor — this view only reads.
+ * commit that last touched the file (same banner github.com shows above a
+ * file's contents). Editing a file on GitHub is a commit workflow, so the
+ * editor sheet (with its own commit message) lives in GitHubFileEditor —
+ * this view only reads.
  */
 
 export function GitHubFileView({
@@ -79,14 +81,13 @@ export function GitHubFileView({
       )}
 
       {onOpenCommits && (
-        <TouchableOpacity
-          style={[styles.editRow, { borderBottomColor: theme.border }]}
-          onPress={onOpenCommits}
-          activeOpacity={0.7}
-        >
-          <Octicons name="history" size={12} color={theme.textSecondary} />
-          <Text style={[styles.editText, { color: theme.textSecondary }]}>History for this file</Text>
-        </TouchableOpacity>
+        <RepoCodeHeader
+          owner={owner}
+          repo={repo}
+          refName={refName}
+          path={path}
+          onOpenCommits={onOpenCommits}
+        />
       )}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>

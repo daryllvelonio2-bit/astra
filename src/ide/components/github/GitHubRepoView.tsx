@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { fetchRepo, fetchLanguages } from "../../services/gitHubRepoService";
@@ -11,6 +11,7 @@ import { GitHubIssueListView } from "./GitHubIssueListView";
 import { GitHubActionsView } from "./GitHubActionsView";
 import { GitHubNavigation } from "./useGitHubNavigation";
 import { formatStale } from "../../services/gitHubProfileService";
+import { openRepoMenu } from "./GitHubRepoMenu";
 
 /**
  * The repository screen: identity header (star / watch / fork / follow),
@@ -33,7 +34,7 @@ export function GitHubRepoView({
   nav: GitHubNavigation;
   login?: string;
   onCloneRepo: (fullName: string) => void;
-  onOpenBranches: (ref: string) => void;
+  onOpenBranches: () => void;
 }) {
   const { theme } = useTheme();
   const [tab, setTab] = useState<RepoTabKey>("code");
@@ -74,41 +75,86 @@ export function GitHubRepoView({
             <View style={styles.metaRow}>
               <Octicons
                 name={r.isPrivate ? "lock" : r.isFork ? "repo-forked" : "repo"}
-                size={10}
+                size={9}
                 color={theme.textMuted}
               />
               <Text style={[styles.metaText, { color: theme.textMuted }]}>{r.visibility}</Text>
               {!!r.license && <Text style={[styles.metaText, { color: theme.textMuted }]}>{r.license}</Text>}
-              <Text style={[styles.metaText, { color: theme.textMuted }]}>updated {formatStale(r.updatedAt)}</Text>
+              {!!r.updatedAt && (
+                <Text style={[styles.metaText, { color: theme.textMuted }]}>
+                  updated {formatStale(r.updatedAt)}
+                </Text>
+              )}
+              {!!r.pushedAt && r.pushedAt !== r.updatedAt && (
+                <Text style={[styles.metaText, { color: theme.textMuted }]}>
+                  pushed {formatStale(r.pushedAt)}
+                </Text>
+              )}
+              {!!r.homepage && (
+                <Text style={[styles.metaText, { color: theme.accent }]} numberOfLines={1}>
+                  {r.homepage}
+                </Text>
+              )}
             </View>
+          </View>
+          <View style={styles.statRow}>
+            <StatBtn
+              icon="star"
+              value={r.stars}
+              onPress={() => action.run(() => starRepo(owner, repo), detail.refresh)}
+            />
+            <StatBtn
+              icon="repo-forked"
+              value={r.forks}
+              onPress={() => action.run(() => forkRepo(owner, repo), detail.refresh)}
+            />
+            <StatBtn icon="eye" onPress={() => action.run(() => watchRepo(owner, repo))} />
+            <StatBtn
+              icon="kebab-horizontal"
+              onPress={() =>
+                openRepoMenu({
+                  nav,
+                  owner,
+                  repo,
+                  refName,
+                  onClone: () => onCloneRepo(r.fullName),
+                })
+              }
+            />
           </View>
         </View>
 
         {!!r.description && (
-          <Text style={[styles.description, { color: theme.textSecondary }]} numberOfLines={3}>
+          <Text style={[styles.description, { color: theme.textSecondary }]} numberOfLines={2}>
             {r.description}
           </Text>
         )}
 
-        <View style={styles.actionRow}>
-          <CountChip icon="star" label="Star" value={r.stars} onPress={() => action.run(() => starRepo(owner, repo), detail.refresh)} />
-          <CountChip icon="repo-forked" label="Fork" value={r.forks} onPress={() => action.run(() => forkRepo(owner, repo), detail.refresh)} />
-          <CountChip icon="eye" label="Watch" onPress={() => action.run(() => watchRepo(owner, repo))} />
-          <CountChip
-            icon="download"
-            label="Clone"
-            onPress={() => onCloneRepo(r.fullName)}
-            accent
-          />
-        </View>
+        {r.topics && r.topics.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.topicScroll}>
+            <View style={styles.topicRow}>
+              {r.topics.map((topic) => (
+                <Text
+                  key={topic}
+                  style={[
+                    styles.topic,
+                    {
+                      color: theme.accent,
+                      backgroundColor: `${theme.accent}18`,
+                      borderColor: `${theme.accent}35`,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {topic}
+                </Text>
+              ))}
+            </View>
+          </ScrollView>
+        )}
 
-        <View style={styles.actionRow}>
-          <SmallBtn
-            icon="git-branch"
-            label={refName}
-            onPress={() => onOpenBranches(refName)}
-          />
-          {!!login && login !== owner && (
+        {!!login && login !== owner && (
+          <View style={styles.actionRow}>
             <SmallBtn
               icon={following.data ? "check" : "person-add"}
               label={following.data ? "Following" : "Follow"}
@@ -119,24 +165,10 @@ export function GitHubRepoView({
                 )
               }
             />
-          )}
-          <SmallBtn icon="history" label="Commits" onPress={() => nav.push({ name: "commits", owner, repo, ref: refName })} />
-          <SmallBtn icon="tag" label="Releases" onPress={() => nav.push({ name: "releases", owner, repo })} />
-          <SmallBtn
-            icon="gear"
-            label="Settings"
-            onPress={() => nav.push({ name: "repoSettings", owner, repo })}
-          />
-          <SmallBtn icon="people" label="Contributors" onPress={() => nav.push({ name: "contributors", owner, repo })} />
-        </View>
+          </View>
+        )}
 
         {!!action.error && <Text style={[styles.error, { color: theme.accentRed }]}>{action.error}</Text>}
-
-        {!!r.homepage && (
-          <Text style={[styles.homepage, { color: theme.accent }]} numberOfLines={1}>
-            {r.homepage}
-          </Text>
-        )}
       </View>
 
       {languageTotal > 0 && (
@@ -148,17 +180,26 @@ export function GitHubRepoView({
                 style={{
                   flex: Math.max(0.02, lang.bytes / languageTotal),
                   height: 4,
-                  backgroundColor: languageShade(index, theme.accent),
+                  backgroundColor: languageColor(lang.name, index, theme.accent),
                 }}
               />
             ))}
           </View>
-          <Text style={[styles.languageText, { color: theme.textMuted }]} numberOfLines={1}>
-            {(languages.data || [])
-              .slice(0, 3)
-              .map((l) => `${l.name} ${((l.bytes / languageTotal) * 100).toFixed(1)}%`)
-              .join(" · ")}
-          </Text>
+          <View style={styles.languageLegend}>
+            {(languages.data || []).slice(0, 3).map((l, index) => (
+              <View key={l.name} style={styles.legendItem}>
+                <View
+                  style={[
+                    styles.legendDot,
+                    { backgroundColor: languageColor(l.name, index, theme.accent) },
+                  ]}
+                />
+                <Text style={[styles.languageText, { color: theme.textMuted }]} numberOfLines={1}>
+                  {`${l.name} ${((l.bytes / languageTotal) * 100).toFixed(1)}%`}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
       )}
 
@@ -179,6 +220,8 @@ export function GitHubRepoView({
             onOpenFile={(filePath) =>
               nav.push({ name: "file", owner, repo, path: filePath, ref: refName })
             }
+            onOpenBranches={onOpenBranches}
+            nav={nav}
           />
         )}
         {tab === "issues" && (
@@ -193,53 +236,108 @@ export function GitHubRepoView({
   );
 }
 
-function languageShade(index: number, accent: string): string {
+/** GitHub linguist colors per language; unknown languages fall back to theme-aware shades. */
+const LANGUAGE_COLORS: Record<string, string> = {
+  TypeScript: "#3178c6",
+  JavaScript: "#f1e05a",
+  Python: "#3572A5",
+  Java: "#b07219",
+  "C++": "#f34b7d",
+  C: "#555555",
+  "C#": "#178600",
+  Go: "#00ADD8",
+  Rust: "#dea584",
+  Ruby: "#701516",
+  PHP: "#4F5D95",
+  Swift: "#F05138",
+  Kotlin: "#A97BFF",
+  Dart: "#00B4AB",
+  HTML: "#e34c26",
+  CSS: "#563d7c",
+  SCSS: "#c6538c",
+  Shell: "#89e051",
+  Dockerfile: "#384d54",
+  Vue: "#41b883",
+  Svelte: "#ff3e00",
+  Lua: "#000080",
+  R: "#198CE7",
+  Scala: "#c22d40",
+  Haskell: "#5e5086",
+  Elixir: "#6e4a7e",
+  Erlang: "#B83998",
+  Clojure: "#db5855",
+  Zig: "#ec915c",
+  Astro: "#ff5a03",
+  MDX: "#fcb32c",
+  Jupyter: "#DA5B0B",
+  "Objective-C": "#438eff",
+  "Objective-C++": "#6866fb",
+  Perl: "#0298c3",
+  Groovy: "#4298b8",
+  PowerShell: "#012456",
+  Batchfile: "#C1F12E",
+  Vim: "#199f4b",
+  Makefile: "#427819",
+  CMake: "#DA3434",
+  YAML: "#cb171e",
+  TOML: "#9c4221",
+  Nix: "#7e7eff",
+  Terraform: "#844FBA",
+  Solidity: "#AA6746",
+  Move: "#4a137a",
+};
+
+function languageColor(name: string, index: number, accent: string): string {
+  const known = LANGUAGE_COLORS[name];
+  if (known) return known;
   const shades = [accent, "#f2cc60", "#f85149", "#a371f7", "#3fb950"];
   return shades[index % shades.length];
 }
 
-function CountChip({
+function StatBtn({
   icon,
-  label,
   value,
   onPress,
-  accent,
+}: {
+  icon: string;
+  value?: number;
+  onPress: () => void;
+}) {
+  const { theme } = useTheme();
+  const label = value ? (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : `${value}`) : "";
+  return (
+    <TouchableOpacity
+      style={[styles.statBtn, { borderColor: theme.border, backgroundColor: theme.bgTertiary }]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Octicons name={icon as any} size={11} color={theme.textSecondary} />
+      {!!label && <Text style={[styles.statText, { color: theme.textSecondary }]}>{label}</Text>}
+    </TouchableOpacity>
+  );
+}
+
+function SmallBtn({
+  icon,
+  label,
+  onPress,
 }: {
   icon: string;
   label: string;
-  value?: number;
   onPress: () => void;
-  accent?: boolean;
 }) {
   const { theme } = useTheme();
   return (
     <TouchableOpacity
       style={[
-        styles.chip,
-        {
-          backgroundColor: accent ? theme.accent : theme.bgTertiary,
-          borderColor: accent ? theme.accent : theme.border,
-        },
+        styles.smallBtn,
+        { backgroundColor: theme.bgTertiary, borderColor: theme.border },
       ]}
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.7}
+      accessibilityLabel={label}
     >
-      <Octicons name={icon as any} size={11} color={accent ? "#fff" : theme.textSecondary} />
-      <Text style={[styles.chipText, { color: accent ? "#fff" : theme.textSecondary }]}>{label}</Text>
-      {value !== undefined && value > 0 && (
-        <Text style={[styles.chipValue, { color: accent ? "#fff" : theme.textMuted }]}>
-          {value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value}
-        </Text>
-      )}
-    </TouchableOpacity>
-  );
-}
-
-function SmallBtn({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
-  const { theme } = useTheme();
-  return (
-    <TouchableOpacity style={styles.smallBtn} onPress={onPress} activeOpacity={0.7}>
-      <Octicons name={icon as any} size={11} color={theme.textSecondary} />
+      <Octicons name={icon as any} size={13} color={theme.textSecondary} />
       <Text style={[styles.smallBtnText, { color: theme.textSecondary }]} numberOfLines={1}>
         {label}
       </Text>
@@ -262,26 +360,44 @@ function TabBtn({ label, active, onPress }: { label: string; active: boolean; on
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
-  header: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth },
-  headerTop: { flexDirection: "row", alignItems: "center", gap: 10 },
-  avatar: { width: 30, height: 30, borderRadius: 6, backgroundColor: "#333" },
-  headerText: { flex: 1, gap: 2 },
-  fullName: { fontSize: 13.5, fontWeight: "800" },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  metaText: { fontSize: 10 },
-  description: { fontSize: 11.5, lineHeight: 16 },
-  actionRow: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
-  chip: {
+  header: {
+    paddingHorizontal: 10,
+    paddingTop: 7,
+    paddingBottom: 6,
+    gap: 5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerTop: { flexDirection: "row", alignItems: "center", gap: 8 },
+  avatar: { width: 24, height: 24, borderRadius: 6, backgroundColor: "#333" },
+  headerText: { flex: 1, gap: 1, minWidth: 0 },
+  fullName: { fontSize: 13, fontWeight: "800" },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" },
+  metaText: { fontSize: 9.5 },
+  statRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  statBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 9,
-    height: 28,
+    justifyContent: "center",
+    gap: 4,
+    minWidth: 30,
+    height: 24,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  statText: { fontSize: 10, fontWeight: "700" },
+  description: { fontSize: 11.5, lineHeight: 15 },
+  topicScroll: { flexGrow: 0 },
+  topicRow: { flexDirection: "row", gap: 5, alignItems: "center" },
+  topic: {
+    fontSize: 9,
+    fontWeight: "700",
+    paddingHorizontal: 5,
+    paddingVertical: 2,
     borderRadius: 7,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  chipText: { fontSize: 11, fontWeight: "700" },
-  chipValue: { fontSize: 10.5, fontWeight: "700" },
+  actionRow: { flexDirection: "row", gap: 6, alignItems: "center" },
   smallBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -289,15 +405,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     height: 24,
     borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   smallBtnText: { fontSize: 10.5, fontWeight: "600" },
-  error: { fontSize: 11 },
-  homepage: { fontSize: 10.5 },
-  languageWrap: { paddingHorizontal: 12, paddingTop: 8, gap: 4 },
-  languageBar: { flexDirection: "row", height: 4, borderRadius: 2, overflow: "hidden" },
-  languageText: { fontSize: 10 },
-  tabs: { flexDirection: "row", paddingHorizontal: 8, borderBottomWidth: StyleSheet.hairlineWidth, marginTop: 6 },
-  tabBtn: { paddingVertical: 8, paddingHorizontal: 10, borderBottomWidth: 2 },
-  tabText: { fontSize: 11.5, fontWeight: "700" },
+  error: { fontSize: 10.5 },
+  languageWrap: { paddingHorizontal: 10, paddingTop: 5, gap: 3 },
+  languageBar: { flexDirection: "row", height: 3, borderRadius: 2, overflow: "hidden" },
+  languageLegend: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  languageText: { fontSize: 9.5 },
+  tabs: { flexDirection: "row", paddingHorizontal: 6, borderBottomWidth: StyleSheet.hairlineWidth, marginTop: 4 },
+  tabBtn: { paddingVertical: 6, paddingHorizontal: 9, borderBottomWidth: 2 },
+  tabText: { fontSize: 11, fontWeight: "700" },
   body: { flex: 1 },
 });

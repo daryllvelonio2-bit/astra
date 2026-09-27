@@ -79,18 +79,39 @@ export function GitHubCommitDetailView({ owner, repo, sha }: { owner: string; re
   if (!commit.data) return null;
 
   const c = commit.data;
+  const fileWord = c.files === 1 ? "changed file" : "changed files";
   return (
     <ScrollView showsVerticalScrollIndicator={false}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Text style={[styles.commitMessage, { color: theme.textPrimary }]}>{c.message}</Text>
         <View style={styles.commitMeta}>
           <Text style={[styles.metaText, { color: theme.textMuted }]}>
-            {c.authorName} committed {formatStale(c.date)} · {c.shortSha} · {c.files} file
-            {c.files === 1 ? "" : "s"}
+            {c.authorName} committed {formatStale(c.date)} · {c.shortSha}
+          </Text>
+        </View>
+        <View style={styles.commitMeta}>
+          <Text style={[styles.metaText, { color: theme.textMuted }]}>
+            Showing {c.files} {fileWord} with
+          </Text>
+          <Text style={[styles.stat, { color: theme.accentGreen }]}>
+            {c.additions} addition{c.additions === 1 ? "" : "s"}
+          </Text>
+          <Text style={[styles.metaText, { color: theme.textMuted }]}>and</Text>
+          <Text style={[styles.stat, { color: theme.accentRed }]}>
+            {c.deletions} deletion{c.deletions === 1 ? "" : "s"}
           </Text>
         </View>
       </View>
-      <GitHubFileDiff file={{ filename: "Changes", status: "modified", additions: 0, deletions: 0, changes: 0, patch: c.patch }} />
+      <GitHubFileDiff
+        file={{
+          filename: "Changes",
+          status: "modified",
+          additions: c.additions,
+          deletions: c.deletions,
+          changes: c.additions + c.deletions,
+          patch: c.patch,
+        }}
+      />
     </ScrollView>
   );
 }
@@ -157,6 +178,7 @@ const styles = StyleSheet.create({
   commitMeta: { flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" },
   miniAvatar: { width: 16, height: 16, borderRadius: 8, backgroundColor: "#333" },
   metaText: { fontSize: 10.5 },
+  stat: { fontSize: 10.5, fontWeight: "700" },
   header: { paddingHorizontal: 12, paddingVertical: 10, gap: 6, borderBottomWidth: StyleSheet.hairlineWidth },
   branchName: { flex: 1, fontSize: 12.5, fontWeight: "600" },
 });

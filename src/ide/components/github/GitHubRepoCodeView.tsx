@@ -1,12 +1,25 @@
-import React, { useCallback } from "react";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  LayoutChangeEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+} from "react-native";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { fetchContents, fetchReadme } from "../../services/gitHubRepoService";
 import { useGitHubResource } from "./useGitHubResource";
+import { useTreeCommits } from "./useTreeCommits";
 import { EmptyState, ErrorState, LoadingState } from "./GitHubStates";
 import { GitHubRepo } from "../../services/gitHubTypes";
+import { formatStale } from "../../services/gitHubProfileService";
 import { MarkdownView } from "./MarkdownView";
+import { RepoCodeHeader } from "./GitHubRepoCodeHeader";
+import { GitHubNavigation } from "./useGitHubNavigation";
 
 /**
  * Code tab: browse a repo's tree at a chosen ref, open files, and read the
@@ -28,14 +41,32 @@ export function GitHubRepoCodeView({
   path,
   onOpenFile,
   onOpenPath,
+  onOpenBranches,
+  onScroll,
+  onReadmeLayout,
+  nav,
 }: {
   repo: GitHubRepo;
   refName: string;
   path: string;
   onOpenFile: (filePath: string) => void;
   onOpenPath: (nextPath: string) => void;
+  onOpenBranches?: () => void;
+  /** Feeds the repo screen's header collapse with this list's scroll offset. */
+  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  /** Reports the README card's top in scroll-content coordinates. */
+  onReadmeLayout?: (event: LayoutChangeEvent) => void;
+  nav: GitHubNavigation;
 }) {
   const { theme } = useTheme();
+  const scrollRef = useRef<ScrollView>(null);
+
+  // A folder change swaps the entire content: landing mid-list is
+  // disorienting, and the header collapse tracks the real offset, so start at
+  // the top.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [path]);
 
   const tree = useGitHubResource(
     () => fetchContents(repo.owner, repo.name, path, refName),
@@ -52,6 +83,21 @@ export function GitHubRepoCodeView({
     { skip: !!path }
   );
 
+  const entries = useMemo(
+    () =>
+      (tree.data || [])
+        .slice()
+        .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === "dir" ? -1 : 1)),
+    [tree.data]
+  );
+
+  const commits = useTreeCommits(
+    repo.owner,
+    repo.name,
+    refName,
+    useMemo(() => entries.map((e) => e.path), [entries])
+  );
+
   const open = useCallback(
     (entryPath: string, isDir: boolean) => {
       if (isDir) onOpenPath(entryPath);
@@ -61,7 +107,30 @@ export function GitHubRepoCodeView({
   );
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <ScrollView
+      ref={scrollRef}
+      showsVerticalScrollIndicator={false}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+    >
+      <RepoCodeHeader
+        owner={repo.owner}
+        repo={repo.name}
+        refName={refName}
+        path={path}
+        onOpenBranches={onOpenBranches}
+        onOpenCommits={() =>
+          nav.push({ name: "commits", owner: repo.owner, repo: repo.name, ref: refName, path: path || undefined })
+        }
+      />
+      {!!path && (
+        <View style={[styles.crumbRow, { borderBottomColor: theme.border }]}>
+          <Octicons name="repo" size={11} color={theme.textMuted} />
+          <Text style={[styles.crumb, { color: theme.textMuted }]} numberOfLines={1}>
+            {repo.fullName} <Text style={{ color: theme.textMuted }}>·</Text> {path}
+          </Text>
+        </View>
+      )}
       {!!path && (
         <TouchableOpacity
           style={[styles.row, { borderBottomColor: theme.border }]}
@@ -75,12 +144,6 @@ export function GitHubRepoCodeView({
         </TouchableOpacity>
       )}
 
-      {!!path && (
-        <Text style={[styles.crumb, { color: theme.textMuted }]} numberOfLines={1}>
-          {repo.fullName}/{path}
-        </Text>
-      )}
-
       {tree.loading && !tree.data ? (
         <LoadingState />
       ) : tree.error ? (
@@ -89,33 +152,40 @@ export function GitHubRepoCodeView({
         <EmptyState text="This folder is empty." />
       ) : (
         <View>
-          {(tree.data || [])
-            .slice()
-            .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === "dir" ? -1 : 1))
-            .map((entry) => {
-              const isDir = entry.type === "dir";
-              return (
-                <TouchableOpacity
-                  key={entry.path}
-                  style={[styles.row, { borderBottomColor: theme.border }]}
-                  onPress={() => open(entry.path, isDir)}
-                  activeOpacity={0.7}
-                >
-                  <Octicons
-                    name={isDir ? "file-directory" : entry.type === "symlink" ? "file-symlink-file" : "file"}
-                    size={13}
-                    color={isDir ? theme.accent : theme.textMuted}
-                  />
+          {entries.map((entry) => {
+            const isDir = entry.type === "dir";
+            const info = commits[entry.path];
+            return (
+              <TouchableOpacity
+                key={entry.path}
+                style={[styles.row, { borderBottomColor: theme.border }]}
+                onPress={() => open(entry.path, isDir)}
+                activeOpacity={0.7}
+              >
+                <Octicons
+                  name={isDir ? "file-directory" : entry.type === "symlink" ? "file-symlink-file" : "file"}
+                  size={13}
+                  color={isDir ? theme.accent : theme.textMuted}
+                  style={styles.rowIcon}
+                />
+                <View style={styles.rowBody}>
                   <Text style={[styles.rowName, { color: theme.textPrimary }]} numberOfLines={1}>
                     {entry.name}
                   </Text>
-                  {!isDir && entry.size > 0 && (
-                    <Text style={[styles.rowSize, { color: theme.textMuted }]}>{formatBytes(entry.size)}</Text>
+                  {!!info && (
+                    <Text style={[styles.rowCommit, { color: theme.textMuted }]} numberOfLines={1}>
+                      {info.messageHeadline}
+                      {info.committedDate ? ` · ${formatStale(info.committedDate)}` : ""}
+                    </Text>
                   )}
-                  <Octicons name="chevron-right" size={12} color={theme.textMuted} />
-                </TouchableOpacity>
-              );
-            })}
+                </View>
+                {!isDir && entry.size > 0 && (
+                  <Text style={[styles.rowSize, { color: theme.textMuted }]}>{formatBytes(entry.size)}</Text>
+                )}
+                <Octicons name="chevron-right" size={12} color={theme.textMuted} />
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
 
@@ -146,12 +216,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowName: { flex: 1, fontSize: 12.5 },
+  rowIcon: { marginTop: 1 },
+  rowBody: { flex: 1, gap: 1, minWidth: 0 },
+  rowCommit: { fontSize: 9.5 },
   rowSize: { fontSize: 10 },
-  crumb: { fontSize: 10.5, paddingHorizontal: 12, paddingVertical: 6 },
+  crumb: { fontSize: 10.5 },
+  crumbRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   readmeCard: {
     margin: 12,
     padding: 14,
