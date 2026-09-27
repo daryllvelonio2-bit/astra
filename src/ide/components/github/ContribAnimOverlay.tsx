@@ -1,8 +1,7 @@
 import React from "react";
-import { Animated, StyleSheet } from "react-native";
-import { FontAwesome6 } from "@expo/vector-icons";
+import { Animated, StyleSheet, View } from "react-native";
 import { useTheme } from "../../../theme/themeContext";
-import { BULLET_H, BULLET_W, CELL, PLANE_BOX, PLANE_SIZE, muzzleY } from "./contribPlan";
+import { BULLET_H, BULLET_W, CELL, PLANE_BOX, muzzleY } from "./contribPlan";
 import { ContribAnimationState } from "./useContribAnimation";
 
 /**
@@ -38,12 +37,11 @@ export function ContribAnimOverlay({ anim }: { anim: ContribAnimationState }) {
           <Animated.View
             style={[styles.plane, { transform: [{ translateX: plane.x }, { translateY: plane.y }] }]}
           >
-            <FontAwesome6
-              name="fighter-jet"
-              size={PLANE_SIZE}
-              color={theme.accentCyan}
-              style={styles.icon}
-            />
+            {/* Top-view jet drawn from theme tokens: nose left, wings amidships,
+                tailplane aft — so it always points the way it flies. */}
+            <View style={[styles.fuselage, { backgroundColor: theme.accentCyan }]} />
+            <View style={[styles.wing, { backgroundColor: theme.accentCyan }]} />
+            <View style={[styles.tailplane, { backgroundColor: theme.accentCyan }]} />
           </Animated.View>
           {plane.bullets.map((bullet) => (
             <Animated.View
@@ -65,15 +63,9 @@ export function ContribAnimOverlay({ anim }: { anim: ContribAnimationState }) {
 const styles = StyleSheet.create({
   layer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
   segment: { position: "absolute", left: 0, top: 0, width: CELL, height: CELL, borderRadius: 3 },
-  plane: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: PLANE_BOX,
-    height: PLANE_BOX,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  icon: { transform: [{ rotate: "-90deg" }] },
+  plane: { position: "absolute", left: 0, top: 0, width: PLANE_BOX, height: PLANE_BOX },
+  fuselage: { position: "absolute", left: 1, top: 6.5, width: 13, height: 3, borderRadius: 1.5 },
+  wing: { position: "absolute", left: 6, top: 2.5, width: 3, height: 11, borderRadius: 1.5 },
+  tailplane: { position: "absolute", left: 11, top: 5, width: 2, height: 6, borderRadius: 1 },
   bullet: { position: "absolute", top: muzzleY(), width: BULLET_W, height: BULLET_H, borderRadius: 1 },
 });

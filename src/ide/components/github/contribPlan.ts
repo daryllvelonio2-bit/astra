@@ -13,9 +13,8 @@ export const GAP = 2.5;
 export const CELL_STEP = CELL + GAP;
 /** Flight lane reserved above the grid for the aircraft. */
 export const SKY = 16;
-export const PLANE_SIZE = 14;
-/** Sprite box the aircraft is centred in — also how far off-screen it parks. */
-export const PLANE_BOX = PLANE_SIZE + 2;
+/** Sprite box the aircraft is drawn in — also how far off-screen it parks. */
+export const PLANE_BOX = 16;
 export const BULLET_W = 2;
 export const BULLET_H = 6;
 
@@ -167,7 +166,7 @@ export function buildPlanePlan(alive: ContribCell[], cols: number): PlanePlan {
   }
 
   const width = gridWidth(cols);
-  const span = width + PLANE_SIZE; // right edge -> just past the left edge
+  const span = width + PLANE_BOX; // right edge -> just past the left edge
   // The aircraft flies right to left, so a column decides when the plane is
   // above it — and therefore when the bullet leaves the belly.
   const lane = (col: number) => Math.min(0.97, Math.max(0.03, (width - cellCenterX(col)) / span));

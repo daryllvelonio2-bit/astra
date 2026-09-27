@@ -1,18 +1,22 @@
 import React from "react";
-import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { Animated, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../../../theme/themeContext";
 import { fetchContributionCalendar } from "../../services/gitHubAccountService";
 import { ContribCalendar } from "../../services/gitHubTypes";
 import { useGitHubResource } from "./useGitHubResource";
-
-const CELL = 11;
-const GAP = 2.5;
-const ROWS = 7;
+import { ContribCell, CELL, GAP, ROWS, SKY, gridWidth } from "./contribPlan";
+import { useContribAnimation } from "./useContribAnimation";
+import { ContribAnimOverlay } from "./ContribAnimOverlay";
 
 /**
  * Year contributions graph (GitHub's green squares): total on top, weeks as
- * columns in a horizontal scroller pinned to the recent end. Never breaks
- * the profile — loading shows a fixed placeholder, errors render nothing.
+ * columns in a horizontal scroller pinned to the recent end, and a random
+ * animation over it — a snake that eats the greens, or an aircraft strafing
+ * them away. Never breaks the profile: loading shows a fixed placeholder,
+ * errors render nothing.
+ *
+ * Each green square sits on an empty track of its own, so when it is eaten the
+ * square underneath shows through and the grid keeps its shape.
  */
 export function GitHubContribGraph({ login }: { login: string }) {
   const { theme } = useTheme();
@@ -41,6 +45,18 @@ export function GitHubContribGraph({ login }: { login: string }) {
     });
   }, [data]);
 
+  const alive = React.useMemo(() => {
+    const squares: ContribCell[] = [];
+    columns.forEach((slots, col) => {
+      slots.forEach((slot, row) => {
+        if (slot) squares.push({ key: slot.key, col, row });
+      });
+    });
+    return squares;
+  }, [columns]);
+
+  const anim = useContribAnimation(alive, columns.length);
+
   if (cal.error && !data) return null;
   if (!data) {
     return <View style={[styles.placeholder, { backgroundColor: theme.bgSecondary }]} />;
@@ -57,18 +73,33 @@ export function GitHubContribGraph({ login }: { login: string }) {
         showsHorizontalScrollIndicator={false}
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
       >
-        <View style={styles.grid}>
-          {columns.map((slots, wi) => (
-            <View key={`w${wi}`} style={styles.col}>
-              {slots.map((s, di) =>
-                s ? (
-                  <View key={s.key} style={[styles.cell, { backgroundColor: s.color }]} />
-                ) : (
-                  <View key={`e${wi}-${di}`} style={[styles.cell, { backgroundColor: emptyTrack }]} />
-                )
-              )}
-            </View>
-          ))}
+        <View style={[styles.stage, { width: gridWidth(columns.length) }]}>
+          <View style={styles.grid}>
+            {columns.map((slots, wi) => (
+              <View key={`w${wi}`} style={styles.col}>
+                {slots.map((slot, di) => {
+                  if (!slot) {
+                    return (
+                      <View key={`e${wi}-${di}`} style={[styles.cell, { backgroundColor: emptyTrack }]} />
+                    );
+                  }
+                  const square = anim.cells.get(slot.key);
+                  return (
+                    <View key={slot.key} style={[styles.cell, { backgroundColor: emptyTrack }]}>
+                      <Animated.View
+                        style={[
+                          styles.fill,
+                          { backgroundColor: slot.color },
+                          square && { opacity: square.value, transform: [{ scale: square.scale }] },
+                        ]}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+          <ContribAnimOverlay anim={anim} />
         </View>
       </ScrollView>
     </View>
@@ -78,8 +109,12 @@ export function GitHubContribGraph({ login }: { login: string }) {
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 12, paddingVertical: 10 },
   total: { fontSize: 11.5, fontWeight: "600", marginBottom: 8 },
+  /** Holds the aircraft's flight lane above the squares. */
+  stage: { position: "relative", paddingTop: SKY },
   grid: { flexDirection: "row", gap: GAP },
   col: { gap: GAP },
   cell: { width: CELL, height: CELL, borderRadius: 2 },
+  fill: { ...StyleSheet.absoluteFillObject, borderRadius: 2, opacity: 1 },
   placeholder: { height: 118, marginHorizontal: 12, marginVertical: 10, borderRadius: 6, opacity: 0.5 },
 });
+

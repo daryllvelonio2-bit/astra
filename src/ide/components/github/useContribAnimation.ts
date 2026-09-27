@@ -124,7 +124,7 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
       );
     }
 
-    if (plane) {
+    if (plane && plan.mode === "plane") {
       plane.clock.setValue(0);
       run(Animated.sequence(planeClockSteps(plan, plane.clock)));
       plane.bullets.forEach((bullet) => {
