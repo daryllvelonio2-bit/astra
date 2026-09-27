@@ -24,6 +24,16 @@
   daryllvelonio2-bit/astra renders centered heading, 5 badge pills, tables,
   no raw markup; tsc exit 0; ReactNativeJS error count 0.
 
+### [2026-09-27] - Hunt reset removed
+- **User directive:** the snake shouldn't reset.
+- **Change (`useContribAnimation.ts`):** exit fade and reset beat reverted; hunts chain instantly again, and only the very first appearance fades in — later hunts take over with the snake already visible.
+- **Verify:** `tsc --noEmit` exit 0. Pace/movement untouched (350ms, probe-green).
+
+### [2026-09-27] - Faster tick, hunt reset beat, connected body
+- **User directives:** (a) faster for a bit, (b) snake should reset between hunts since it's continuous, (c) body should read connected.
+- **Change:** `SNAKE_MS_PER_CELL` ms(350)→ms(175) (350ms/block effective). Driver: each hunt ends with the snake fading out over `EXIT_MS` and the next hunt starts one beat later — the grid breathes straight through, only the hunter resets. Overlay segments run 1px large every side so neighbors overlap into one body.
+- **Verify:** `tsc --noEmit` exit 0. File-probe 6/6: 351–356ms/step, all contracts hold, 0 body touches.
+
 ### [2026-09-27] - Snake slows to 1 block per 700ms
 - **User directive:** snake too fast — nearly a second per block.
 - **Change (`contribPlan.ts`, 2 lines):** `SNAKE_MS_PER_CELL` ms(30)→ms(350) (700ms effective); `MAX_CYCLE_MS` ms(22500)→ms(210000) so the old 45s cap stops crushing long hunts back to a blur — it now binds only past ~600 steps.

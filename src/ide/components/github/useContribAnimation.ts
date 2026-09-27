@@ -21,9 +21,9 @@ import { PlaneNodes, bulletFlight, buildPlaneNodes, planeClockSteps } from "./co
  * or aircraft) is picked once at random when the graph opens and stays for
  * the whole open. Every hunt schedules every square's hit, then each eaten
  * square fades back on its own after a random dark spell — the grid breathes
- * continuously, never wipes. Each hunt resets the hunter with a quick fade
- * beat while the grid keeps breathing underneath. A newer animation for a
- * square always stops its older one, so nothing ever fights over a value.
+ * continuously, never wipes, and hunts chain with no reset between them. A
+ * newer animation for a square always stops its older one, so nothing ever
+ * fights over a value.
  *
  * Everything visual is driven by Animated with the native driver, so the JS
  * thread only wakes to schedule hunts and respawns — the frame rate never
@@ -92,6 +92,7 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
       return;
     }
 
+    let firstHunt = true;
     const runHunt = () => {
       if (unmounted) return;
       stopCycle();
@@ -133,10 +134,14 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
 
       if (snake) {
         snake.progress.setValue(0);
-        // Each hunt resets the snake: it fades in at the start, and fades out
-        // once the route is done while the grid keeps breathing underneath.
-        snake.fade.setValue(0);
-        track(Animated.timing(snake.fade, { toValue: 1, duration: EXIT_MS, useNativeDriver: true }));
+        // No reset between hunts: only the very first appearance fades in;
+        // later hunts take over instantly while the grid keeps breathing.
+        if (firstHunt) {
+          snake.fade.setValue(0);
+          track(Animated.timing(snake.fade, { toValue: 1, duration: EXIT_MS, useNativeDriver: true }));
+        } else {
+          snake.fade.setValue(1);
+        }
         track(
           Animated.timing(snake.progress, {
             toValue: snake.end,
@@ -145,13 +150,6 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
             easing: snakeEase,
             useNativeDriver: true,
           })
-        );
-        timers.push(
-          setTimeout(() => {
-            if (!unmounted) {
-              track(Animated.timing(snake.fade, { toValue: 0, duration: EXIT_MS, useNativeDriver: true }));
-            }
-          }, plan.cycleMs)
         );
       }
 
@@ -165,9 +163,9 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
       }
 
       setNodes({ mode, snake, plane });
-      // The next hunt starts one reset beat after this one ends — the grid
-      // never pauses, only the hunter resets.
-      timers.push(setTimeout(runHunt, plan.cycleMs + EXIT_MS));
+      firstHunt = false;
+      // No reset, no beat — the next hunt takes over the instant this one ends.
+      timers.push(setTimeout(runHunt, plan.cycleMs));
     };
     runHunt();
 
