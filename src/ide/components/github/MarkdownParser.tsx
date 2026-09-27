@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, Image, ImageStyle, StyleProp } from "react-native";
+import { View, Text, Image, ImageStyle, StyleProp } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { ThemeColors } from "../../../theme/themeContext";
 
@@ -21,6 +21,7 @@ export type MarkdownBlock =
   | { type: "hr" }
   | { type: "table"; header: string[]; rows: string[][] }
   | { type: "img"; alt: string; src: string; width?: number; align?: "center" }
+  | { type: "row"; items: { src: string; width?: number }[] }
   | { type: "group"; align: "center"; children: MarkdownBlock[] }
   | { type: "details"; summary: string; children: MarkdownBlock[] };
 
@@ -46,6 +47,61 @@ export function parseMarkdown(src: string): MarkdownBlock[] {
   return parseBlocks(src.replace(/\r\n/g, "\n").split("\n"));
 }
 
+/** shields.io badge URLs carry their own text: /badge/LABEL-MESSAGE-COLOR.
+ *  React Native cannot decode SVG, so draw the pill from the URL instead. */
+const SHIELDS_NAMED: Record<string, string> = {
+  blue: "#007ec6", brightgreen: "#44cc11", green: "#97ca00", orange: "#fe7d37",
+  red: "#e05d44", yellow: "#dfb317", yellowgreen: "#a4a61d", blueviolet: "#8a2be2",
+  lightgrey: "#9f9f9f", gray: "#555555", grey: "#555555", lightryellow: "#cccc33",
+  critical: "#d63a3a", informationals: "#007ec6", inactive: "#9f9f9f",
+};
+
+export function parseShieldsBadge(
+  uri: string
+): { label: string; message: string; color: string; big: boolean } | null {
+  const m = /img\.shields\.io\/badge\/([^?]+)(\?.*)?$/i.exec(uri);
+  if (!m) return null;
+  const big = /style=(?:for-the-badge|social)/.test(m[2] || "");
+  const segs = m[1]
+    .replace(/--/g, "\u0002")
+    .split("-")
+    .map((s) => decodeURIComponent(s.replace(/\u0002/g, "-")).replace(/_/g, " "));
+  if (segs.length < 2) return null;
+  const label = segs[0];
+  const rawColor = segs[segs.length - 1];
+  const message = segs.slice(1, segs.length - 1).join("-") || " ";
+  let color = /^[\da-f]{3,6}$/i.test(rawColor) ? `#${rawColor}` : SHIELDS_NAMED[rawColor.toLowerCase()] || "#4c1";
+  if (segs.length < 3) {
+    // label-only badge: single pill
+    return { label: "", message: label, color, big };
+  }
+  return { label, message, color, big };
+}
+
+/** A drawn badge pill (matches shields.io styling closely enough). */
+export function BadgePill({
+  uri,
+}: {
+  uri: string;
+}) {
+  const b = parseShieldsBadge(uri);
+  if (!b) return null;
+  const h = b.big ? 26 : 20;
+  const fs = b.big ? 11 : 9.5;
+  return (
+    <View style={{ flexDirection: "row", alignSelf: "center", overflow: "hidden", borderRadius: b.big ? 4 : 3, height: h, margin: 2 }}>
+      {!!b.label && (
+        <Text style={{ backgroundColor: "#555", color: "#fff", fontSize: fs, fontWeight: "700", paddingHorizontal: b.big ? 8 : 6, lineHeight: h + 2 }}>
+          {b.label}
+        </Text>
+      )}
+      <Text style={{ backgroundColor: b.color, color: "#fff", fontSize: fs, fontWeight: "700", paddingHorizontal: b.big ? 8 : 6, lineHeight: h + 2 }}>
+        {b.message}
+      </Text>
+    </View>
+  );
+}
+
 /** <Image> that renders nothing on load failure (RN cannot decode SVG —
  *  shields.io badges are SVG by default; a broken-image box is worse than
  *  blank space). */
@@ -54,10 +110,12 @@ export function SafeImage({
   style,
 }: {
   uri: string;
-  style?: ImageStyle;
+  style?: StyleProp<ImageStyle>;
 }) {
   const [failed, setFailed] = React.useState(false);
-  if (failed || !uri || !/^https?:/i.test(uri)) return null;
+  if (!uri || !/^https?:/i.test(uri)) return null;
+  if (parseShieldsBadge(uri)) return <BadgePill uri={uri} />;
+  if (failed) return null;
   return <Image source={{ uri }} style={style} resizeMode="contain" onError={() => setFailed(true)} />;
 }
 
@@ -70,8 +128,21 @@ function parseBlocks(lines: string[], opts?: { align?: "center" }): MarkdownBloc
   const pushPara = (buf: string) => {
     const t = buf.trim();
     if (!t) return;
-    const img = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/.exec(t);
-    if (img && t === img[0]) {
+    const IMG_RE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g;
+    const tokens = t.match(IMG_RE);
+    const rest = t.replace(IMG_RE, "").trim();
+    if (tokens && tokens.length > 1 && !rest) {
+      // badge row: images side by side, wrapping like GitHub
+      const items = tokens.map((tok) => {
+        const g = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/.exec(tok)!;
+        const w = /^w=(\d+)$/.exec(g[3] || "")?.[1];
+        return { src: g[2], width: w ? Number(w) : undefined };
+      });
+      out.push({ type: "row", items });
+      return;
+    }
+    const img = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/.exec(t);
+    if (img) {
       const w = /^w=(\d+)$/.exec(img[3] || "")?.[1];
       out.push({ type: "img", alt: img[1], src: img[2], width: w ? Number(w) : undefined, align });
     } else {
@@ -258,16 +329,34 @@ function parseBlocks(lines: string[], opts?: { align?: "center" }): MarkdownBloc
 export function renderInline(text: string, theme: ThemeColors, key: string): React.ReactNode {
   const nodes: React.ReactNode[] = [];
   const clean = (s: string) => s.replace(/\\([`*_~\[\]])/g, "$1");
-  const badge = (uri: string, width: number | undefined, href?: string, k?: string) => {
-    const img = (
-      <SafeImage
+  const inlineBadge = (uri: string, width: number | undefined, k: string) => {
+    const b = parseShieldsBadge(uri);
+    if (b) {
+      // Text-only pill: nesting a View inside Text crashes RN
+      const h = b.big ? 24 : 18;
+      const fs = b.big ? 10.5 : 9;
+      const pill = { fontSize: fs, fontWeight: "700" as const, color: "#fff", paddingHorizontal: 4 };
+      return (
+        <Text key={k}>
+          {!!b.label && <Text style={{ ...pill, backgroundColor: "#555" }}>{b.label} </Text>}
+          <Text style={{ ...pill, backgroundColor: b.color }}>{b.message}</Text>
+          {" "}
+        </Text>
+      );
+    }
+    return (
+      <Image
         key={k}
-        uri={uri}
+        source={{ uri }}
         style={width && width <= 240 ? { width, height: Math.max(16, Math.round(width * 0.22)) } : { width: "100%", height: 150 }}
+        resizeMode="contain"
       />
     );
+  };
+  const badge = (uri: string, width: number | undefined, href?: string, k?: string) => {
+    const img = inlineBadge(uri, width, k || "b");
     return href ? (
-      <Text key={k} onPress={() => void WebBrowser.openBrowserAsync(href.startsWith("http") ? href : `https://${href}`)}>
+      <Text key={`${k}-w`} onPress={() => void WebBrowser.openBrowserAsync(href.startsWith("http") ? href : `https://${href}`)}>
         {img}
       </Text>
     ) : img;

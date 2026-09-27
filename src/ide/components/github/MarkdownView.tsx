@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import * as WebBrowser from "expo-web-browser";
-import { useTheme, ThemeColors } from "../../../theme/themeContext";
+import { useTheme } from "../../../theme/themeContext";
 import { normalizeReadmeHtml } from "./markdownHtml";
 import { MarkdownBlock, parseMarkdown, renderInline, SafeImage } from "./MarkdownParser";
 
@@ -121,6 +120,14 @@ function BlockList({ blocks, align }: { blocks: MarkdownBlock[]; align?: "center
             return <View key={i} style={[mdStyles.hr, { backgroundColor: theme.border }]} />;
           case "img":
             return <ImageBlock key={i} src={b.src} width={b.width} align={b.align || align} />;
+          case "row":
+            return (
+              <View key={i} style={mdStyles.badgeRow}>
+                {b.items.map((im, j) => (
+                  <ImageBlock key={j} src={im.src} width={im.width} />
+                ))}
+              </View>
+            );
           case "group":
             return (
               <View key={i} style={{ alignItems: "center" }}>
@@ -172,6 +179,7 @@ const mdStyles = StyleSheet.create({
   codeBlock: { borderRadius: 8, padding: 10 },
   hr: { height: StyleSheet.hairlineWidth, marginVertical: 6 },
   image: { borderRadius: 4, marginVertical: 2, backgroundColor: "#8881" },
+  badgeRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 4 },
   details: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
   summaryRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 6, overflow: "hidden" },

@@ -21,9 +21,9 @@ import { PlaneNodes, bulletFlight, buildPlaneNodes, planeClockSteps } from "./co
  * or aircraft) is picked once at random when the graph opens and stays for
  * the whole open. Every hunt schedules every square's hit, then each eaten
  * square fades back on its own after a random dark spell — the grid breathes
- * continuously, never wipes, and the next hunt starts the instant the route
- * ends. A newer animation for a square always stops its older one, so nothing
- * ever fights over a value.
+ * continuously, never wipes. Each hunt resets the hunter with a quick fade
+ * beat while the grid keeps breathing underneath. A newer animation for a
+ * square always stops its older one, so nothing ever fights over a value.
  *
  * Everything visual is driven by Animated with the native driver, so the JS
  * thread only wakes to schedule hunts and respawns — the frame rate never
@@ -133,8 +133,8 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
 
       if (snake) {
         snake.progress.setValue(0);
-        // The new snake fades in as the hunt starts; the old one is already
-        // gone with its hunt, so there is no exit fade to play.
+        // Each hunt resets the snake: it fades in at the start, and fades out
+        // once the route is done while the grid keeps breathing underneath.
         snake.fade.setValue(0);
         track(Animated.timing(snake.fade, { toValue: 1, duration: EXIT_MS, useNativeDriver: true }));
         track(
@@ -145,6 +145,13 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
             easing: snakeEase,
             useNativeDriver: true,
           })
+        );
+        timers.push(
+          setTimeout(() => {
+            if (!unmounted) {
+              track(Animated.timing(snake.fade, { toValue: 0, duration: EXIT_MS, useNativeDriver: true }));
+            }
+          }, plan.cycleMs)
         );
       }
 
@@ -157,30 +164,10 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
         });
       }
 
-      // Long leaps between far patches happen while the sprite blinks, so the
-      // jump across empties is never seen; short hops zip visibly.
-      if (plan.mode === "snake" && snake) {
-        plan.teleports.forEach((t) => {
-          timers.push(
-            setTimeout(() => {
-              if (!unmounted) {
-                track(Animated.timing(snake.fade, { toValue: 0, duration: EXIT_MS, useNativeDriver: true }));
-              }
-            }, Math.max(0, t - EXIT_MS))
-          );
-          timers.push(
-            setTimeout(() => {
-              if (!unmounted) {
-                track(Animated.timing(snake.fade, { toValue: 1, duration: EXIT_MS, useNativeDriver: true }));
-              }
-            }, t)
-          );
-        });
-      }
-
       setNodes({ mode, snake, plane });
-      // No hold, no rest — the next hunt starts the instant this one ends.
-      timers.push(setTimeout(runHunt, plan.cycleMs));
+      // The next hunt starts one reset beat after this one ends — the grid
+      // never pauses, only the hunter resets.
+      timers.push(setTimeout(runHunt, plan.cycleMs + EXIT_MS));
     };
     runHunt();
 

@@ -1,5 +1,41 @@
 # Project Progress Tracker
 
+### [2026-09-27] - README rendering in the repo Code tab (GitHub-style)
+- **User directive:** repo view must show the rendered README below the file
+  tree (replacing the recent-commit strip), and `<div align="center">` etc.
+  must not leak as raw text.
+- Code tab now: file list -> README.md card (only at repo root; absent when
+  the repo has no README). Recent-commit strip removed; commits remain
+  reachable from the repo meta row.
+- `markdownHtml.ts`: normalizes README HTML to markdown before parsing -
+  `<div align=center>`/`<center>`/`<p align=center>` kept as structure,
+  `<img>`/`<a><img></a>` -> `![](...)` (width via title slot), h1-6, strong/
+  em/del/code/kbd, br/hr, entities; all other tags stripped so nothing raw
+  leaks.
+- `MarkdownParser.tsx`: block parser (headings, lists, quotes, fenced code,
+  tables, img rows, centered groups, collapsible details) + inline renderer;
+  linked badges stash via sentinel so nested brackets never break the link
+  regex. `SafeImage` hides broken images; shields.io badges (SVG - RN cannot
+  decode) are drawn as two-tone pills parsed from the badge URL.
+- `MarkdownView.tsx`: block renderer with centered groups, badge rows
+  (wrap), details toggle.
+- Verified: unit harness on microsoft/vscode README + the exact `astra`
+  README - zero tag leaks, badge pills decode correctly; on-device
+  daryllvelonio2-bit/astra renders centered heading, 5 badge pills, tables,
+  no raw markup; tsc exit 0; ReactNativeJS error count 0.
+
+### [2026-09-27] - Snake slows to 1 block per 700ms
+- **User directive:** snake too fast — nearly a second per block.
+- **Change (`contribPlan.ts`, 2 lines):** `SNAKE_MS_PER_CELL` ms(30)→ms(350) (700ms effective); `MAX_CYCLE_MS` ms(22500)→ms(210000) so the old 45s cap stops crushing long hunts back to a blur — it now binds only past ~600 steps.
+- **Verify:** `tsc --noEmit` exit 0. File-probe 6/6: per-step 702–713ms everywhere (uncapped), all contracts hold.
+- **Tradeoff to know:** at this pace a full year runs ~3 minutes per hunt. Say the word if you want a hunt cap back (pace would compress on big years) or an even slower tick.
+
+### [2026-09-27] - Dives reverted: snake walks again, empties travel-only
+- **User correction:** empties MAY be stepped on, just never targeted — and the dives made movement bad: bites fired on head-schedule while the body sprite lagged across gaps, so the body looked like it ate everything.
+- **Cause:** I over-read "shouldn't be included" as "never step on" and built dive/blink machinery that desynced head and body.
+- **Change (`contribPlan.ts` 418→398, `useContribAnimation.ts` −21):** `teleports`/`DIVE_BLINK_DIST`/blink scheduling deleted; the walker crosses empties again to reach kills, but targets stay greens-only (count>0 `alive`), waypoint-skip stays, and bites still record head first-visits — so head and body move as one and empties never fade. Also pinned `huntOrder[0]` to the start cell itself (it was drawing from the 3-nearest pool, so hunts sometimes opened off-view).
+- **Verify:** `tsc --noEmit` exit 0; files <500. File-probe 6/6 on compiled plan (patchy/streaky/sparse): unit steps, every green eaten once in-cycle, newest-week start always, runs differ, 60ms pace; 2 single-step body touches total.
+
 ### [2026-09-27] - Snake eats/walks greens only; empties gray in dark mode
 - **User directives:** (a) the snake ate squares with no contributions — empties must not be included at all. (b) in dark mode, no-contribution squares show white; they should be gray.
 - **Causes:** (a) `alive` held every calendar day including zero-count days, and the walker pathed over any cell. (b) zero-day fills used the API's light-palette color (`#ebedf0`) instead of a theme color.

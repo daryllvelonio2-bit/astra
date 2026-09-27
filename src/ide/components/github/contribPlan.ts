@@ -43,18 +43,13 @@ export const REAPPEAR_MS = ms(420);
 export const EXIT_MS = ms(260);
 /** Gap between two strafing passes (the aircraft lines up out of sight). */
 const PASS_GAP_MS = ms(170);
-/** Longest a single animation may run before every square is gone. */
-const MAX_CYCLE_MS = ms(22500);
-/** Cruise pace: one steady tick per cell of the hunt. */
-const SNAKE_MS_PER_CELL = ms(30);
+/** Longest a single animation may run: ~600 steps at cruise before it binds. */
+const MAX_CYCLE_MS = ms(210000);
+/** Cruise pace: one deliberate tick per block of the hunt (350ms effective). */
+const SNAKE_MS_PER_CELL = ms(175);
 const SNAKE_MIN_MS = ms(1300);
 /** Classic arcade body: head plus this many trailing segments, in cells. */
 export const SNAKE_BODY_CELLS = 6;
-/**
- * Dives longer than this (in cells) blink the sprite; shorter hops between
- * nearby patches just zip across in one tick.
- */
-const DIVE_BLINK_DIST = 2;
 /** Strafing pass bounds, and the budget all passes share. */
 const PASS_MIN_MS = ms(900);
 const PASS_MAX_MS = ms(1400);
@@ -80,16 +75,11 @@ export interface SnakeStep {
 
 export interface SnakePlan {
   mode: "snake";
-  /**
-   * The head's walk in travel order: every step lands on a green square, one
-   * grid move apart — except dive landings, which jump patches invisibly.
-   */
+  /** The head's walk in travel order: every cell entered, one grid step apart. */
   route: SnakeStep[];
   cycleMs: number;
   /** Square key -> ms after cycle start at which the snake eats it. */
   vanishAt: Map<string, number>;
-  /** Ms after cycle start of each long leap's landing (short hops zip visibly). */
-  teleports: number[];
 }
 
 export interface PlanePass {
@@ -152,10 +142,13 @@ const HUNT_WIDTH = 3;
 function huntOrder(alive: ContribCell[]): ContribCell[] {
   const remaining = new Map<string, ContribCell>();
   alive.forEach((c) => remaining.set(c.key, c));
-  const order: ContribCell[] = [];
-  let head: ContribPoint = alive.reduce((best, c) =>
+  // First kill is the start cell itself, so the head always appears in view.
+  const start = alive.reduce((best, c) =>
     c.col > best.col || (c.col === best.col && c.row < best.row) ? c : best
   );
+  remaining.delete(start.key);
+  const order: ContribCell[] = [start];
+  let head: ContribPoint = { col: start.col, row: start.row };
   while (remaining.size) {
     const byDist = Array.from(remaining.values())
       .map((c) => ({ c, d: Math.abs(c.col - head.col) + Math.abs(c.row - head.row) }))
@@ -177,28 +170,26 @@ const DIRS: Array<[number, number]> = [
 ];
 
 /**
- * One step toward the target along the shortest all-green path that avoids
- * the body. Greens are the only legal ground — the head never steps on an
- * empty square. Returns null when the target sits on a disconnected patch no
- * green path can reach — or when the head is fully surrounded with no green
- * stride left: the caller dives the head straight there instead of walking
- * the empties between.
+ * One step toward the target along the shortest path that avoids the body.
+ * The head may cross empty squares to get there — but empties are never
+ * targets, only greens are eaten. The body slides every step, so the search
+ * runs per step against the current trail: the head threads around itself
+ * instead of crossing through it, and shortest-path steps never wander away
+ * from the kill.
  */
 function nextStep(
   head: SnakeStep,
   target: ContribPoint,
   occupied: Set<string>,
   tail: SnakeStep | null,
-  greens: Set<string>,
   c0: number,
   c1: number
-): SnakeStep | null {
+): SnakeStep {
   const key = (c: number, r: number): string => `${c}:${r}`;
   const targetKey = key(target.col, target.row);
   if (key(head.col, head.row) === targetKey) return head;
-  // Shortest first step to the target; every neighbor must be green, and
-  // blocked() walls extra squares off (the body — or nothing, to test whether
-  // the patch is even connected). The target itself is always enterable.
+  // Shortest first step to the target, treating body squares as walls. The
+  // target itself is always enterable.
   const search = (blocked: (k: string) => boolean): SnakeStep | null => {
     const prev = new Map<string, SnakeStep | null>();
     const queue: SnakeStep[] = [{ col: head.col, row: head.row }];
@@ -220,7 +211,7 @@ function nextStep(
         if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS) continue;
         const k = key(nc, nr);
         if (prev.has(k)) continue;
-        if (k !== targetKey && (blocked(k) || !greens.has(k))) continue;
+        if (k !== targetKey && blocked(k)) continue;
         prev.set(k, cur);
         queue.push({ col: nc, row: nr });
       }
@@ -229,18 +220,16 @@ function nextStep(
   };
   const step = search((k) => occupied.has(k));
   if (step) return step;
-  // No free path: a connected patch means boxed in by body (escape below); a
-  // disconnected one means dive.
-  if (!search(() => false)) return null;
-  // Boxed in: escape onto the green neighbor closest to the target, or onto
-  // the tail tip (it vacates as the head arrives, like the game).
+  // No free path, but the grid is open ground: boxed in by body, so escape
+  // onto the free neighbor closest to the target, or onto the tail tip (it
+  // vacates as the head arrives, like the game).
   let best: SnakeStep | null = null;
   let bestDist = Infinity;
   for (const [dc, dr] of DIRS) {
     const nc = head.col + dc;
     const nr = head.row + dr;
     const k = key(nc, nr);
-    if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS || occupied.has(k) || !greens.has(k)) continue;
+    if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS || occupied.has(k)) continue;
     const d = Math.abs(target.col - nc) + Math.abs(target.row - nr);
     if (d < bestDist) {
       bestDist = d;
@@ -250,55 +239,51 @@ function nextStep(
   if (best) return best;
   if (
     tail &&
-    greens.has(key(tail.col, tail.row)) &&
     Math.abs(tail.col - head.col) + Math.abs(tail.row - head.row) === 1 &&
     tail.col >= c0 &&
     tail.col <= c1
   ) {
     return { col: tail.col, row: tail.row };
   }
-  // Fully surrounded: one direct stride as the last resort — but only onto a
-  // green; otherwise dive instead. Off-green landings are never allowed.
+  // Fully surrounded: one direct stride as the last resort (the route guard
+  // bounds even this).
   const dx = target.col - head.col;
   const dy = target.row - head.row;
-  const sx = Math.abs(dx) >= Math.abs(dy) ? head.col + Math.sign(dx) : head.col;
-  const sy = Math.abs(dx) >= Math.abs(dy) ? head.row : head.row + Math.sign(dy);
-  return greens.has(key(sx, sy)) ? { col: sx, row: sy } : null;
+  if (Math.abs(dx) >= Math.abs(dy)) return { col: head.col + Math.sign(dx), row: head.row };
+  return { col: head.col, row: head.row + Math.sign(dy) };
 }
 /**
  * The classic route: the head walks the grid one cell at a time and eats every
- * green square it steps on, chasing its hunt order until nothing is left.
- * Every step stays on greens and paths around the current body (see nextStep),
- * so the head never crosses its own trail, never wanders onto empties, and
- * every stride approaches the kill — the walk stays tight like the game
- * instead of jumbling across the grid. The body simply follows the head's
- * footprints: a chain of whole cells winding around. Kills eaten in passing
- * are skipped as waypoints, so the head never doubles back onto its own trail
- * for one. Between disconnected patches the head dives: it lands on the next
- * kill invisibly (see teleports) instead of walking the empties between.
+ * green square it steps on, chasing its hunt order until nothing is left. The
+ * head may cross empty squares to reach its kills, but empties are never
+ * targets — only the head's first visit to a green eats it. Every step paths
+ * around the current body (see nextStep), so the head never crosses its own
+ * trail and every stride approaches the kill — the walk stays tight like the
+ * game instead of jumbling across the grid. The body simply follows the head's
+ * footprints: a chain of whole cells winding around, so bites always land
+ * under the head, never under the body. Kills eaten in passing are skipped as
+ * waypoints, so the head never doubles back onto its own trail for one.
  */
 function buildRoute(
   lunch: ContribCell[],
-  greens: Set<string>,
   c0: number,
   c1: number
-): { route: SnakeStep[]; bites: number[]; teleports: number[] } {
+): { route: SnakeStep[]; bites: number[] } {
   const route: SnakeStep[] = [];
   const bites: number[] = [];
-  const teleports: number[] = [];
   let head = { col: lunch[0].col, row: lunch[0].row };
   route.push(head);
-  const pos = (s: SnakeStep): string => `${s.col}:${s.row}`;
+  const at = (s: SnakeStep): string => `${s.col}:${s.row}`;
   // Squares eaten so far (the start square dies under the head at t=0).
-  const eaten = new Set<string>([pos(head)]);
+  const eaten = new Set<string>([at(head)]);
   let next = 1;
-  // Fail-safe: the stepper always returns a move or a dive, but a corrupt
-  // grid must never spin — bail out instead of looping forever.
+  // Fail-safe: the stepper always returns a move, but a corrupt grid must
+  // never spin — bail out instead of looping forever.
   const maxSteps = Math.max(500, lunch.length * 50);
   while (next < lunch.length && route.length < maxSteps) {
     // Skip kills already eaten in passing — the head never doubles back onto
     // its own trail for a dead waypoint.
-    while (next < lunch.length && eaten.has(pos(lunch[next]))) next++;
+    while (next < lunch.length && eaten.has(at(lunch[next]))) next++;
     if (next >= lunch.length) break;
     const target = lunch[next];
     // Cells the visible body covers right now (the tail tip sits just outside
@@ -309,18 +294,9 @@ function buildRoute(
     }
     // The vacating tail tip, for the fully-surrounded escape in nextStep.
     const tail = route.length >= SNAKE_BODY_CELLS + 1 ? route[route.length - SNAKE_BODY_CELLS - 1] : null;
-    const move = nextStep(head, target, occupied, tail, greens, c0, c1);
-    if (!move) {
-      head = { col: target.col, row: target.row };
-      route.push(head);
-      teleports.push(route.length - 1);
-      eaten.add(pos(head));
-      next++;
-      continue;
-    }
-    head = move;
+    head = nextStep(head, target, occupied, tail, c0, c1);
     route.push(head);
-    eaten.add(pos(head));
+    eaten.add(at(head));
     if (head.col === target.col && head.row === target.row) next++;
   }
   const keyAt = new Map<string, number>();
@@ -330,17 +306,14 @@ function buildRoute(
     // First visit eats it; the walk can cross a square it already ate.
     if (target !== undefined && bites[target] === undefined) bites[target] = i;
   });
-  return { route, bites, teleports };
+  return { route, bites };
 }
 
 export function buildSnakePlan(alive: ContribCell[], cols: number): SnakePlan {
   if (!alive.length) {
-    return { mode: "snake", route: [], cycleMs: SNAKE_MIN_MS, vanishAt: new Map(), teleports: [] };
+    return { mode: "snake", route: [], cycleMs: SNAKE_MIN_MS, vanishAt: new Map() };
   }
   const lunch = huntOrder(alive);
-  // Greens are the only legal ground: the head walks them and dives between
-  // their patches, never stepping on an empty square.
-  const greens = new Set<string>(alive.map((c) => `${c.col}:${c.row}`));
   // Keep the pathfinder on the greens' turf (plus a little margin) so the
   // head routes around its body instead of detouring across empty grid.
   let lo = cols;
@@ -351,18 +324,14 @@ export function buildSnakePlan(alive: ContribCell[], cols: number): SnakePlan {
   });
   const c0 = Math.max(0, lo - 2);
   const c1 = Math.min(Math.max(cols - 1, 0), hi + 2);
-  const { route, bites, teleports: teleportsIdx } = buildRoute(lunch, greens, c0, c1);
+  const { route, bites } = buildRoute(lunch, c0, c1);
   // One steady tick per cell: a long year costs more than a short one. The
   // floor keeps a bare year readable, the cap a crowded one from crawling.
   const cycleMs = Math.min(MAX_CYCLE_MS, Math.max(SNAKE_MIN_MS, route.length * SNAKE_MS_PER_CELL));
   const vanishAt = new Map<string, number>();
   const span = Math.max(1, route.length - 1);
   lunch.forEach((cell, i) => vanishAt.set(cell.key, ((bites[i] ?? span) / span) * cycleMs));
-  // Only long leaps blink; short hops between nearby patches zip visibly.
-  const teleports = teleportsIdx
-    .filter((j) => Math.abs(route[j].col - route[j - 1].col) + Math.abs(route[j].row - route[j - 1].row) > DIVE_BLINK_DIST)
-    .map((j) => (j / span) * cycleMs);
-  return { mode: "snake", route, cycleMs, vanishAt, teleports };
+  return { mode: "snake", route, cycleMs, vanishAt };
 }
 
 export function buildPlanePlan(alive: ContribCell[], cols: number): PlanePlan {

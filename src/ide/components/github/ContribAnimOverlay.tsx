@@ -62,7 +62,9 @@ export function ContribAnimOverlay({ anim }: { anim: ContribAnimationState }) {
 
 const styles = StyleSheet.create({
   layer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
-  segment: { position: "absolute", left: 0, top: 0, width: CELL, height: CELL, borderRadius: 3 },
+  // Segments run 1px large on every side so neighbors overlap into one
+  // connected body instead of spaced beads.
+  segment: { position: "absolute", left: -1, top: -1, width: CELL + 2, height: CELL + 2, borderRadius: 4 },
   plane: { position: "absolute", left: 0, top: 0, width: PLANE_BOX, height: PLANE_BOX },
   fuselage: { position: "absolute", left: 1, top: 6.5, width: 13, height: 3, borderRadius: 1.5 },
   wing: { position: "absolute", left: 6, top: 2.5, width: 3, height: 11, borderRadius: 1.5 },
