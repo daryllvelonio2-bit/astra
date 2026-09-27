@@ -41,10 +41,10 @@ export const EXIT_MS = ms(260);
 /** Gap between two strafing passes (the aircraft lines up out of sight). */
 const PASS_GAP_MS = ms(170);
 /** Longest a single animation may run before every square is gone. */
-const MAX_CYCLE_MS = ms(9000);
-/** Hunt pace: one steady cruise speed, plus the cycle floor. */
-const SNAKE_MS_PER_CELL = ms(95);
-const SNAKE_MIN_MS = ms(2600);
+const MAX_CYCLE_MS = ms(15000);
+/** Cruise pace: one steady tick per cell of the winding walk. */
+const SNAKE_MS_PER_CELL = ms(20);
+const SNAKE_MIN_MS = ms(1300);
 /** Classic arcade body: head plus this many trailing segments, in cells. */
 export const SNAKE_BODY_CELLS = 6;
 /** Strafing pass bounds, and the budget all passes share. */
@@ -126,12 +126,15 @@ export function snakeEase(u: number): number {
   return u;
 }
 
+/** How many of the closest uneaten squares the snake picks its next kill from. */
+const HUNT_WIDTH = 3;
+
 /**
- * Dynamic hunt: the snake starts where the user looks (newest week, already
- * in view — the scroller pins to the recent end) and always chases the
- * closest uneaten square, so the route winds through the data like the game
- * instead of mowing it column by column. Ties drift toward newer weeks, then
- * upward — fully deterministic for the same year.
+ * Random hunt: the snake starts where the user looks (newest week, already in
+ * view — the scroller pins to the recent end), then each kill is a random pick
+ * among the closest uneaten squares, so every cycle darts a different trail.
+ * Hops stay short (no cross-grid dashes), which keeps the walk — and the pace
+ * below — bounded no matter how the shuffle lands.
  */
 function huntOrder(alive: ContribCell[]): ContribCell[] {
   const remaining = new Map<string, ContribCell>();
@@ -141,20 +144,11 @@ function huntOrder(alive: ContribCell[]): ContribCell[] {
     c.col > best.col || (c.col === best.col && c.row < best.row) ? c : best
   );
   while (remaining.size) {
-    let next: ContribCell | null = null;
-    let nextDist = Infinity;
-    for (const c of remaining.values()) {
-      const d = Math.abs(c.col - head.col) + Math.abs(c.row - head.row);
-      if (
-        !next ||
-        d < nextDist ||
-        (d === nextDist && (c.col > next.col || (c.col === next.col && c.row < next.row)))
-      ) {
-        next = c;
-        nextDist = d;
-      }
-    }
-    if (!next) break;
+    const byDist = Array.from(remaining.values())
+      .map((c) => ({ c, d: Math.abs(c.col - head.col) + Math.abs(c.row - head.row) }))
+      .sort((a, b) => a.d - b.d || (a.c.key < b.c.key ? -1 : 1));
+    const pool = byDist.slice(0, Math.min(HUNT_WIDTH, byDist.length));
+    const next = pool[Math.floor(Math.random() * pool.length)].c;
     remaining.delete(next.key);
     order.push(next);
     head = { col: next.col, row: next.row };

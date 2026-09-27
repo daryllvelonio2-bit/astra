@@ -1,10 +1,10 @@
 # Project Progress Tracker
 
-### [2026-09-27] - Snake hunts nearest food instead of mowing columns
-- **User directive:** snake went up and down; make it move properly, dynamically.
-- **Cause:** the route chased a fixed left-to-right, top-to-bottom target list, so in dense weeks it mowed each column vertically — repeated up-down runs.
-- **Change (`contribPlan.ts` 261→289, plan-only):** new `huntOrder` replaces `lunchLine` — starts at the newest week (in view, scroller pins to the recent end) and always chases the closest uneaten square (Manhattan, ties drift newer-then-up, deterministic). `buildRoute`/`vanishAt`/pacing/animation nodes untouched, so bite sync and the single native-driven progress value are unchanged.
-- **Verify:** `tsc --noEmit` exit 0 repo-wide; **13/13 contract checks on the real compiled module** (unit Manhattan steps, every green eaten once inside the cycle, starts at newest week, nearest-neighbor order, differs from column sweep, deterministic, empty/single/one-column safe); temp probe + compiled output deleted after green.
+### [2026-09-27] - Snake hunts randomly instead of mowing columns
+- **User directive:** snake went up and down; make it move dynamically — random, not nearest.
+- **Cause:** the route chased a fixed left-to-right, top-to-bottom target list, so in dense weeks it mowed each column vertically — repeated up-down runs. (Nearest-neighbor was tried first and still read as repetitive; user corrected to random.)
+- **Change (`contribPlan.ts`, plan-only):** new `huntOrder` — starts at the newest week (in view, scroller pins to the recent end), then chases the remaining greens in Fisher-Yates-shuffled order, rebuilt fresh every cycle so no two runs trace the same path. `buildRoute`/`vanishAt`/pacing/animation nodes untouched, so bite sync and the single native-driven progress value are unchanged.
+- **Verify:** `tsc --noEmit` exit 0 repo-wide; **5/5 contract checks on the real compiled module** (5 fresh cycles all valid: unit Manhattan steps, every green eaten once inside the cycle; cycles differ across runs; every cycle starts at newest week; empty/single safe); temp probe + compiled output deleted after green.
 
 ### [2026-09-27] - GitHub Home: recent repositories section removed
 - **User directive:** remove Recent Repositories from the GitHub Home tab.
