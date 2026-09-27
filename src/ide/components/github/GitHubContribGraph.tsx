@@ -24,12 +24,12 @@ export function GitHubContribGraph({ login }: { login: string }) {
   const data = cal.data;
   const scrollRef = React.useRef<ScrollView>(null);
 
-  const emptyTrack = theme.isDark ? "#21262d" : "#ebedf0";
+  const emptyTrack = theme.bgTertiary;
 
   const columns = React.useMemo(() => {
     if (!data) return [];
     return data.weeks.map((days, wi) => {
-      const slots: ({ key: string; color: string } | null)[] = new Array(ROWS).fill(null);
+      const slots: ({ key: string; color: string; count: number } | null)[] = new Array(ROWS).fill(null);
       days.forEach((d) => {
         let wd = 0;
         try {
@@ -39,17 +39,19 @@ export function GitHubContribGraph({ login }: { login: string }) {
         }
         // Weeks arrive Sunday-first; the first/last weeks are partial, so
         // index within the column by weekday and leave the rest empty.
-        slots[wd >= 0 && wd < ROWS ? wd : 0] = { key: d.date || `${wi}-${wd}`, color: d.color };
+        slots[wd >= 0 && wd < ROWS ? wd : 0] = { key: d.date || `${wi}-${wd}`, color: d.color, count: d.count };
       });
       return slots;
     });
   }, [data]);
 
+  // Only days with real contributions are prey — empty squares are never
+  // eaten, never animated, and the snake never walks them.
   const alive = React.useMemo(() => {
     const squares: ContribCell[] = [];
     columns.forEach((slots, col) => {
       slots.forEach((slot, row) => {
-        if (slot) squares.push({ key: slot.key, col, row });
+        if (slot && slot.count > 0) squares.push({ key: slot.key, col, row });
       });
     });
     return squares;
@@ -78,9 +80,11 @@ export function GitHubContribGraph({ login }: { login: string }) {
             {columns.map((slots, wi) => (
               <View key={`w${wi}`} style={styles.col}>
                 {slots.map((slot, di) => {
-                  if (!slot) {
+                  // Structural gaps and zero-contribution days share the theme
+                  // gray — never the API's light palette, never animated.
+                  if (!slot || slot.count === 0) {
                     return (
-                      <View key={`e${wi}-${di}`} style={[styles.cell, { backgroundColor: emptyTrack }]} />
+                      <View key={slot?.key ?? `e${wi}-${di}`} style={[styles.cell, { backgroundColor: emptyTrack }]} />
                     );
                   }
                   const square = anim.cells.get(slot.key);

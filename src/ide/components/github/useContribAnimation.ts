@@ -157,6 +157,27 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
         });
       }
 
+      // Long leaps between far patches happen while the sprite blinks, so the
+      // jump across empties is never seen; short hops zip visibly.
+      if (plan.mode === "snake" && snake) {
+        plan.teleports.forEach((t) => {
+          timers.push(
+            setTimeout(() => {
+              if (!unmounted) {
+                track(Animated.timing(snake.fade, { toValue: 0, duration: EXIT_MS, useNativeDriver: true }));
+              }
+            }, Math.max(0, t - EXIT_MS))
+          );
+          timers.push(
+            setTimeout(() => {
+              if (!unmounted) {
+                track(Animated.timing(snake.fade, { toValue: 1, duration: EXIT_MS, useNativeDriver: true }));
+              }
+            }, t)
+          );
+        });
+      }
+
       setNodes({ mode, snake, plane });
       // No hold, no rest — the next hunt starts the instant this one ends.
       timers.push(setTimeout(runHunt, plan.cycleMs));

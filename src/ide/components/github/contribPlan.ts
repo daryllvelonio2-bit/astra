@@ -50,6 +50,11 @@ const SNAKE_MS_PER_CELL = ms(30);
 const SNAKE_MIN_MS = ms(1300);
 /** Classic arcade body: head plus this many trailing segments, in cells. */
 export const SNAKE_BODY_CELLS = 6;
+/**
+ * Dives longer than this (in cells) blink the sprite; shorter hops between
+ * nearby patches just zip across in one tick.
+ */
+const DIVE_BLINK_DIST = 2;
 /** Strafing pass bounds, and the budget all passes share. */
 const PASS_MIN_MS = ms(900);
 const PASS_MAX_MS = ms(1400);
@@ -75,11 +80,16 @@ export interface SnakeStep {
 
 export interface SnakePlan {
   mode: "snake";
-  /** The head's walk in travel order: every cell entered, one grid step apart. */
+  /**
+   * The head's walk in travel order: every step lands on a green square, one
+   * grid move apart — except dive landings, which jump patches invisibly.
+   */
   route: SnakeStep[];
   cycleMs: number;
   /** Square key -> ms after cycle start at which the snake eats it. */
   vanishAt: Map<string, number>;
+  /** Ms after cycle start of each long leap's landing (short hops zip visibly). */
+  teleports: number[];
 }
 
 export interface PlanePass {
@@ -167,59 +177,70 @@ const DIRS: Array<[number, number]> = [
 ];
 
 /**
- * One step toward the target along the shortest path that avoids the body.
- * The body slides every step, so the search runs per step against the current
- * trail — the head threads around itself instead of crossing through it, and
- * shortest-path steps never wander away from the kill. If no free path exists,
- * it escapes onto the free neighbor closest to the target; only a head fully
- * surrounded by body falls through to the direct stride (and the route guard
- * below bounds even that).
+ * One step toward the target along the shortest all-green path that avoids
+ * the body. Greens are the only legal ground — the head never steps on an
+ * empty square. Returns null when the target sits on a disconnected patch no
+ * green path can reach — or when the head is fully surrounded with no green
+ * stride left: the caller dives the head straight there instead of walking
+ * the empties between.
  */
 function nextStep(
   head: SnakeStep,
   target: ContribPoint,
   occupied: Set<string>,
   tail: SnakeStep | null,
+  greens: Set<string>,
   c0: number,
   c1: number
-): SnakeStep {
+): SnakeStep | null {
   const key = (c: number, r: number): string => `${c}:${r}`;
-  if (head.col === target.col && head.row === target.row) return head;
-  const prev = new Map<string, SnakeStep | null>();
-  const queue: SnakeStep[] = [{ col: head.col, row: head.row }];
-  prev.set(key(head.col, head.row), null);
-  for (let qi = 0; qi < queue.length; qi++) {
-    const cur = queue[qi];
-    if (cur.col === target.col && cur.row === target.row) {
-      let node = cur;
-      let p = prev.get(key(node.col, node.row));
-      while (p && (p.col !== head.col || p.row !== head.row)) {
-        node = p;
-        p = prev.get(key(p.col, p.row));
+  const targetKey = key(target.col, target.row);
+  if (key(head.col, head.row) === targetKey) return head;
+  // Shortest first step to the target; every neighbor must be green, and
+  // blocked() walls extra squares off (the body — or nothing, to test whether
+  // the patch is even connected). The target itself is always enterable.
+  const search = (blocked: (k: string) => boolean): SnakeStep | null => {
+    const prev = new Map<string, SnakeStep | null>();
+    const queue: SnakeStep[] = [{ col: head.col, row: head.row }];
+    prev.set(key(head.col, head.row), null);
+    for (let qi = 0; qi < queue.length; qi++) {
+      const cur = queue[qi];
+      if (key(cur.col, cur.row) === targetKey) {
+        let node = cur;
+        let p = prev.get(key(node.col, node.row));
+        while (p && (p.col !== head.col || p.row !== head.row)) {
+          node = p;
+          p = prev.get(key(p.col, p.row));
+        }
+        return node;
       }
-      return node;
+      for (const [dc, dr] of DIRS) {
+        const nc = cur.col + dc;
+        const nr = cur.row + dr;
+        if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS) continue;
+        const k = key(nc, nr);
+        if (prev.has(k)) continue;
+        if (k !== targetKey && (blocked(k) || !greens.has(k))) continue;
+        prev.set(k, cur);
+        queue.push({ col: nc, row: nr });
+      }
     }
-    for (const [dc, dr] of DIRS) {
-      const nc = cur.col + dc;
-      const nr = cur.row + dr;
-      if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS) continue;
-      const k = key(nc, nr);
-      if (prev.has(k)) continue;
-      const isTarget = nc === target.col && nr === target.row;
-      if (!isTarget && occupied.has(k)) continue;
-      prev.set(k, cur);
-      queue.push({ col: nc, row: nr });
-    }
-  }
-  // Boxed in (no free path — rare with a 6-long body on an open grid):
-  // escape onto the free neighbor closest to the target, or onto the tail tip
-  // (it vacates as the head arrives, like the game) — never through the body.
+    return null;
+  };
+  const step = search((k) => occupied.has(k));
+  if (step) return step;
+  // No free path: a connected patch means boxed in by body (escape below); a
+  // disconnected one means dive.
+  if (!search(() => false)) return null;
+  // Boxed in: escape onto the green neighbor closest to the target, or onto
+  // the tail tip (it vacates as the head arrives, like the game).
   let best: SnakeStep | null = null;
   let bestDist = Infinity;
   for (const [dc, dr] of DIRS) {
     const nc = head.col + dc;
     const nr = head.row + dr;
-    if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS || occupied.has(key(nc, nr))) continue;
+    const k = key(nc, nr);
+    if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS || occupied.has(k) || !greens.has(k)) continue;
     const d = Math.abs(target.col - nc) + Math.abs(target.row - nr);
     if (d < bestDist) {
       bestDist = d;
@@ -227,46 +248,52 @@ function nextStep(
     }
   }
   if (best) return best;
-  // Fully surrounded: the tail tip vacates as the head arrives, so stepping
-  // onto it when adjacent is safe — the last move that avoids the body.
   if (
     tail &&
+    greens.has(key(tail.col, tail.row)) &&
     Math.abs(tail.col - head.col) + Math.abs(tail.row - head.row) === 1 &&
     tail.col >= c0 &&
     tail.col <= c1
   ) {
     return { col: tail.col, row: tail.row };
   }
+  // Fully surrounded: one direct stride as the last resort — but only onto a
+  // green; otherwise dive instead. Off-green landings are never allowed.
   const dx = target.col - head.col;
   const dy = target.row - head.row;
-  if (Math.abs(dx) >= Math.abs(dy)) return { col: head.col + Math.sign(dx), row: head.row };
-  return { col: head.col, row: head.row + Math.sign(dy) };
+  const sx = Math.abs(dx) >= Math.abs(dy) ? head.col + Math.sign(dx) : head.col;
+  const sy = Math.abs(dx) >= Math.abs(dy) ? head.row : head.row + Math.sign(dy);
+  return greens.has(key(sx, sy)) ? { col: sx, row: sy } : null;
 }
 /**
  * The classic route: the head walks the grid one cell at a time and eats every
- * square it steps on, chasing its hunt order until nothing is left. Every step
- * paths around the current body (see nextStep), so the head never crosses its
- * own trail and every stride approaches the kill — the walk stays tight like
- * the game instead of jumbling across the grid. The body simply follows the
- * head's footprints: a chain of whole cells winding around. Kills eaten in
- * passing are skipped as waypoints, so the head never doubles back onto its
- * own trail for one.
+ * green square it steps on, chasing its hunt order until nothing is left.
+ * Every step stays on greens and paths around the current body (see nextStep),
+ * so the head never crosses its own trail, never wanders onto empties, and
+ * every stride approaches the kill — the walk stays tight like the game
+ * instead of jumbling across the grid. The body simply follows the head's
+ * footprints: a chain of whole cells winding around. Kills eaten in passing
+ * are skipped as waypoints, so the head never doubles back onto its own trail
+ * for one. Between disconnected patches the head dives: it lands on the next
+ * kill invisibly (see teleports) instead of walking the empties between.
  */
 function buildRoute(
   lunch: ContribCell[],
+  greens: Set<string>,
   c0: number,
   c1: number
-): { route: SnakeStep[]; bites: number[] } {
+): { route: SnakeStep[]; bites: number[]; teleports: number[] } {
   const route: SnakeStep[] = [];
   const bites: number[] = [];
+  const teleports: number[] = [];
   let head = { col: lunch[0].col, row: lunch[0].row };
   route.push(head);
   const pos = (s: SnakeStep): string => `${s.col}:${s.row}`;
   // Squares eaten so far (the start square dies under the head at t=0).
   const eaten = new Set<string>([pos(head)]);
   let next = 1;
-  // Fail-safe: the stepper always returns a move, but a corrupt grid must
-  // never spin — bail out instead of looping forever.
+  // Fail-safe: the stepper always returns a move or a dive, but a corrupt
+  // grid must never spin — bail out instead of looping forever.
   const maxSteps = Math.max(500, lunch.length * 50);
   while (next < lunch.length && route.length < maxSteps) {
     // Skip kills already eaten in passing — the head never doubles back onto
@@ -282,7 +309,16 @@ function buildRoute(
     }
     // The vacating tail tip, for the fully-surrounded escape in nextStep.
     const tail = route.length >= SNAKE_BODY_CELLS + 1 ? route[route.length - SNAKE_BODY_CELLS - 1] : null;
-    head = nextStep(head, target, occupied, tail, c0, c1);
+    const move = nextStep(head, target, occupied, tail, greens, c0, c1);
+    if (!move) {
+      head = { col: target.col, row: target.row };
+      route.push(head);
+      teleports.push(route.length - 1);
+      eaten.add(pos(head));
+      next++;
+      continue;
+    }
+    head = move;
     route.push(head);
     eaten.add(pos(head));
     if (head.col === target.col && head.row === target.row) next++;
@@ -294,14 +330,17 @@ function buildRoute(
     // First visit eats it; the walk can cross a square it already ate.
     if (target !== undefined && bites[target] === undefined) bites[target] = i;
   });
-  return { route, bites };
+  return { route, bites, teleports };
 }
 
 export function buildSnakePlan(alive: ContribCell[], cols: number): SnakePlan {
   if (!alive.length) {
-    return { mode: "snake", route: [], cycleMs: SNAKE_MIN_MS, vanishAt: new Map() };
+    return { mode: "snake", route: [], cycleMs: SNAKE_MIN_MS, vanishAt: new Map(), teleports: [] };
   }
   const lunch = huntOrder(alive);
+  // Greens are the only legal ground: the head walks them and dives between
+  // their patches, never stepping on an empty square.
+  const greens = new Set<string>(alive.map((c) => `${c.col}:${c.row}`));
   // Keep the pathfinder on the greens' turf (plus a little margin) so the
   // head routes around its body instead of detouring across empty grid.
   let lo = cols;
@@ -312,14 +351,18 @@ export function buildSnakePlan(alive: ContribCell[], cols: number): SnakePlan {
   });
   const c0 = Math.max(0, lo - 2);
   const c1 = Math.min(Math.max(cols - 1, 0), hi + 2);
-  const { route, bites } = buildRoute(lunch, c0, c1);
+  const { route, bites, teleports: teleportsIdx } = buildRoute(lunch, greens, c0, c1);
   // One steady tick per cell: a long year costs more than a short one. The
   // floor keeps a bare year readable, the cap a crowded one from crawling.
   const cycleMs = Math.min(MAX_CYCLE_MS, Math.max(SNAKE_MIN_MS, route.length * SNAKE_MS_PER_CELL));
   const vanishAt = new Map<string, number>();
   const span = Math.max(1, route.length - 1);
   lunch.forEach((cell, i) => vanishAt.set(cell.key, ((bites[i] ?? span) / span) * cycleMs));
-  return { mode: "snake", route, cycleMs, vanishAt };
+  // Only long leaps blink; short hops between nearby patches zip visibly.
+  const teleports = teleportsIdx
+    .filter((j) => Math.abs(route[j].col - route[j - 1].col) + Math.abs(route[j].row - route[j - 1].row) > DIVE_BLINK_DIST)
+    .map((j) => (j / span) * cycleMs);
+  return { mode: "snake", route, cycleMs, vanishAt, teleports };
 }
 
 export function buildPlanePlan(alive: ContribCell[], cols: number): PlanePlan {

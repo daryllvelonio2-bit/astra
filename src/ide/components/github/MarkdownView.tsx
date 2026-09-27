@@ -1,194 +1,70 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { useTheme, ThemeColors } from "../../../theme/themeContext";
+import { normalizeReadmeHtml } from "./markdownHtml";
+import { MarkdownBlock, parseMarkdown, renderInline } from "./MarkdownParser";
 
 /**
- * Minimal markdown renderer for repo READMEs — no native deps. Covers the
- * blocks GitHub READMEs actually use: headings, paragraphs, lists (ul/ol),
- * blockquotes, fenced + indented code, hr, tables, and images; inline:
- * bold, italic, strike, code spans, links. Line-by-line, not recursive,
- * so a 2000-line README costs one pass.
+ * Renders a GitHub README: normalizes HTML (div-align, raw img/kbd/br) into
+ * markdown blocks, then lays them out. Centered groups for badge strips,
+ * collapsible <details>, width-sized images, and horizontal badge rows.
  */
 
-export type MarkdownBlock =
-  | { type: "heading"; level: number; text: string }
-  | { type: "para"; text: string }
-  | { type: "ul"; items: string[] }
-  | { type: "ol"; items: string[] }
-  | { type: "quote"; lines: string[] }
-  | { type: "code"; lang: string; text: string }
-  | { type: "hr" }
-  | { type: "table"; header: string[]; rows: string[][] }
-  | { type: "img"; alt: string; src: string };
+const IMG = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g;
+const IMG_ONLY = /^(!\[[^\]]*\]\([^)\s]+(?:\s+"[^"]*")?\)\s*)+$/;
 
-export function parseMarkdown(src: string): MarkdownBlock[] {
-  const out: MarkdownBlock[] = [];
-  const lines = src.replace(/\r\n/g, "\n").split("\n");
-  let i = 0;
-
-  const pushPara = (buf: string) => {
-    const t = buf.trim();
-    if (!t) return;
-    const img = /^!\[([^\]]*)\]\(([^)\s]+)/.exec(t);
-    if (img) out.push({ type: "img", alt: img[1], src: img[2] });
-    else out.push({ type: "para", text: t });
-  };
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    if (!line.trim()) {
-      i++;
-      continue;
-    }
-
-    // fenced code
-    const fence = /^\s*(```|~~~)\s*([^\s`]*)/.exec(line);
-    if (fence) {
-      const body: string[] = [];
-      i++;
-      while (i < lines.length && !new RegExp(`^\\s*${fence[1]}`).test(lines[i])) {
-        body.push(lines[i]);
-        i++;
-      }
-      i++; // closing fence (or EOF)
-      out.push({ type: "code", lang: fence[2], text: body.join("\n") });
-      continue;
-    }
-
-    // heading
-    const head = /^(#{1,6})\s+(.*)$/.exec(line);
-    if (head) {
-      out.push({ type: "heading", level: head[1].length, text: head[2].trim().replace(/#+\s*$/, "") });
-      i++;
-      continue;
-    }
-
-    // hr
-    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
-      out.push({ type: "hr" });
-      i++;
-      continue;
-    }
-
-    // table: header row + separator
-    if (line.includes("|") && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes("-")) {
-      const cells = (row: string) => row.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
-      const header = cells(line);
-      i += 2;
-      const rows: string[][] = [];
-      while (i < lines.length && lines[i].includes("|") && lines[i].trim()) {
-        rows.push(cells(lines[i]));
-        i++;
-      }
-      out.push({ type: "table", header, rows });
-      continue;
-    }
-
-    // blockquote
-    if (/^\s*>/.test(line)) {
-      const q: string[] = [];
-      while (i < lines.length && /^\s*>/.test(lines[i])) {
-        q.push(lines[i].replace(/^\s*>\s?/, ""));
-        i++;
-      }
-      out.push({ type: "quote", lines: q });
-      continue;
-    }
-
-    // lists (one nesting level: nested items fold into the parent)
-    if (/^\s*([-*+]|\d+[.)])\s+/.test(line)) {
-      const ordered = /^\s*\d/.test(line);
-      const items: string[] = [];
-      while (i < lines.length && (/^\s*([-*+]|\d+[.)])\s+/.test(lines[i]) || (lines[i].trim() && /^\s{2,}\S/.test(lines[i])))) {
-        if (/^\s*([-*+]|\d+[.)])\s+/.test(lines[i])) items.push(lines[i].replace(/^\s*([-*+]|\d+[.)])\s+/, ""));
-        else items[items.length - 1] += " " + lines[i].trim();
-        i++;
-        // blank line followed by another list item keeps going
-        if (i < lines.length && !lines[i].trim() && i + 1 < lines.length && /^\s*([-*+]|\d+[.)])\s+/.test(lines[i + 1])) i++;
-      }
-      out.push({ type: ordered ? "ol" : "ul", items });
-      continue;
-    }
-
-    // paragraph: fold plain lines until a blank line or a block starter
-    const buf: string[] = [];
-    while (
-      i < lines.length &&
-      lines[i].trim() &&
-      !/^\s*(```|~~~)/.test(lines[i]) &&
-      !/^(#{1,6})\s/.test(lines[i]) &&
-      !/^\s*>/.test(lines[i]) &&
-      !/^\s*([-*+]|\d+[.)])\s+/.test(lines[i]) &&
-      !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])
-    ) {
-      buf.push(lines[i]);
-      i++;
-    }
-    pushPara(buf.join("\n"));
-  }
-  return out;
+function imgWidth(title?: string): number | undefined {
+  const w = /^w=(\d+)$/.exec(title || "")?.[1];
+  return w ? Number(w) : undefined;
 }
 
-/** Inline markdown -> React <Text> children (bold/italic/code/links). */
-export function renderInline(text: string, theme: ThemeColors, key: string): React.ReactNode {
-  const nodes: React.ReactNode[] = [];
-  // tokenize: link [t](u), image ![t](u), code `c`, bold **, italic *, strike ~~
-  const re = /(!?\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\))|(`[^`]+`)|(\*\*([^*_]+)\*\*)|(__([^_]+)__)|(~~([^~]+)~~)|(\*([^*\s][^*]*)\*)|(_([^_\s][^_]*)_)/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let n = 0;
-  const clean = (s: string) => s.replace(/\\([`*_~\[\]])/g, "$1");
-
-  while ((m = re.exec(text))) {
-    if (m.index > last) nodes.push(<Text key={`${key}-t${n++}`}>{clean(text.slice(last, m.index))}</Text>);
-    if (m[1]) {
-      // link or image
-      const isImg = m[1].startsWith("!");
-      const label = m[2];
-      const url = m[3];
-      if (isImg) {
-        nodes.push(
-          <Image key={`${key}-img${n++}`} source={{ uri: url }} style={{ width: "100%", height: 160, resizeMode: "contain", marginVertical: 6 }} />
-        );
-      } else {
-        nodes.push(
-          <Text
-            key={`${key}-a${n++}`}
-            style={{ color: theme.accent }}
-            onPress={() => void WebBrowser.openBrowserAsync(url.startsWith("http") ? url : `https://${url}`)}
-          >
-            {label || url}
-          </Text>
-        );
-      }
-    } else if (m[4]) {
-      nodes.push(
-        <Text key={`${key}-c${n++}`} style={mdStyles.code}>
-          {m[4].slice(1, -1)}
-        </Text>
-      );
-    } else if (m[5]) {
-      nodes.push(<Text key={`${key}-b${n++}`} style={{ fontWeight: "700" }}>{clean(m[6])}</Text>);
-    } else if (m[7]) {
-      nodes.push(<Text key={`${key}-B${n++}`} style={{ fontWeight: "700" }}>{clean(m[8])}</Text>);
-    } else if (m[9]) {
-      nodes.push(<Text key={`${key}-s${n++}`} style={{ textDecorationLine: "line-through" }}>{clean(m[10])}</Text>);
-    } else if (m[11]) {
-      nodes.push(<Text key={`${key}-i${n++}`} style={{ fontStyle: "italic" }}>{clean(m[12])}</Text>);
-    } else if (m[13]) {
-      nodes.push(<Text key={`${key}-I${n++}`} style={{ fontStyle: "italic" }}>{clean(m[14])}</Text>);
-    }
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) nodes.push(<Text key={`${key}-t${n++}`}>{clean(text.slice(last))}</Text>);
-  return nodes;
+function badgeHeight(w: number): number {
+  return Math.max(18, Math.min(48, Math.round(w * 0.24)));
 }
 
-export function MarkdownView({ source }: { source: string }) {
+function ImageBlock({
+  src,
+  width,
+  align,
+}: {
+  src: string;
+  width?: number;
+  align?: "center";
+}) {
+  return (
+    <Image
+      source={{ uri: src }}
+      style={[
+        width && width <= 200
+          ? { width, height: badgeHeight(width) }
+          : { width: "100%", height: 160 },
+        mdStyles.image,
+        align === "center" && { alignSelf: "center" },
+      ]}
+      resizeMode="contain"
+    />
+  );
+}
+
+function Collapsible({ summary, children }: { summary: string; children: React.ReactNode }) {
   const { theme } = useTheme();
-  const blocks = useMemo(() => parseMarkdown(source), [source]);
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={[mdStyles.details, { borderColor: theme.border }]}>
+      <TouchableOpacity onPress={() => setOpen((o) => !o)} activeOpacity={0.7} style={mdStyles.summaryRow}>
+        <Text style={{ color: theme.textMuted, fontSize: 11 }}>{open ? "▾" : "▸"}</Text>
+        <Text style={{ color: theme.accent, fontSize: 12.5, fontWeight: "600", flex: 1 }}>
+          {renderInline(summary, theme, "sum")}
+        </Text>
+      </TouchableOpacity>
+      {open && <View style={{ gap: 8, paddingTop: 8 }}>{children}</View>}
+    </View>
+  );
+}
+
+function BlockList({ blocks, align }: { blocks: MarkdownBlock[]; align?: "center" }) {
+  const { theme } = useTheme();
 
   return (
     <View style={{ gap: 8 }}>
@@ -197,8 +73,16 @@ export function MarkdownView({ source }: { source: string }) {
           case "heading": {
             const size = [20, 17, 15, 13.5, 12.5, 12][b.level - 1];
             return (
-              <View key={i} style={b.level <= 2 ? mdStyles.hRule : undefined}>
-                <Text style={{ color: theme.textPrimary, fontSize: size, fontWeight: "700", paddingTop: b.level <= 2 ? 4 : 0 }}>
+              <View key={i} style={[b.level <= 2 && mdStyles.hRule, align === "center" && { alignSelf: "center" }]}>
+                <Text
+                  style={{
+                    color: theme.textPrimary,
+                    fontSize: size,
+                    fontWeight: "700",
+                    paddingTop: b.level <= 2 ? 4 : 0,
+                    textAlign: align,
+                  }}
+                >
                   {renderInline(b.text, theme, `h${i}`)}
                 </Text>
               </View>
@@ -206,7 +90,7 @@ export function MarkdownView({ source }: { source: string }) {
           }
           case "para":
             return (
-              <Text key={i} style={{ color: theme.textSecondary, fontSize: 12.5, lineHeight: 18 }}>
+              <Text key={i} style={{ color: theme.textSecondary, fontSize: 12.5, lineHeight: 18, textAlign: b.align || align }}>
                 {renderInline(b.text, theme, `p${i}`)}
               </Text>
             );
@@ -245,11 +129,18 @@ export function MarkdownView({ source }: { source: string }) {
           case "hr":
             return <View key={i} style={[mdStyles.hr, { backgroundColor: theme.border }]} />;
           case "img":
+            return <ImageBlock key={i} src={b.src} width={b.width} align={b.align || align} />;
+          case "group":
             return (
-              <View key={i}>
-                <Image source={{ uri: b.src }} style={mdStyles.image} resizeMode="contain" />
-                {!!b.alt && <Text style={{ color: theme.textMuted, fontSize: 10 }}>{b.alt}</Text>}
+              <View key={i} style={{ alignItems: "center" }}>
+                <BlockList blocks={b.children} align="center" />
               </View>
+            );
+          case "details":
+            return (
+              <Collapsible key={i} summary={b.summary}>
+                <BlockList blocks={b.children} />
+              </Collapsible>
             );
           case "table":
             return (
@@ -278,14 +169,20 @@ export function MarkdownView({ source }: { source: string }) {
   );
 }
 
+export function MarkdownView({ source }: { source: string }) {
+  const blocks = useMemo(() => parseMarkdown(normalizeReadmeHtml(source)), [source]);
+  return <BlockList blocks={blocks} />;
+}
+
 const mdStyles = StyleSheet.create({
   hRule: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#8884", paddingBottom: 4 },
   listRow: { flexDirection: "row", gap: 8, paddingLeft: 4 },
   quote: { borderLeftWidth: 3, paddingLeft: 10, gap: 2 },
-  code: { fontFamily: "monospace", fontSize: 11.5, backgroundColor: "#8882", color: "#e88" },
   codeBlock: { borderRadius: 8, padding: 10 },
   hr: { height: StyleSheet.hairlineWidth, marginVertical: 6 },
-  image: { width: "100%", height: 180, borderRadius: 8, marginVertical: 4, backgroundColor: "#8881" },
+  image: { borderRadius: 4, marginVertical: 2, backgroundColor: "#8881" },
+  details: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  summaryRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 6, overflow: "hidden" },
   tableRow: { flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth },
   tableCell: { flex: 1, fontSize: 11, padding: 6 },

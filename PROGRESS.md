@@ -1,5 +1,11 @@
 # Project Progress Tracker
 
+### [2026-09-27] - Snake eats/walks greens only; empties gray in dark mode
+- **User directives:** (a) the snake ate squares with no contributions — empties must not be included at all. (b) in dark mode, no-contribution squares show white; they should be gray.
+- **Causes:** (a) `alive` held every calendar day including zero-count days, and the walker pathed over any cell. (b) zero-day fills used the API's light-palette color (`#ebedf0`) instead of a theme color.
+- **Change (`GitHubContribGraph.tsx`, `contribPlan.ts`, `useContribAnimation.ts`):** slots carry `count`; `alive` = count>0 only, so bites, prey, and walkable ground are greens exclusively. BFS/escape/tail/stride all require green membership — off-green steps are impossible by construction (the last-resort stride dives instead). Between disconnected patches the head dives straight onto the next kill: leaps over >2 cells blink the sprite (driver schedules fade out/in around the landing), shorter hops zip in one tick. `SnakePlan.teleports` carries the blink landings in ms. Zero days and structural gaps render `theme.bgTertiary` with no animated fill — gray in both modes, hardcoded hex gone.
+- **Verify:** `tsc --noEmit` exit 0; all three files <500 lines. Compiled-probe green-only run: 0 off-green steps across dense/checker/sparse years; every green eaten once with valid times; blink times within cycle. Leap-blink re-verification after the >2-cell threshold was blocked by an approval timeout — re-run pending. Dark-mode gray + dive feel need Metro + phone eyeball.
+
 ### [2026-09-27] - Animation runs as an endless loop, squares respawn on their own
 - **User directive:** respawn should happen randomly over time, not as a refill after the animation ends — the animation must read as continuous, no ending.
 - **Cause:** the driver ran discrete rounds (hunt → hold wiped grid → refill all → rest → next round), so every round visibly ended.
