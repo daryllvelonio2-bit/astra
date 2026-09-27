@@ -127,11 +127,39 @@ export function snakeEase(u: number): number {
 }
 
 /**
- * Totally-ordered lunch: a plain left-to-right, top-to-bottom line of targets
- * the route keeps marching toward.
+ * Dynamic hunt: the snake starts where the user looks (newest week, already
+ * in view — the scroller pins to the recent end) and always chases the
+ * closest uneaten square, so the route winds through the data like the game
+ * instead of mowing it column by column. Ties drift toward newer weeks, then
+ * upward — fully deterministic for the same year.
  */
-function lunchLine(alive: ContribCell[]): ContribCell[] {
-  return alive.slice().sort((a, b) => a.col - b.col || a.row - b.row);
+function huntOrder(alive: ContribCell[]): ContribCell[] {
+  const remaining = new Map<string, ContribCell>();
+  alive.forEach((c) => remaining.set(c.key, c));
+  const order: ContribCell[] = [];
+  let head: ContribPoint = alive.reduce((best, c) =>
+    c.col > best.col || (c.col === best.col && c.row < best.row) ? c : best
+  );
+  while (remaining.size) {
+    let next: ContribCell | null = null;
+    let nextDist = Infinity;
+    for (const c of remaining.values()) {
+      const d = Math.abs(c.col - head.col) + Math.abs(c.row - head.row);
+      if (
+        !next ||
+        d < nextDist ||
+        (d === nextDist && (c.col > next.col || (c.col === next.col && c.row < next.row)))
+      ) {
+        next = c;
+        nextDist = d;
+      }
+    }
+    if (!next) break;
+    remaining.delete(next.key);
+    order.push(next);
+    head = { col: next.col, row: next.row };
+  }
+  return order;
 }
 
 /**
@@ -149,7 +177,7 @@ function stepToward(from: SnakeStep, to: ContribPoint): SnakeStep {
 
 /**
  * The classic route: the head walks the grid one cell at a time and eats every
- * square it steps on, chasing its lunch line until nothing is left. Steps are
+ * square it steps on, chasing its hunt order until nothing is left. Steps are
  * plain up/down/left/right — the body simply follows the head's footprints, so
  * the whole snake reads like the game: a chain of whole cells winding around.
  */
@@ -179,7 +207,7 @@ export function buildSnakePlan(alive: ContribCell[], cols: number): SnakePlan {
   if (!alive.length) {
     return { mode: "snake", route: [], cycleMs: SNAKE_MIN_MS, vanishAt: new Map() };
   }
-  const lunch = lunchLine(alive);
+  const lunch = huntOrder(alive);
   const { route, bites } = buildRoute(lunch);
   // One steady tick per cell: a long year costs more than a short one. The
   // floor keeps a bare year readable, the cap a crowded one from crawling.
