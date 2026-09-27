@@ -32,7 +32,9 @@ export const BULLET_FLIGHT_MS = ms(240);
 export const FADE_MS = ms(180);
 /** The wiped grid holds this long before the squares come back. */
 export const HOLD_MS = ms(850);
-/** Squares fade back in together over this long. */
+/** Squares respawn over this window instead of together — each at its own random moment. */
+export const RESPAWN_SPREAD_MS = ms(600);
+/** A respawning square fades back in over this long. */
 export const REAPPEAR_MS = ms(420);
 /** Rest on the refilled grid before the next animation is picked. */
 export const REST_MS = ms(750);
@@ -156,35 +158,123 @@ function huntOrder(alive: ContribCell[]): ContribCell[] {
   return order;
 }
 
-/**
- * Walk one cell toward a target, the way the game steers: the axis that is
- * further off moves first, so corners land on whole cells and the walk never
- * cuts diagonally across one.
- */
-function stepToward(from: SnakeStep, to: ContribPoint): SnakeStep {
-  const dx = to.col - from.col;
-  const dy = to.row - from.row;
-  if (dx === 0 && dy === 0) return from;
-  if (Math.abs(dx) >= Math.abs(dy)) return { col: from.col + Math.sign(dx), row: from.row };
-  return { col: from.col, row: from.row + Math.sign(dy) };
-}
+const DIRS: Array<[number, number]> = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
 
 /**
- * The classic route: the head walks the grid one cell at a time and eats every
- * square it steps on, chasing its hunt order until nothing is left. Steps are
- * plain up/down/left/right — the body simply follows the head's footprints, so
- * the whole snake reads like the game: a chain of whole cells winding around.
+ * One step toward the target along the shortest path that avoids the body.
+ * The body slides every step, so the search runs per step against the current
+ * trail — the head threads around itself instead of crossing through it, and
+ * shortest-path steps never wander away from the kill. If no free path exists,
+ * it escapes onto the free neighbor closest to the target; only a head fully
+ * surrounded by body falls through to the direct stride (and the route guard
+ * below bounds even that).
  */
-function buildRoute(lunch: ContribCell[]): { route: SnakeStep[]; bites: number[] } {
+function nextStep(
+  head: SnakeStep,
+  target: ContribPoint,
+  occupied: Set<string>,
+  tail: SnakeStep | null,
+  c0: number,
+  c1: number
+): SnakeStep {
+  const key = (c: number, r: number): string => `${c}:${r}`;
+  if (head.col === target.col && head.row === target.row) return head;
+  const prev = new Map<string, SnakeStep | null>();
+  const queue: SnakeStep[] = [{ col: head.col, row: head.row }];
+  prev.set(key(head.col, head.row), null);
+  for (let qi = 0; qi < queue.length; qi++) {
+    const cur = queue[qi];
+    if (cur.col === target.col && cur.row === target.row) {
+      let node = cur;
+      let p = prev.get(key(node.col, node.row));
+      while (p && (p.col !== head.col || p.row !== head.row)) {
+        node = p;
+        p = prev.get(key(p.col, p.row));
+      }
+      return node;
+    }
+    for (const [dc, dr] of DIRS) {
+      const nc = cur.col + dc;
+      const nr = cur.row + dr;
+      if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS) continue;
+      const k = key(nc, nr);
+      if (prev.has(k)) continue;
+      const isTarget = nc === target.col && nr === target.row;
+      if (!isTarget && occupied.has(k)) continue;
+      prev.set(k, cur);
+      queue.push({ col: nc, row: nr });
+    }
+  }
+  // Boxed in (no free path — rare with a 6-long body on an open grid):
+  // escape onto the free neighbor closest to the target, or onto the tail tip
+  // (it vacates as the head arrives, like the game) — never through the body.
+  let best: SnakeStep | null = null;
+  let bestDist = Infinity;
+  for (const [dc, dr] of DIRS) {
+    const nc = head.col + dc;
+    const nr = head.row + dr;
+    if (nc < c0 || nc > c1 || nr < 0 || nr >= ROWS || occupied.has(key(nc, nr))) continue;
+    const d = Math.abs(target.col - nc) + Math.abs(target.row - nr);
+    if (d < bestDist) {
+      bestDist = d;
+      best = { col: nc, row: nr };
+    }
+  }
+  if (best) return best;
+  // Fully surrounded: the tail tip vacates as the head arrives, so stepping
+  // onto it when adjacent is safe — the last move that avoids the body.
+  if (
+    tail &&
+    Math.abs(tail.col - head.col) + Math.abs(tail.row - head.row) === 1 &&
+    tail.col >= c0 &&
+    tail.col <= c1
+  ) {
+    return { col: tail.col, row: tail.row };
+  }
+  const dx = target.col - head.col;
+  const dy = target.row - head.row;
+  if (Math.abs(dx) >= Math.abs(dy)) return { col: head.col + Math.sign(dx), row: head.row };
+  return { col: head.col, row: head.row + Math.sign(dy) };
+}
+/**
+ * The classic route: the head walks the grid one cell at a time and eats every
+ * square it steps on, chasing its hunt order until nothing is left. Every step
+ * paths around the current body (see nextStep), so the head never crosses its
+ * own trail and every stride approaches the kill — the walk stays tight like
+ * the game instead of jumbling across the grid. The body simply follows the
+ * head's footprints: a chain of whole cells winding around.
+ */
+function buildRoute(
+  lunch: ContribCell[],
+  c0: number,
+  c1: number
+): { route: SnakeStep[]; bites: number[] } {
   const route: SnakeStep[] = [];
   const bites: number[] = [];
   let head = { col: lunch[0].col, row: lunch[0].row };
   route.push(head);
   let next = 1;
-  while (next < lunch.length) {
-    head = stepToward(head, lunch[next]);
+  // Fail-safe: the stepper always returns a move, but a corrupt grid must
+  // never spin — bail out instead of looping forever.
+  const maxSteps = Math.max(500, lunch.length * 50);
+  while (next < lunch.length && route.length < maxSteps) {
+    const target = lunch[next];
+    // Cells the visible body covers right now (the tail tip sits just outside
+    // this window: it vacates as the head arrives, so it stays enterable).
+    const occupied = new Set<string>();
+    for (let k = Math.max(0, route.length - SNAKE_BODY_CELLS); k < route.length; k++) {
+      occupied.add(`${route[k].col}:${route[k].row}`);
+    }
+    // The vacating tail tip, for the fully-surrounded escape in nextStep.
+    const tail = route.length >= SNAKE_BODY_CELLS + 1 ? route[route.length - SNAKE_BODY_CELLS - 1] : null;
+    head = nextStep(head, target, occupied, tail, c0, c1);
     route.push(head);
-    if (head.col === lunch[next].col && head.row === lunch[next].row) next++;
+    if (head.col === target.col && head.row === target.row) next++;
   }
   const keyAt = new Map<string, number>();
   lunch.forEach((cell, i) => keyAt.set(`${cell.col}:${cell.row}`, i));
@@ -197,26 +287,28 @@ function buildRoute(lunch: ContribCell[]): { route: SnakeStep[]; bites: number[]
 }
 
 export function buildSnakePlan(alive: ContribCell[], cols: number): SnakePlan {
-  void cols;
   if (!alive.length) {
     return { mode: "snake", route: [], cycleMs: SNAKE_MIN_MS, vanishAt: new Map() };
   }
   const lunch = huntOrder(alive);
-  const { route, bites } = buildRoute(lunch);
+  // Keep the pathfinder on the greens' turf (plus a little margin) so the
+  // head routes around its body instead of detouring across empty grid.
+  let lo = cols;
+  let hi = -1;
+  alive.forEach((c) => {
+    if (c.col < lo) lo = c.col;
+    if (c.col > hi) hi = c.col;
+  });
+  const c0 = Math.max(0, lo - 2);
+  const c1 = Math.min(Math.max(cols - 1, 0), hi + 2);
+  const { route, bites } = buildRoute(lunch, c0, c1);
   // One steady tick per cell: a long year costs more than a short one. The
   // floor keeps a bare year readable, the cap a crowded one from crawling.
   const cycleMs = Math.min(MAX_CYCLE_MS, Math.max(SNAKE_MIN_MS, route.length * SNAKE_MS_PER_CELL));
   const vanishAt = new Map<string, number>();
   const span = Math.max(1, route.length - 1);
-  lunch.forEach((cell, i) => vanishAt.set(cell.key, (bites[i] / span) * cycleMs));
+  lunch.forEach((cell, i) => vanishAt.set(cell.key, ((bites[i] ?? span) / span) * cycleMs));
   return { mode: "snake", route, cycleMs, vanishAt };
-}
-
-/** Random every cycle, never twice in a row so both animations get seen. */
-export function pickContribMode(previous: ContribMode | null): ContribMode {
-  const pick: ContribMode = Math.random() < 0.5 ? "snake" : "plane";
-  if (!previous || pick !== previous) return pick;
-  return previous === "snake" ? "plane" : "snake";
 }
 
 export function buildPlanePlan(alive: ContribCell[], cols: number): PlanePlan {

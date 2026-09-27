@@ -8,19 +8,21 @@ import {
   FADE_MS,
   HOLD_MS,
   REAPPEAR_MS,
+  RESPAWN_SPREAD_MS,
   REST_MS,
   buildPlanePlan,
   buildSnakePlan,
-  pickContribMode,
   snakeEase,
 } from "./contribPlan";
 import { SnakeNodes, buildSnakeNodes } from "./contribSnakeAnim";
 import { PlaneNodes, bulletFlight, buildPlaneNodes, planeClockSteps } from "./contribPlaneAnim";
 
 /**
- * Runs the contribution-graph animation one cycle at a time: pick a mode at
- * random, schedule every square's hit, play the animation natively, then hold
- * the wiped grid, refill it and start over with a fresh pick.
+ * Runs the contribution-graph animation one cycle at a time: the mode (snake
+ * or aircraft) is picked once at random when the graph opens and stays for
+ * the whole open; every cycle schedules every square's hit, plays natively,
+ * then holds the wiped grid, respawns the squares at random moments and
+ * starts over.
  *
  * Everything visual is driven by Animated with the native driver, so the JS
  * thread only wakes up three times per cycle (start, refill, next pick) — the
@@ -64,7 +66,8 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
     plane: null,
   });
   const [cycle, setCycle] = React.useState(0);
-  const previous = React.useRef<ContribMode | null>(null);
+  // One mode per open: picked once at random, kept until the graph unmounts.
+  const [mode] = React.useState<ContribMode>(() => (Math.random() < 0.5 ? "snake" : "plane"));
   const live = React.useRef<Animated.CompositeAnimation[]>([]);
 
   React.useEffect(() => {
@@ -85,8 +88,6 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
       return;
     }
 
-    const mode = pickContribMode(previous.current);
-    previous.current = mode;
     const plan: ContribPlan = mode === "snake" ? buildSnakePlan(alive, cols) : buildPlanePlan(alive, cols);
     const snake = plan.mode === "snake" ? buildSnakeNodes(plan) : null;
     const plane = plan.mode === "plane" ? buildPlaneNodes(plan, cols) : null;
@@ -135,13 +136,15 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
       });
     }
 
-    // ...the wiped grid holds, then every square fades back in together.
+    // ...the wiped grid holds, then every square respawns at its own random
+    // moment inside the respawn window.
     timers.push(
       setTimeout(() => {
         cells.forEach((cell) =>
           run(
             Animated.timing(cell.value, {
               toValue: 1,
+              delay: Math.random() * RESPAWN_SPREAD_MS,
               duration: REAPPEAR_MS,
               easing: Easing.out(Easing.cubic),
               useNativeDriver: true,
@@ -150,7 +153,12 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
         );
       }, plan.cycleMs + HOLD_MS)
     );
-    timers.push(setTimeout(() => setCycle((c) => c + 1), plan.cycleMs + HOLD_MS + REAPPEAR_MS + REST_MS));
+    timers.push(
+      setTimeout(
+        () => setCycle((c) => c + 1),
+        plan.cycleMs + HOLD_MS + RESPAWN_SPREAD_MS + REAPPEAR_MS + REST_MS
+      )
+    );
 
     setNodes({ mode, snake, plane });
 
@@ -158,7 +166,7 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
       timers.forEach(clearTimeout);
       stopLive();
     };
-  }, [cells, cols, alive, cycle]);
+  }, [cells, cols, alive, cycle, mode]);
 
   return React.useMemo(
     () => ({ mode: nodes.mode, cells, snake: nodes.snake, plane: nodes.plane }),
