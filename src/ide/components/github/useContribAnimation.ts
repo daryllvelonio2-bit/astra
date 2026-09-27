@@ -6,10 +6,9 @@ import {
   ContribPlan,
   EXIT_MS,
   FADE_MS,
-  HOLD_MS,
   REAPPEAR_MS,
-  RESPAWN_SPREAD_MS,
-  REST_MS,
+  RESPAWN_MAX_MS,
+  RESPAWN_MIN_MS,
   buildPlanePlan,
   buildSnakePlan,
   snakeEase,
@@ -18,15 +17,17 @@ import { SnakeNodes, buildSnakeNodes } from "./contribSnakeAnim";
 import { PlaneNodes, bulletFlight, buildPlaneNodes, planeClockSteps } from "./contribPlaneAnim";
 
 /**
- * Runs the contribution-graph animation one cycle at a time: the mode (snake
+ * Runs the contribution-graph animation as one endless loop: the mode (snake
  * or aircraft) is picked once at random when the graph opens and stays for
- * the whole open; every cycle schedules every square's hit, plays natively,
- * then holds the wiped grid, respawns the squares at random moments and
- * starts over.
+ * the whole open. Every hunt schedules every square's hit, then each eaten
+ * square fades back on its own after a random dark spell — the grid breathes
+ * continuously, never wipes, and the next hunt starts the instant the route
+ * ends. A newer animation for a square always stops its older one, so nothing
+ * ever fights over a value.
  *
  * Everything visual is driven by Animated with the native driver, so the JS
- * thread only wakes up three times per cycle (start, refill, next pick) — the
- * frame rate never depends on React renders.
+ * thread only wakes to schedule hunts and respawns — the frame rate never
+ * depends on React renders.
  */
 
 /** How small a square shrinks while it is being eaten. */
@@ -65,22 +66,25 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
     snake: null,
     plane: null,
   });
-  const [cycle, setCycle] = React.useState(0);
   // One mode per open: picked once at random, kept until the graph unmounts.
   const [mode] = React.useState<ContribMode>(() => (Math.random() < 0.5 ? "snake" : "plane"));
-  const live = React.useRef<Animated.CompositeAnimation[]>([]);
 
   React.useEffect(() => {
-    const run = (anim: Animated.CompositeAnimation) => {
-      live.current.push(anim);
+    let unmounted = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    // Latest animation per square: a newer hunt stops the older one, and a
+    // respawn only fires when nothing newer took the square meanwhile.
+    const perCell = new Map<string, Animated.CompositeAnimation>();
+    // Route/sprite animations of the running hunt: replaced every hunt.
+    let cycleAnims: Animated.CompositeAnimation[] = [];
+    const stopCycle = () => {
+      cycleAnims.forEach((anim) => anim.stop());
+      cycleAnims = [];
+    };
+    const track = (anim: Animated.CompositeAnimation): void => {
+      cycleAnims.push(anim);
       anim.start();
     };
-    const stopLive = () => {
-      live.current.forEach((anim) => anim.stop());
-      live.current = [];
-    };
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    stopLive();
 
     // Nothing to animate without a grid to travel across.
     if (!alive.length || cols < 2) {
@@ -88,85 +92,84 @@ export function useContribAnimation(alive: ContribCell[], cols: number): Contrib
       return;
     }
 
-    const plan: ContribPlan = mode === "snake" ? buildSnakePlan(alive, cols) : buildPlanePlan(alive, cols);
-    const snake = plan.mode === "snake" ? buildSnakeNodes(plan) : null;
-    const plane = plan.mode === "plane" ? buildPlaneNodes(plan, cols) : null;
+    const runHunt = () => {
+      if (unmounted) return;
+      stopCycle();
+      const plan: ContribPlan =
+        mode === "snake" ? buildSnakePlan(alive, cols) : buildPlanePlan(alive, cols);
+      const snake = plan.mode === "snake" ? buildSnakeNodes(plan) : null;
+      const plane = plan.mode === "plane" ? buildPlaneNodes(plan, cols) : null;
 
-    // Each square holds until its scheduled hit, then shrinks away...
-    cells.forEach((cell, key) => {
-      cell.value.setValue(1);
-      run(
-        Animated.timing(cell.value, {
+      // Each square falls at its scheduled hit, then fades back on its own
+      // after a random dark spell — even across hunt boundaries, so the grid
+      // never wipes and never refills all at once.
+      cells.forEach((cell, key) => {
+        perCell.get(key)?.stop();
+        const hitAt = plan.vanishAt.get(key) ?? plan.cycleMs;
+        const bite = Animated.timing(cell.value, {
           toValue: 0,
-          delay: plan.vanishAt.get(key) ?? plan.cycleMs,
+          delay: hitAt,
           duration: FADE_MS,
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
-        })
-      );
-    });
-
-    if (snake) {
-      snake.progress.setValue(0);
-      snake.fade.setValue(1);
-      run(
-        Animated.timing(snake.progress, {
-          toValue: snake.end,
-          duration: plan.cycleMs,
-          // Steady cruise: one cell per tick, like the game.
-          easing: snakeEase,
-          useNativeDriver: true,
-        })
-      );
-      // Route finished: the snake leaves as the grid refills.
-      timers.push(
-        setTimeout(
-          () => run(Animated.timing(snake.fade, { toValue: 0, duration: EXIT_MS, useNativeDriver: true })),
-          plan.cycleMs
-        )
-      );
-    }
-
-    if (plane && plan.mode === "plane") {
-      plane.clock.setValue(0);
-      run(Animated.sequence(planeClockSteps(plan, plane.clock)));
-      plane.bullets.forEach((bullet) => {
-        bullet.value.setValue(0);
-        run(bulletFlight(bullet));
-      });
-    }
-
-    // ...the wiped grid holds, then every square respawns at its own random
-    // moment inside the respawn window.
-    timers.push(
-      setTimeout(() => {
-        cells.forEach((cell) =>
-          run(
-            Animated.timing(cell.value, {
+        });
+        perCell.set(key, bite);
+        bite.start();
+        const darkFor = RESPAWN_MIN_MS + Math.random() * (RESPAWN_MAX_MS - RESPAWN_MIN_MS);
+        timers.push(
+          setTimeout(() => {
+            if (unmounted || perCell.get(key) !== bite) return;
+            const back = Animated.timing(cell.value, {
               toValue: 1,
-              delay: Math.random() * RESPAWN_SPREAD_MS,
               duration: REAPPEAR_MS,
               easing: Easing.out(Easing.cubic),
               useNativeDriver: true,
-            })
-          )
+            });
+            perCell.set(key, back);
+            back.start();
+          }, hitAt + darkFor)
         );
-      }, plan.cycleMs + HOLD_MS)
-    );
-    timers.push(
-      setTimeout(
-        () => setCycle((c) => c + 1),
-        plan.cycleMs + HOLD_MS + RESPAWN_SPREAD_MS + REAPPEAR_MS + REST_MS
-      )
-    );
+      });
 
-    setNodes({ mode, snake, plane });
+      if (snake) {
+        snake.progress.setValue(0);
+        // The new snake fades in as the hunt starts; the old one is already
+        // gone with its hunt, so there is no exit fade to play.
+        snake.fade.setValue(0);
+        track(Animated.timing(snake.fade, { toValue: 1, duration: EXIT_MS, useNativeDriver: true }));
+        track(
+          Animated.timing(snake.progress, {
+            toValue: snake.end,
+            duration: plan.cycleMs,
+            // Steady cruise: one cell per tick, like the game.
+            easing: snakeEase,
+            useNativeDriver: true,
+          })
+        );
+      }
+
+      if (plane && plan.mode === "plane") {
+        plane.clock.setValue(0);
+        track(Animated.sequence(planeClockSteps(plan, plane.clock)));
+        plane.bullets.forEach((bullet) => {
+          bullet.value.setValue(0);
+          track(bulletFlight(bullet));
+        });
+      }
+
+      setNodes({ mode, snake, plane });
+      // No hold, no rest — the next hunt starts the instant this one ends.
+      timers.push(setTimeout(runHunt, plan.cycleMs));
+    };
+    runHunt();
 
     return () => {
+      unmounted = true;
       timers.forEach(clearTimeout);
-      stopLive();
+      stopCycle();
+      perCell.forEach((anim) => anim.stop());
     };
-  }, [cells, cols, alive, cycle, mode]);
+  }, [cells, cols, alive, mode]);
 
   return React.useMemo(
     () => ({ mode: nodes.mode, cells, snake: nodes.snake, plane: nodes.plane }),

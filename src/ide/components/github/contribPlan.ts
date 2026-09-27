@@ -30,15 +30,16 @@ const ms = (base: number): number => Math.round(base * PACE);
 export const BULLET_FLIGHT_MS = ms(240);
 /** A hit square shrinks away over this long. */
 export const FADE_MS = ms(180);
-/** The wiped grid holds this long before the squares come back. */
-export const HOLD_MS = ms(850);
-/** Squares respawn over this window instead of together — each at its own random moment. */
-export const RESPAWN_SPREAD_MS = ms(600);
+/**
+ * After a square dies it stays dark for a random moment inside this window,
+ * then fades back on its own — the grid breathes continuously instead of
+ * wiping and refilling between rounds.
+ */
+export const RESPAWN_MIN_MS = ms(1500);
+export const RESPAWN_MAX_MS = ms(6000);
 /** A respawning square fades back in over this long. */
 export const REAPPEAR_MS = ms(420);
-/** Rest on the refilled grid before the next animation is picked. */
-export const REST_MS = ms(750);
-/** The snake's whole-snake fade-out once its route is done. */
+/** The snake's whole-snake fade-out once its route is done (also its fade-in). */
 export const EXIT_MS = ms(260);
 /** Gap between two strafing passes (the aircraft lines up out of sight). */
 const PASS_GAP_MS = ms(170);

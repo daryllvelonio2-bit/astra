@@ -179,7 +179,6 @@ export function GitHubRepoView({
             onOpenFile={(filePath) =>
               nav.push({ name: "file", owner, repo, path: filePath, ref: refName })
             }
-            onOpenCommits={() => nav.push({ name: "commits", owner, repo, ref: refName, path: path || undefined })}
           />
         )}
         {tab === "issues" && (
