@@ -44,6 +44,7 @@ export function GitHubRepoCodeView({
   onOpenBranches,
   onScroll,
   onReadmeLayout,
+  onContentHeight,
   nav,
 }: {
   repo: GitHubRepo;
@@ -56,6 +57,8 @@ export function GitHubRepoCodeView({
   onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   /** Reports the README card's top in scroll-content coordinates. */
   onReadmeLayout?: (event: LayoutChangeEvent) => void;
+  /** Reports the scrollable content's height, i.e. how far the list can reach. */
+  onContentHeight?: (width: number, height: number) => void;
   nav: GitHubNavigation;
 }) {
   const { theme } = useTheme();
@@ -111,6 +114,7 @@ export function GitHubRepoCodeView({
       ref={scrollRef}
       showsVerticalScrollIndicator={false}
       onScroll={onScroll}
+      onContentSizeChange={onContentHeight}
       scrollEventThrottle={16}
     >
       <RepoCodeHeader
@@ -192,7 +196,10 @@ export function GitHubRepoCodeView({
       {!path && (readme.loading && !readme.data ? (
         <LoadingState />
       ) : readme.data ? (
-        <View style={[styles.readmeCard, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
+        <View
+          style={[styles.readmeCard, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}
+          onLayout={onReadmeLayout}
+        >
           <View style={[styles.readmeHeader, { borderBottomColor: theme.border }]}>
             <Octicons name="book" size={13} color={theme.textSecondary} />
             <Text style={[styles.readmeTitle, { color: theme.textPrimary }]}>README.md</Text>

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Animated, View, Text, Image, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { fetchRepo, fetchLanguages } from "../../services/gitHubRepoService";
@@ -12,6 +12,7 @@ import { GitHubActionsView } from "./GitHubActionsView";
 import { GitHubNavigation } from "./useGitHubNavigation";
 import { formatStale } from "../../services/gitHubProfileService";
 import { openRepoMenu } from "./GitHubRepoMenu";
+import { useRepoHeaderCollapse } from "./useRepoHeaderCollapse";
 
 /**
  * The repository screen: identity header (star / watch / fork / follow),
@@ -50,6 +51,17 @@ export function GitHubRepoView({
   );
   const action = useGitHubAction();
 
+  // While the README takes over the screen, the header slides up out of the
+  // way and the README gets the whole viewport.
+  const collapse = useRepoHeaderCollapse();
+  const { reset: resetCollapse } = collapse;
+
+  // A different tab or folder means a different top block and a different
+  // scroll offset: always restart from a whole header.
+  useEffect(() => {
+    resetCollapse();
+  }, [tab, path, resetCollapse]);
+
   const refName = ref || detail.data?.defaultBranch || "main";
   const languageTotal = (languages.data || []).reduce((sum, l) => sum + l.bytes, 0);
 
@@ -61,7 +73,7 @@ export function GitHubRepoView({
 
   return (
     <View style={styles.wrap}>
-      <View style={[styles.header, { borderBottomColor: theme.border }]}>
+      <Animated.View style={[styles.header, { borderBottomColor: theme.border }, collapse.liftStyle]}>
         <View style={styles.headerTop}>
           {r.ownerAvatar ? (
             <Image source={{ uri: r.ownerAvatar }} style={styles.avatar} />
@@ -169,10 +181,10 @@ export function GitHubRepoView({
         )}
 
         {!!action.error && <Text style={[styles.error, { color: theme.accentRed }]}>{action.error}</Text>}
-      </View>
+      </Animated.View>
 
       {languageTotal > 0 && (
-        <View style={styles.languageWrap}>
+        <Animated.View style={[styles.languageWrap, collapse.liftStyle]}>
           <View style={styles.languageBar}>
             {(languages.data || []).slice(0, 5).map((lang, index) => (
               <View
@@ -200,17 +212,17 @@ export function GitHubRepoView({
               </View>
             ))}
           </View>
-        </View>
+        </Animated.View>
       )}
 
-      <View style={[styles.tabs, { borderBottomColor: theme.border }]}>
+      <Animated.View style={[styles.tabs, { borderBottomColor: theme.border }, collapse.liftStyle]}>
         <TabBtn label="Code" active={tab === "code"} onPress={() => setTab("code")} />
         <TabBtn label="Issues" active={tab === "issues"} onPress={() => setTab("issues")} />
         <TabBtn label="Pull requests" active={tab === "pulls"} onPress={() => setTab("pulls")} />
         <TabBtn label="Actions" active={tab === "actions"} onPress={() => setTab("actions")} />
-      </View>
+      </Animated.View>
 
-      <View style={styles.body}>
+      <Animated.View style={[styles.body, collapse.liftStyle]} onLayout={collapse.onBodyLayout}>
         {tab === "code" && (
           <GitHubRepoCodeView
             repo={r}
@@ -221,6 +233,9 @@ export function GitHubRepoView({
               nav.push({ name: "file", owner, repo, path: filePath, ref: refName })
             }
             onOpenBranches={onOpenBranches}
+            onScroll={collapse.onScroll}
+            onReadmeLayout={collapse.onReadmeLayout}
+            onContentHeight={collapse.onContentHeight}
             nav={nav}
           />
         )}
@@ -231,7 +246,7 @@ export function GitHubRepoView({
           <GitHubIssueListView owner={owner} repo={repo} nav={nav} login={login} isPull />
         )}
         {tab === "actions" && <GitHubActionsView owner={owner} repo={repo} />}
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -359,7 +374,7 @@ function TabBtn({ label, active, onPress }: { label: string; active: boolean; on
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1 },
+  wrap: { flex: 1, overflow: "hidden" },
   header: {
     paddingHorizontal: 10,
     paddingTop: 7,
