@@ -194,7 +194,7 @@ export function GitHeaderBar({
       )}
 
       {/* Account: signed-in = avatar (opens profile popup), signed-out = key */}
-      <View style={styles.rightActions}>
+      <View style={[styles.rightActions, !isRepo && { marginLeft: "auto" }]}>
         {ghSession && onPressProfile ? (
           <TouchableOpacity
             style={styles.iconBtn}
