@@ -1,4 +1,4 @@
-import { loadApiKey, loadSelectedModel, DEFAULT_MODEL_ID } from "./configService";
+import { loadConfig, DEFAULT_MODEL_ID } from "./configService";
 import { getGitFileDiff } from "./gitService";
 import type { GitFileStatus } from "../components/git/types";
 
@@ -20,14 +20,15 @@ export async function generateCommitSummary(
   workspaceId: string | undefined,
   files: GitFileStatus[]
 ): Promise<CommitSummary> {
-  const apiKey = (await loadApiKey()).trim();
+  const cfg = await loadConfig();
+  const apiKey = (cfg.apiKey || "").trim();
   if (!apiKey) {
     throw new Error("No API key configured. Add your Gemini API key in Settings to generate summaries.");
   }
   if (files.length === 0) {
     throw new Error("No changed files to summarize.");
   }
-  const model = (await loadSelectedModel()).trim() || DEFAULT_MODEL_ID;
+  const model = (cfg.selectedModel || "").trim() || DEFAULT_MODEL_ID;
 
   const picked = files.slice(0, MAX_FILES);
   const parts: string[] = [];
