@@ -369,6 +369,11 @@ html, body {
     } catch (e) {}
   };
   var scrollCursorIntoView = function () {
+    // Alternate screen or mouse-reporting apps (opencode, htop, vim) own their
+    // view and cursor; scrolling to bottom fights the app's redraw stream.
+    if (isAltScreen() || appMouseMode() !== 'none') return;
+    // Don't yank scroll position while user is actively drag-scrolling history.
+    if (isTouchScrolling || momentumRaf) return;
     try {
       term.scrollToBottom();
       if (term.buffer && term.buffer.active) {

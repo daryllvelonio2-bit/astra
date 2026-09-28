@@ -1,5 +1,20 @@
 # Project Progress Tracker
 
+### [2026-09-28] - Fix TUI Scroll Sluggishness After Split->Unsplit (issue-tui-scroll-after-split.md)
+- **Ask:** issue-tui-scroll-after-split.md read it and fixed it throughly.
+- **Root Cause Identified (Empirically Measured via CDP):**
+  - Upon split -> unsplit, the primary terminal WebView remounts. Because toggling split in the header did not dismiss the soft keyboard or clear input focus, `useTerminalKeyboardPad` propagated stale `isKeyboardVisible: true`, causing `handleReady()` in `XtermView.tsx` to invoke `window.__astraSetKeyboardVisible(true, rows)`.
+  - In `scripts/build-xterm-html.js`, whenever `kbVisible === true`, every single incoming PTY write (`window.__astraWrite`) called `scrollCursorIntoView()`, executing `term.scrollToBottom()`.
+  - While a mouse-reporting alt-screen TUI (`opencode`, `vim`, `htop`) was active, each swipe-up wheel sequence caused the TUI to redraw and stream output back. Every written chunk yanked the viewport down via `term.scrollToBottom()`, creating severe tug-of-war where swipes yielded only a fraction of a line.
+- **Fix:**
+  - **`scripts/build-xterm-html.js`:** Added early return in `scrollCursorIntoView` when in alternate screen or mouse-reporting mode (`isAltScreen() || appMouseMode() !== 'none'`) and during active touch or momentum scrolling (`isTouchScrolling || momentumRaf`).
+  - **`src/ide/components/TerminalView.tsx` (498 lines):** Added `handleToggleSplit` which calls `Keyboard.dismiss()` and blurs the hidden input catcher when toggling split mode, preventing stale keyboard state from carrying over across pane transitions.
+  - Regenerated `src/ide/components/terminal/xtermHtml.generated.ts`.
+- **Verification:**
+  - Confirmed via CDP that during drag-scrolling inside `opencode` after split->unsplit, `scrollCursorCount` stayed at 1 while 13 coalesced wheel packets were dispatched smoothly with 0 tug-of-war.
+  - Normal shell scrolling and double-tap keyboard gate (`raiseKeyboardOnDoubleTap`) preserved.
+  - `npx tsc --noEmit` passed with 0 errors. `TerminalView.tsx` is 498 lines (<= 500 lines).
+
 ### [2026-09-28] - Contribution Tooltip: Plain text floating overlay without background card
 - **Ask:** remove the background of the pop up contributions, just the text.
 - **`GitHubContribGraph.tsx` (323 lines):**

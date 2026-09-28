@@ -202,6 +202,13 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
     };
   }, [visible, keyboardMouseMode, isKeyboardVisible, handleFocusTerminal, inputRef, setIsFocused]);
 
+  const handleToggleSplit = useCallback(() => {
+    Keyboard.dismiss();
+    inputRef.current?.blur();
+    setIsFocused(false);
+    toggleSplit();
+  }, [toggleSplit, inputRef, setIsFocused]);
+
   return (
     <View
       style={[
@@ -244,7 +251,7 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
         }
         onPasteClipboard={pasteFromClipboard}
         isSplit={isSplit}
-        onToggleSplit={toggleSplit}
+        onToggleSplit={handleToggleSplit}
         splitSessionId={splitSessionId}
         focusedPane={focusedPane}
         onSelectSplitSession={setSplitSessionId}
