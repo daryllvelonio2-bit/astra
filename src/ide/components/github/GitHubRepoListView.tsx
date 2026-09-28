@@ -44,7 +44,11 @@ export function GitHubRepoListView({
     return (
       <EmptyState
         text={emptyText || (mode === "starred" ? "No starred repositories." : "No repositories found.")}
-        hint={mode === "mine" ? "Create one from the ⋯ menu on the home screen." : undefined}
+        hint={
+          mode === "mine"
+            ? "Create one from Home > Quick Actions > New repository."
+            : undefined
+        }
       />
     );
   }

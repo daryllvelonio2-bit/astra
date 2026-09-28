@@ -74,6 +74,20 @@ export function GitHubHomeActions({
           onPress: () => nav.push({ name: "newRepo" }),
         },
         {
+          icon: "bell",
+          iconColor: theme.accentGold,
+          label: "Notifications",
+          hint: "Unread notifications",
+          onPress: () => nav.push({ name: "notifications" }),
+        },
+        {
+          icon: "git-pull-request",
+          iconColor: theme.accentPurple,
+          label: "New pull request",
+          hint: "Open the pull request form",
+          onPress: () => nav.push({ name: "newPull", owner: login, repo: login }),
+        },
+        {
           icon: "pencil",
           iconColor: theme.accentCyan,
           label: "New gist",

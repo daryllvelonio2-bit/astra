@@ -47,6 +47,18 @@ export function openRepoMenu({
       onPress: () => nav.push({ name: "contributors", owner, repo }),
     },
     {
+      icon: "issue-opened",
+      label: "New issue",
+      hint: `Open an issue on ${owner}/${repo}`,
+      onPress: () => nav.push({ name: "newIssue", owner, repo, isPull: false }),
+    },
+    {
+      icon: "rocket",
+      label: "Create release",
+      hint: `Publish a release for ${owner}/${repo}`,
+      onPress: () => nav.push({ name: "createRelease", owner, repo }),
+    },
+    {
       icon: "gear",
       label: "Settings",
       hint: "Edit repository metadata",
