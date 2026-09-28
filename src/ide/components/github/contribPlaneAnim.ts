@@ -1,17 +1,18 @@
 import { Animated, Easing } from "react-native";
 import { PlanePlan } from "./contribPlan";
 import { ShooterShot } from "./contribShooterPlan";
+import { BULLET_H, BULLET_W, JET_W, muzzleY } from "./contribGrid";
 
 /**
- * Animated nodes for the right-side shooter:
- * The turret sits stationed on the right edge and moves vertically to track
- * rows. Each shot fires a high-speed laser bolt from the turret leftward
- * into the target block. On impact, the block explodes into 4 fragments of
- * that exact color bursting outward diagonally and dissolving.
+ * Animated nodes for the jet pass:
+ * The jet flies in the sky lane above the grid and slides horizontally to
+ * hover over each target column. Every shot drops a bolt from its belly
+ * straight down onto the target block, which then explodes into 4 fragments
+ * of that exact color bursting outward diagonally and dissolving.
  *
- * Each shot is driven by a single native Animated.Value (0 -> 2):
- *  - 0 -> 1: laser bolt flies leftward from turretX to targetX
- *  - 1 -> 2: block explosion fragments burst outward and fade to 0
+ * Each shot is driven by a single native Animated.Value (0 -> duration):
+ *  - 0 -> flightMs: bolt falls from the belly (muzzleY) onto the square
+ *  - flightMs -> duration: the block's fragments burst outward and fade to 0
  */
 
 export interface ShotNodes {
@@ -24,9 +25,10 @@ export interface ShotNodes {
   flightMs: number;
   explosionMs: number;
   value: Animated.Value;
-  laserX: Animated.AnimatedInterpolation<number>;
-  laserY: number;
-  laserOpacity: Animated.AnimatedInterpolation<number>;
+  /** Bolt's travel: from the jet's belly down onto the target square. */
+  boltX: Animated.AnimatedInterpolation<number>;
+  boltY: Animated.AnimatedInterpolation<number>;
+  boltOpacity: Animated.AnimatedInterpolation<number>;
   explosionOpacity: Animated.AnimatedInterpolation<number>;
   fragScale: Animated.AnimatedInterpolation<number>;
   frag1X: Animated.AnimatedInterpolation<number>;
@@ -41,8 +43,10 @@ export interface ShotNodes {
 
 export interface PlaneNodes {
   time: Animated.Value;
-  turretX: number;
-  turretY: Animated.AnimatedInterpolation<number>;
+  /** Horizontal glide from one target column to the next. */
+  turretX: Animated.AnimatedInterpolation<number>;
+  /** Constant: the jet stays up in the sky lane, clear of the squares. */
+  turretY: number;
   shots: ShotNodes[];
 }
 
@@ -50,67 +54,71 @@ export function buildPlaneNodes(plan: PlanePlan, _cols: number): PlaneNodes | nu
   if (!plan.shots.length) return null;
 
   const time = new Animated.Value(0);
-  const turretX = plan.turretX;
 
-  // Build smooth continuous keyframes for the jet's vertical tracking
-  const timeKeyframes: [number, number][] = [];
-  const y0 = plan.shots[0].targetY - 9;
-  timeKeyframes.push([0, y0]);
+  // Keyframes for the jet's horizontal glide, mirroring the hip between shots:
+  // hold over the target while firing, then ease across to the next column.
+  const xKeyframes: [number, number][] = [];
+  xKeyframes.push([0, plan.shots[0].jetX]);
 
   const AIM_HOLD_MS = 250;
 
   for (let i = 0; i < plan.shots.length; i++) {
     const curShot = plan.shots[i];
-    const curY = curShot.targetY - 9;
-    timeKeyframes.push([curShot.fireAt, curY]);
+    xKeyframes.push([curShot.fireAt, curShot.jetX]);
 
     if (i < plan.shots.length - 1) {
       const nextShot = plan.shots[i + 1];
-      const nextY = nextShot.targetY - 9;
       const moveStart = curShot.fireAt + curShot.flightMs + 120;
       const moveEnd = nextShot.fireAt - AIM_HOLD_MS;
       const dt = moveEnd - moveStart;
 
       if (dt > 80) {
-        timeKeyframes.push([moveStart, curY]);
+        xKeyframes.push([moveStart, curShot.jetX]);
         // Smooth S-curve easing points for slow, gradual glide to the next target
-        timeKeyframes.push([moveStart + dt * 0.25, curY + (nextY - curY) * 0.156]);
-        timeKeyframes.push([moveStart + dt * 0.50, curY + (nextY - curY) * 0.500]);
-        timeKeyframes.push([moveStart + dt * 0.75, curY + (nextY - curY) * 0.844]);
-        timeKeyframes.push([moveEnd, nextY]);
+        xKeyframes.push([moveStart + dt * 0.25, curShot.jetX + (nextShot.jetX - curShot.jetX) * 0.156]);
+        xKeyframes.push([moveStart + dt * 0.50, curShot.jetX + (nextShot.jetX - curShot.jetX) * 0.500]);
+        xKeyframes.push([moveStart + dt * 0.75, curShot.jetX + (nextShot.jetX - curShot.jetX) * 0.844]);
+        xKeyframes.push([moveEnd, nextShot.jetX]);
       }
     }
   }
-  timeKeyframes.push([plan.cycleMs, plan.shots[plan.shots.length - 1].targetY - 9]);
+  xKeyframes.push([plan.cycleMs, plan.shots[plan.shots.length - 1].jetX]);
 
   // Deduplicate and filter any non-strictly-increasing timestamps
   const inputRange: number[] = [];
   const outputRange: number[] = [];
-  for (const [t, y] of timeKeyframes) {
+  for (const [t, x] of xKeyframes) {
     if (inputRange.length > 0 && t <= inputRange[inputRange.length - 1]) {
       continue;
     }
     inputRange.push(t);
-    outputRange.push(y);
+    outputRange.push(x);
   }
 
-  const turretY = time.interpolate({
-    inputRange,
-    outputRange,
-  });
+  const turretX = time.interpolate({ inputRange, outputRange });
 
   const shots: ShotNodes[] = plan.shots.map((shot: ShooterShot) => {
     const duration = shot.flightMs + shot.explosionMs;
     const value = new Animated.Value(0);
-    const muzzleX = turretX - 16;
 
-    // Laser bolt translates leftward from muzzleX to targetX
-    const laserX = value.interpolate({
+    // Bolt leaves the jet's belly (centred on the jet, at the top edge of the
+    // grid) and lands centred on the target square. Both ends are exact, so a
+    // hit always lands on the block that gets destroyed.
+    const muzzleX = shot.jetX + JET_W / 2 - BULLET_W / 2;
+    const muzzleTop = muzzleY() - BULLET_H;
+    const impactX = shot.targetX - BULLET_W / 2;
+    const impactTop = shot.targetY - BULLET_H / 2;
+
+    const boltX = value.interpolate({
       inputRange: [0, shot.flightMs, duration],
-      outputRange: [muzzleX, shot.targetX - 2, shot.targetX - 2],
+      outputRange: [muzzleX, impactX, impactX],
+    });
+    const boltY = value.interpolate({
+      inputRange: [0, shot.flightMs, duration],
+      outputRange: [muzzleTop, impactTop, impactTop],
     });
 
-    const laserOpacity = value.interpolate({
+    const boltOpacity = value.interpolate({
       inputRange: [0, 8, shot.flightMs - 4, shot.flightMs, duration],
       outputRange: [0, 1, 1, 0, 0],
     });
@@ -151,9 +159,9 @@ export function buildPlaneNodes(plan: PlanePlan, _cols: number): PlaneNodes | nu
       flightMs: shot.flightMs,
       explosionMs: shot.explosionMs,
       value,
-      laserX,
-      laserY: shot.targetY - 1.5,
-      laserOpacity,
+      boltX,
+      boltY,
+      boltOpacity,
       explosionOpacity,
       fragScale,
       frag1X,
@@ -167,10 +175,10 @@ export function buildPlaneNodes(plan: PlanePlan, _cols: number): PlaneNodes | nu
     };
   });
 
-  return { time, turretX, turretY, shots };
+  return { time, turretX, turretY: plan.hoverY, shots };
 }
 
-/** Drives the turret along the right edge: smoothly and slowly glides to each target. */
+/** Drives the jet along the sky lane: it holds over each target, then glides across. */
 export function turretMotion(plane: PlaneNodes, plan: PlanePlan): Animated.CompositeAnimation {
   return Animated.timing(plane.time, {
     toValue: plan.cycleMs,
@@ -180,7 +188,7 @@ export function turretMotion(plane: PlaneNodes, plan: PlanePlan): Animated.Compo
   });
 }
 
-/** Drives one shot: fast laser flight (0 -> flightMs) then block explosion (flightMs -> duration). */
+/** Drives one shot: fast bolt drop (0 -> flightMs) then block explosion. */
 export function shotFlight(shot: ShotNodes): Animated.CompositeAnimation {
   const duration = shot.flightMs + shot.explosionMs;
   return Animated.timing(shot.value, {

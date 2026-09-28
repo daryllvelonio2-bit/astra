@@ -1,18 +1,16 @@
-import {
-  ContribCell,
-  ROWS,
-  cellCenterX,
-  gridWidth,
-  rowCenterY,
-} from "./contribGrid";
+import { ContribCell, cellCenterX, gridWidth, JET_W, rowCenterY } from "./contribGrid";
 
-/** Dedicated space on the right edge of the grid for the shooter jet. */
-export const SHOOTER_SPACE = 28;
-/** Flight duration for a laser bolt from the turret to a target (fast by default). */
+/**
+ * The jet hovers in the sky lane ABOVE the grid and dives down onto the
+ * squares it shoots, so it never sits beside the grid reserving a lane that
+ * would unbalance the graph's margins. It slides horizontally to line up over
+ * the current target; each bolt then falls straight down onto that square.
+ */
+/** Flight duration for a bolt from the jet's belly to a target (fast by default). */
 export const LASER_FLIGHT_MS = 130;
 /** Duration of the block fragment explosion. */
 export const EXPLOSION_MS = 220;
-/** Gap between consecutive shots fired by the turret (1 shot per 2 seconds). */
+/** Gap between consecutive shots fired by the jet (1 shot per 2 seconds). */
 const SHOT_GAP_MS = 2000;
 /** Maximum targets engaged in one shooting round. */
 const MAX_ROUND_TARGETS = 14;
@@ -29,6 +27,8 @@ export interface ShooterShot {
   explosionMs: number;
   targetX: number;
   targetY: number;
+  /** Jet's top-left x while firing this shot — it hovers above the target. */
+  jetX: number;
 }
 
 export interface ShooterPlan {
@@ -36,24 +36,32 @@ export interface ShooterPlan {
   shots: ShooterShot[];
   cycleMs: number;
   vanishAt: Map<string, number>;
-  turretX: number;
+  /** Fixed top y of the jet: it flies in the sky lane, above the squares. */
+  hoverY: number;
+}
+
+/** Jet x that lines it up over a given column, kept inside the grid. */
+function jetXOver(col: number, width: number): number {
+  const centered = cellCenterX(col) - JET_W / 2;
+  return Math.max(0, Math.min(width - JET_W, centered));
 }
 
 /**
- * Plans a shooting round: the turret sits stationed on the right edge and
- * fires lasers leftward at green blocks. Targets are chosen from right (newest)
- * to left, with varied rows so the turret slides vertically between shots.
+ * Plans a shooting round: the jet flies in the lane above the grid, slides
+ * over each green square in turn and drops a bolt straight down onto it.
+ * Targets are swept newest to oldest, with varied rows so the sweep does not
+ * march down a single line.
  */
 export function buildShooterPlan(alive: ContribCell[], cols: number): ShooterPlan {
+  const width = gridWidth(cols);
+  const hoverY = 0;
+
   if (!alive.length) {
-    return { mode: "plane", shots: [], cycleMs: 1200, vanishAt: new Map(), turretX: 0 };
+    return { mode: "plane", shots: [], cycleMs: 1200, vanishAt: new Map(), hoverY };
   }
 
-  const width = gridWidth(cols);
-  const turretX = width + 4;
-
   // Pick up to MAX_ROUND_TARGETS, prioritizing recent weeks (right side in view)
-  // and smoothly connecting rows so the turret glides naturally between nearby targets.
+  // and varying rows so consecutive hits are not all in one row.
   const remaining = [...alive].sort((a, b) => b.col - a.col || a.row - b.row);
   const targets: ContribCell[] = [];
   let curRow = remaining[0]?.row ?? 0;
@@ -76,7 +84,7 @@ export function buildShooterPlan(alive: ContribCell[], cols: number): ShooterPla
 
   const shots: ShooterShot[] = [];
   const vanishAt = new Map<string, number>();
-  let t = 350; // initial delay for turret to smoothly aim before the first shot
+  let t = 350; // initial delay for the jet to slide over its first target
 
   targets.forEach((target) => {
     const fireAt = t;
@@ -96,6 +104,7 @@ export function buildShooterPlan(alive: ContribCell[], cols: number): ShooterPla
       explosionMs: EXPLOSION_MS,
       targetX: tx,
       targetY: ty,
+      jetX: jetXOver(target.col, width),
     });
 
     vanishAt.set(target.key, landAt);
@@ -107,6 +116,6 @@ export function buildShooterPlan(alive: ContribCell[], cols: number): ShooterPla
     shots,
     cycleMs: Math.max(1200, t + 400),
     vanishAt,
-    turretX,
+    hoverY,
   };
 }

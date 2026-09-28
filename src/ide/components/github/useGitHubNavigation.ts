@@ -13,7 +13,7 @@ export type GitHubRoute =
   | { name: "starred" }
   | { name: "notifications" }
   | { name: "gists" }
-  | { name: "profile"; login: string }
+  | { name: "profile"; login: string; tab?: ProfileTab }
   | { name: "followers"; login?: string }
   | { name: "following"; login?: string }
   | { name: "activity"; login: string }
@@ -38,6 +38,9 @@ export type GitHubRoute =
   | { name: "newGist" };
 
 export type RepoTab = "code" | "issues" | "pulls" | "actions";
+
+/** Profile surface tabs; shared so routes can open a specific one. */
+export type ProfileTab = "repos" | "followers" | "following" | "activity";
 
 export type IssueMode = "open" | "closed" | "mine" | "assigned" | "mentioned";
 

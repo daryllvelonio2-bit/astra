@@ -9,8 +9,14 @@ export const CELL = 11;
 export const GAP = 2.5;
 /** Distance between two square origins (square + gap). */
 export const CELL_STEP = CELL + GAP;
-/** Flight lane reserved above the grid for the aircraft. */
-export const SKY = 16;
+/**
+ * Jet sprite box — must match styles.jet in ContribAnimOverlay.
+ */
+export const JET_W = 20;
+export const JET_H = 18;
+/** Flight lane reserved above the grid for the aircraft. Tall enough that the
+ *  jet clears the squares entirely (JET_H + a 2px gap). */
+export const SKY = JET_H + 2;
 /** Sprite box the aircraft is drawn in — also how far off-screen it parks. */
 export const PLANE_BOX = 16;
 export const BULLET_W = 2;

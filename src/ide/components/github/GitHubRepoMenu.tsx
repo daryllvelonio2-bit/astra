@@ -1,15 +1,11 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { Octicons } from "@expo/vector-icons";
-import { useTheme } from "../../../theme/themeContext";
-import { dismissAppDialog, showAppDialog } from "../../services/appDialog";
 import { GitHubNavigation } from "./useGitHubNavigation";
+import { MenuItem, openMenu } from "./GitHubMenuList";
 
 /**
  * Repo header overflow. Commits / Releases / Contributors / Settings used to
  * be four buttons crowding the header into a horizontal scroll strip; they
- * now live behind one ⋯ tap. Rendered inside the shared themed dialog, so
- * there is no second modal implementation to keep in sync.
+ * now live behind one ⋯ tap, rendered by the shared menu list.
  */
 
 export function openRepoMenu({
@@ -25,31 +21,7 @@ export function openRepoMenu({
   refName: string;
   onClone: () => void;
 }): void {
-  showAppDialog({
-    title: `${owner}/${repo}`,
-    content: (
-      <RepoMenuList nav={nav} owner={owner} repo={repo} refName={refName} onClone={onClone} />
-    ),
-    buttons: [{ text: "Close", style: "cancel" }],
-  });
-}
-
-function RepoMenuList({
-  nav,
-  owner,
-  repo,
-  refName,
-  onClone,
-}: {
-  nav: GitHubNavigation;
-  owner: string;
-  repo: string;
-  refName: string;
-  onClone: () => void;
-}) {
-  const { theme } = useTheme();
-
-  const items: Array<{ icon: string; label: string; hint: string; onPress: () => void }> = [
+  const items: MenuItem[] = [
     {
       icon: "download",
       label: "Clone",
@@ -82,39 +54,5 @@ function RepoMenuList({
     },
   ];
 
-  return (
-    <View style={styles.list}>
-      {items.map((item, index) => (
-        <TouchableOpacity
-          key={item.label}
-          style={[
-            styles.row,
-            index > 0 && { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth },
-          ]}
-          activeOpacity={0.7}
-          onPress={() => {
-            dismissAppDialog();
-            item.onPress();
-          }}
-        >
-          <Octicons name={item.icon as any} size={14} color={theme.textSecondary} />
-          <View style={styles.rowText}>
-            <Text style={[styles.label, { color: theme.textPrimary }]}>{item.label}</Text>
-            <Text style={[styles.hint, { color: theme.textMuted }]} numberOfLines={1}>
-              {item.hint}
-            </Text>
-          </View>
-          <Octicons name="chevron-right" size={12} color={theme.textMuted} />
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
+  openMenu({ title: `${owner}/${repo}`, items });
 }
-
-const styles = StyleSheet.create({
-  list: { marginTop: 14 },
-  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11 },
-  rowText: { flex: 1, gap: 1, minWidth: 0 },
-  label: { fontSize: 13.5, fontWeight: "700" },
-  hint: { fontSize: 10.5 },
-});

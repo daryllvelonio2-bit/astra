@@ -1,7 +1,7 @@
 import React from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useTheme } from "../../../theme/themeContext";
-import { CELL } from "./contribPlan";
+import { CELL, BULLET_H, BULLET_W, JET_H, JET_W } from "./contribPlan";
 import { ContribAnimationState } from "./useContribAnimation";
 
 /**
@@ -34,7 +34,7 @@ export function ContribAnimOverlay({ anim }: { anim: ContribAnimationState }) {
 
       {plane && (
         <>
-          {/* Fighter jet on the right edge tracking target rows vertically */}
+          {/* Jet up in the sky lane, sliding across above its target column */}
           <Animated.View
             style={[
               styles.jet,
@@ -68,18 +68,17 @@ export function ContribAnimOverlay({ anim }: { anim: ContribAnimationState }) {
             <View style={[styles.jetThruster, { backgroundColor: theme.accentRed }]} />
           </Animated.View>
 
-          {/* Laser projectiles and block explosions */}
+          {/* Bolts dropping from the belly onto the blocks, then explosions */}
           {plane.shots.map((shot) => (
             <React.Fragment key={shot.id}>
-              {/* Laser bolt traveling right to left */}
+              {/* Vertical bolt falling from the jet's belly onto the target */}
               <Animated.View
                 style={[
-                  styles.laser,
+                  styles.bolt,
                   {
                     backgroundColor: theme.accentGold,
-                    top: shot.laserY,
-                    opacity: shot.laserOpacity,
-                    transform: [{ translateX: shot.laserX }],
+                    opacity: shot.boltOpacity,
+                    transform: [{ translateX: shot.boltX }, { translateY: shot.boltY }],
                   },
                 ]}
               />
@@ -163,7 +162,7 @@ export function ContribAnimOverlay({ anim }: { anim: ContribAnimationState }) {
 const styles = StyleSheet.create({
   layer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
   segment: { position: "absolute", left: -1, top: -1, width: CELL + 2, height: CELL + 2, borderRadius: 4 },
-  jet: { position: "absolute", left: 0, top: 0, width: 20, height: 18 },
+  jet: { position: "absolute", left: 0, top: 0, width: JET_W, height: JET_H },
   jetFuselage: { position: "absolute", left: 3, top: 7, width: 14, height: 4, borderRadius: 2 },
   jetNose: { position: "absolute", left: 0, top: 7.5, width: 5, height: 3, borderRadius: 1.5 },
   jetWingTop: {
@@ -200,7 +199,7 @@ const styles = StyleSheet.create({
   },
   jetEngine: { position: "absolute", right: 1, top: 7.5, width: 3, height: 3, borderRadius: 1 },
   jetThruster: { position: "absolute", right: -3, top: 8, width: 4, height: 2, borderRadius: 1 },
-  laser: { position: "absolute", left: 0, width: 18, height: 3, borderRadius: 1.5 },
+  bolt: { position: "absolute", left: 0, top: 0, width: BULLET_W, height: BULLET_H, borderRadius: BULLET_W / 2 },
   explosion: { position: "absolute", width: CELL, height: CELL },
   fragment: { position: "absolute", width: 5, height: 5, borderRadius: 1 },
 });

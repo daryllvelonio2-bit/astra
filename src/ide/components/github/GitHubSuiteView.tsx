@@ -38,6 +38,12 @@ import { useGitHubResource } from "./useGitHubResource";
  * reports progress through the global indicator.
  */
 
+/**
+ * Global top bar height. Kept equal to the Git tab's header bar (40) so the
+ * two headers read as one system; the editor sheet offsets from it.
+ */
+const TOP_BAR_HEIGHT = 40;
+
 interface GitHubSuiteViewProps {
   visible: boolean;
   session: GitHubSession | null;
@@ -123,15 +129,15 @@ export function GitHubSuiteView({ visible, session, workspaceId, initialRoute, o
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={() => (nav.canGoBack ? nav.pop() : onClose())} statusBarTranslucent>
       <View style={[styles.screen, { backgroundColor: theme.bgPrimary, paddingTop: insets.top }]}>
-        {/* Top bar: back / title */}
+        {/* Top bar: back / title — same height as the Git tab's header bar */}
         <View style={[styles.topBar, { borderBottomColor: theme.border, backgroundColor: theme.bgSecondary }]}>
           {nav.canGoBack ? (
             <TouchableOpacity style={styles.topBtn} onPress={nav.pop} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Octicons name="chevron-left" size={16} color={theme.textPrimary} />
+              <Octicons name="chevron-left" size={14} color={theme.textPrimary} />
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={styles.topBtn} onPress={onClose} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Octicons name="x" size={16} color={theme.textSecondary} />
+              <Octicons name="x" size={14} color={theme.textSecondary} />
             </TouchableOpacity>
           )}
           <Text style={[styles.topTitle, { color: theme.textPrimary }]} numberOfLines={1}>
@@ -160,7 +166,7 @@ export function GitHubSuiteView({ visible, session, workspaceId, initialRoute, o
 
         {/* File editor sheet covers the whole content area */}
         {editor && (
-          <View style={[styles.editorSheet, { top: 44 + insets.top }]}>
+          <View style={[styles.editorSheet, { top: TOP_BAR_HEIGHT + insets.top }]}>
             <GitHubFileEditorSheet
               path={editor.path}
               initialText={editor.text}
@@ -232,7 +238,36 @@ function renderRoute(route: GitHubRoute, nav: ReturnType<typeof useGitHubNavigat
     case "orgs":
       return <OrgsList nav={nav} />;
     case "profile":
-      return <GitHubProfileView login={route.login} nav={nav} onCloneRepo={ctx.onCloneRepo} />;
+      return (
+        <GitHubProfileView
+          login={route.login}
+          nav={nav}
+          onCloneRepo={ctx.onCloneRepo}
+          initialTab={route.tab}
+        />
+      );
+    case "followers":
+      return (
+        <GitHubProfileView
+          login={route.login || ctx.login || ""}
+          nav={nav}
+          onCloneRepo={ctx.onCloneRepo}
+          initialTab="followers"
+        />
+      );
+    case "following":
+      return (
+        <GitHubProfileView
+          login={route.login || ctx.login || ""}
+          nav={nav}
+          onCloneRepo={ctx.onCloneRepo}
+          initialTab="following"
+        />
+      );
+    case "activity":
+      return (
+        <GitHubProfileView login={route.login} nav={nav} onCloneRepo={ctx.onCloneRepo} initialTab="activity" />
+      );
     case "repo":
       return (
         <GitHubRepoView
@@ -367,12 +402,12 @@ function BottomTab({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  topBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, height: 44, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth },
+  topBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, height: TOP_BAR_HEIGHT, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth },
   topBtn: { padding: 6 },
-  topTitle: { flex: 1, fontSize: 13.5, fontWeight: "800" },
+  topTitle: { flex: 1, fontSize: 12.5, fontWeight: "700" },
   content: { flex: 1 },
   tabBar: { flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 7 },
   tabBtn: { flex: 1, alignItems: "center", gap: 2 },
   tabLabel: { fontSize: 9.5, fontWeight: "700" },
-  editorSheet: { position: "absolute", top: 44, left: 0, right: 0, bottom: 0 },
+  editorSheet: { position: "absolute", top: TOP_BAR_HEIGHT, left: 0, right: 0, bottom: 0 },
 });

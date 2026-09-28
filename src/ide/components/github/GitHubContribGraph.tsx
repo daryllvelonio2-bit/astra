@@ -5,7 +5,6 @@ import { fetchContributionCalendar } from "../../services/gitHubAccountService";
 import { ContribCalendar } from "../../services/gitHubTypes";
 import { useGitHubResource } from "./useGitHubResource";
 import { ContribCell, CELL, GAP, ROWS, SKY, gridWidth } from "./contribPlan";
-import { SHOOTER_SPACE } from "./contribShooterPlan";
 import { useContribAnimation } from "./useContribAnimation";
 import { ContribAnimOverlay } from "./ContribAnimOverlay";
 
@@ -75,8 +74,12 @@ export function GitHubContribGraph({ login }: { login: string }) {
         horizontal
         showsHorizontalScrollIndicator={false}
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+        // The stage is exactly grid-wide (no reserved lane), so both margins
+        // match. flexGrow + centering keeps it balanced on screens wider than
+        // the year grid, where there is nothing to scroll.
+        contentContainerStyle={styles.scrollContent}
       >
-        <View style={[styles.stage, { width: gridWidth(columns.length) + SHOOTER_SPACE }]}>
+        <View style={[styles.stage, { width: gridWidth(columns.length) }]}>
           <View style={styles.grid}>
             {columns.map((slots, wi) => (
               <View key={`w${wi}`} style={styles.col}>
@@ -114,6 +117,7 @@ export function GitHubContribGraph({ login }: { login: string }) {
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 12, paddingVertical: 10 },
   total: { fontSize: 11.5, fontWeight: "600", marginBottom: 8 },
+  scrollContent: { flexGrow: 1, justifyContent: "center" },
   /** Holds the aircraft's flight lane above the squares. */
   stage: { position: "relative", paddingTop: SKY },
   grid: { flexDirection: "row", gap: GAP },

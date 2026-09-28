@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, Image, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
@@ -11,7 +11,7 @@ import {
 import { useGitHubResource } from "./useGitHubResource";
 import { EmptyState, ErrorState, LoadingState } from "./GitHubStates";
 import { UserRow } from "./GitHubRow";
-import { GitHubNavigation } from "./useGitHubNavigation";
+import { GitHubNavigation, ProfileTab } from "./useGitHubNavigation";
 import { GitHubUserDetail, GitHubUserSummary } from "../../services/gitHubTypes";
 import { formatJoined, formatStale } from "../../services/gitHubProfileService";
 import { GitHubRepoListView } from "./GitHubRepoListView";
@@ -39,16 +39,17 @@ export type ProfileStat = {
   highlight?: boolean;
 };
 
-type ProfileTab = "repos" | "followers" | "following" | "activity";
-
 export function GitHubProfileBody({
   login,
   nav,
   onCloneRepo,
   reposMode = "owner",
   extraStats,
-  headerSlot,
   showContribGraph = false,
+  listClone = true,
+  showList = true,
+  initialTab = "repos",
+  headerTrailing,
 }: {
   login: string;
   nav: GitHubNavigation;
@@ -57,17 +58,34 @@ export function GitHubProfileBody({
   reposMode?: "mine" | "owner";
   /** Counters appended to the profile's own (Home: Starred, Unread). */
   extraStats?: ProfileStat[];
-  /** Extra block under the counters (Home: its quick-action shortcuts). */
-  headerSlot?: React.ReactNode;
-  /**
-   * Contribution calendar. Off by default: it lives on Home now, and the
-   * profile section dropped its copy rather than animating the same year
-   * twice.
-   */
+  /** Contribution calendar. Home shows it; the profile route does not. */
   showContribGraph?: boolean;
+  /**
+   * Whether the repo list rows offer a Clone shortcut. Home turns it off: the
+   * repo screen's ⋯ menu owns cloning.
+   */
+  listClone?: boolean;
+  /**
+   * Whether this surface shows its own list (with the tab bar). Home turns it
+   * off: it is identity + counters + graph only, and every list is a pushed
+   * screen, so its counters navigate instead of switching tabs.
+   */
+  showList?: boolean;
+  /** Which tab to open on (a pushed Followers/Activity screen sets this). */
+  initialTab?: ProfileTab;
+  /**
+   * Optional control rendered at the right of the identity row, in line with
+   * the avatar — Home puts its ⋯ shortcuts menu there.
+   */
+  headerTrailing?: React.ReactNode;
 }) {
   const { theme } = useTheme();
-  const [tab, setTab] = useState<ProfileTab>("repos");
+  const [tab, setTab] = useState<ProfileTab>(initialTab);
+
+  // A pushed route can ask for a specific tab on an already-mounted body.
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
 
   const profile = useGitHubResource<GitHubUserDetail>(() => fetchUserProfile(login), [login]);
 
@@ -76,17 +94,26 @@ export function GitHubProfileBody({
   if (!profile.data) return null;
 
   const u = profile.data;
+  /** With no list of its own, each counter opens the matching screen. */
+  const open = (target: ProfileTab, route: () => void) => () => (showList ? setTab(target) : route());
   const counters: ProfileStat[] = [
-    { label: "Repos", value: u.publicRepos, onPress: () => setTab("repos") },
-    { label: "Followers", value: u.followers, onPress: () => setTab("followers") },
-    { label: "Following", value: u.following, onPress: () => setTab("following") },
+    { label: "Repos", value: u.publicRepos, onPress: open("repos", () => nav.push({ name: "myRepos" })) },
+    {
+      label: "Followers",
+      value: u.followers,
+      onPress: open("followers", () => nav.push({ name: "followers", login })),
+    },
+    {
+      label: "Following",
+      value: u.following,
+      onPress: open("following", () => nav.push({ name: "following", login })),
+    },
     { label: "Gists", value: u.publicGists, onPress: () => nav.push({ name: "gists" }) },
     ...(extraStats || []),
   ];
 
-  return (
-    <View style={styles.wrap}>
-      <View style={[styles.head, { borderBottomColor: theme.border }]}>
+  const head = (
+    <View style={[styles.head, { borderBottomColor: theme.border }]}>
         <View style={styles.headTop}>
           {u.avatarUrl ? (
             <Image source={{ uri: u.avatarUrl }} style={styles.avatar} />
@@ -116,6 +143,7 @@ export function GitHubProfileBody({
               <Text style={[styles.meta, { color: theme.textMuted }]}>{formatJoined(u.createdAt)}</Text>
             </View>
           </View>
+          {!!headerTrailing && <View style={styles.headTrailing}>{headerTrailing}</View>}
         </View>
 
         {!!u.bio && (
@@ -130,10 +158,22 @@ export function GitHubProfileBody({
           ))}
         </View>
 
-        {headerSlot}
-
         {!u.isOrganization && showContribGraph && <GitHubContribGraph login={u.login} />}
-      </View>
+    </View>
+  );
+
+  // No list of its own (Home): the header is the whole surface and scrolls.
+  if (!showList) {
+    return (
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.wrap}>
+        {head}
+      </ScrollView>
+    );
+  }
+
+  return (
+    <View style={styles.wrap}>
+      {head}
 
       <View style={[styles.tabs, { borderBottomColor: theme.border }]}>
         <TabBtn label="Repositories" active={tab === "repos"} onPress={() => setTab("repos")} />
@@ -148,7 +188,7 @@ export function GitHubProfileBody({
             nav={nav}
             mode={reposMode}
             owner={reposMode === "owner" ? login : undefined}
-            onCloneRepo={onCloneRepo}
+            onCloneRepo={listClone ? onCloneRepo : undefined}
           />
         )}
         {tab === "followers" && <PeopleList login={login} kind="followers" nav={nav} />}
@@ -257,7 +297,8 @@ function TabBtn({ label, active, onPress }: { label: string; active: boolean; on
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
   head: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6, gap: 6, borderBottomWidth: StyleSheet.hairlineWidth },
-  headTop: { flexDirection: "row", gap: 10 },
+  headTop: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  headTrailing: { marginTop: 2 },
   avatar: { width: 42, height: 42, borderRadius: 21 },
   avatarFallback: { alignItems: "center", justifyContent: "center" },
   headText: { flex: 1, gap: 1, minWidth: 0 },

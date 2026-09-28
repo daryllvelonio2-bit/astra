@@ -25,6 +25,8 @@ export {
   CELL,
   CELL_STEP,
   GAP,
+  JET_H,
+  JET_W,
   PLANE_BOX,
   ROWS,
   SKY,
