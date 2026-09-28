@@ -1,5 +1,10 @@
 # Project Progress Tracker
 
+### [2026-09-28] - Keystroke Path Equality Bailout (typing render-skip)
+- **Change:** `src/ide/components/IDELayout.tsx` (490 lines): `handleContentChange` returns early when emitted text equals current content, moves the disk-guard timestamp below the equality check, and keeps `activeFile` ref identity on echo/no-op emits so memo'd siblings skip entirely. Real keystrokes still update per the CodeMirror anti-echo contract; debounced save (700ms) and recent-files-on-flush unchanged.
+- **Verification:** `npx tsc --noEmit` passed with 0 errors. File under 500 lines (490).
+- **Left:** contentVersion split, CodeMirror raw asset, editor pre-warm, terminal flush tuning — pick next.
+
 ### [2026-09-28] - Fix Landscape Split Terminal Height Overflow on Orientation Cycle
 - **Symptom:** Landscape split screen works initially, but rotating to portrait and back to landscape broke vertical visibility: bottom contents (and input typing area) could not be scrolled into view because they were rendered below the bottom of the screen.
 - **Root Cause Identified (Empirically Measured via Device & CDP):**

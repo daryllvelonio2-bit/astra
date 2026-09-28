@@ -279,9 +279,10 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
   }, [workspace, safeSetBottomTab, flushPendingSave, recordRecentFile]);
 
   const handleContentChange = useCallback((newContent: string) => {
-    lastLocalEditTimeRef.current = Date.now();
     const current = activeFileRef.current;
     if (!current) return;
+    if (current.content === newContent) return;
+    lastLocalEditTimeRef.current = Date.now();
     const targetPath = current.path || current.name;
     const targetId = current.id;
     // Content prop MUST update per keystroke: CodeMirror's anti-echo contract
@@ -289,7 +290,13 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
     // after the echo TTL as false "external edits"). recordRecentFile is NOT
     // called here anymore — it moved to the debounced-save onFlushed callback
     // (once per typing pause), killing one full-tree render per character.
-    setActiveFile((prev) => (prev && prev.id === targetId ? { ...prev, content: newContent } : prev));
+    // Equality bailouts keep ref identity on echo/no-op emits so memo'd
+    // siblings skip the render entirely.
+    setActiveFile((prev) => {
+      if (!prev || prev.id !== targetId) return prev;
+      if (prev.content === newContent) return prev;
+      return { ...prev, content: newContent };
+    });
     scheduleSave(targetPath, newContent);
   }, [scheduleSave]);
 
