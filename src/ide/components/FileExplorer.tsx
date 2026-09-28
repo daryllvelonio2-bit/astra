@@ -252,6 +252,43 @@ function FileExplorerInner({
       }}
       {...wrapperPanResponder.panHandlers}
     >
+      <View style={styles.headerContainer}>
+        <Text style={[styles.header, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>
+          {projectName ? projectName.toUpperCase() : "EXPLORER"}
+        </Text>
+      </View>
+      {isCreating && (
+        <View style={[styles.inlineCreateRow, { backgroundColor: theme.bgInput, borderColor: theme.accent }]}>
+          <Ionicons
+            name={inlineName.endsWith("/") ? "folder" : "document-text-outline"}
+            size={14}
+            color={inlineName.endsWith("/") ? theme.accentGold : theme.accent}
+            style={{ marginRight: 4 }}
+          />
+          <TextInput
+            style={[styles.inlineInput, { color: theme.textPrimary }]}
+            placeholder="filename (or folder/)..."
+            placeholderTextColor={theme.textMuted}
+            value={inlineName}
+            onChangeText={setInlineName}
+            autoFocus
+            autoCapitalize="none"
+            autoCorrect={false}
+            showSoftInputOnFocus={!keyboardMouseMode}
+            onSubmitEditing={handleInlineSubmit}
+            returnKeyType="done"
+            onKeyPress={(e) => {
+              if (e.nativeEvent.key === "Escape") {
+                setIsCreating(false);
+                setInlineName("");
+              }
+            }}
+          />
+          <TouchableOpacity onPress={handleInlineSubmit} style={styles.inlineBtn}>
+            <Ionicons name="checkmark" size={14} color={theme.accentGreen} />
+          </TouchableOpacity>
+        </View>
+      )}
       <FlatList
         style={styles.scroll}
         data={flatRows}
@@ -273,47 +310,6 @@ function FileExplorerInner({
             setInlineName("");
           },
         } as any)}
-        ListHeaderComponent={
-          <>
-            <View style={styles.headerContainer}>
-              <Text style={[styles.header, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>
-                {projectName ? projectName.toUpperCase() : "EXPLORER"}
-              </Text>
-            </View>
-            {isCreating && (
-              <View style={[styles.inlineCreateRow, { backgroundColor: theme.bgInput, borderColor: theme.accent }]}>
-                <Ionicons
-                  name={inlineName.endsWith("/") ? "folder" : "document-text-outline"}
-                  size={14}
-                  color={inlineName.endsWith("/") ? theme.accentGold : theme.accent}
-                  style={{ marginRight: 4 }}
-                />
-                <TextInput
-                  style={[styles.inlineInput, { color: theme.textPrimary }]}
-                  placeholder="filename (or folder/)..."
-                  placeholderTextColor={theme.textMuted}
-                  value={inlineName}
-                  onChangeText={setInlineName}
-                  autoFocus
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  showSoftInputOnFocus={!keyboardMouseMode}
-                  onSubmitEditing={handleInlineSubmit}
-                  returnKeyType="done"
-                  onKeyPress={(e) => {
-                    if (e.nativeEvent.key === "Escape") {
-                      setIsCreating(false);
-                      setInlineName("");
-                    }
-                  }}
-                />
-                <TouchableOpacity onPress={handleInlineSubmit} style={styles.inlineBtn}>
-                  <Ionicons name="checkmark" size={14} color={theme.accentGreen} />
-                </TouchableOpacity>
-              </View>
-            )}
-          </>
-        }
         ListEmptyComponent={
           !isCreating ? (
             <TouchableOpacity
