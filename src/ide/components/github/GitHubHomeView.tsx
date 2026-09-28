@@ -8,6 +8,7 @@ import { GitHubSearchBar } from "./GitHubControls";
 import { GitHubNavigation } from "./useGitHubNavigation";
 import { GitHubProfileBody, ProfileStat } from "./GitHubProfileBody";
 import { HomeMenuButton } from "./GitHubHomeMenu";
+import { GitHubHomeActions } from "./GitHubHomeActions";
 
 /**
  * Landing screen: search, then your own profile — the same surface the profile
@@ -95,7 +96,9 @@ export function GitHubHomeView({
         listClone={false}
         showList={false}
         headerTrailing={<HomeMenuButton nav={nav} login={login} onSignOut={onSignOut} />}
-      />
+      >
+        <GitHubHomeActions nav={nav} login={login} onSignOut={onSignOut} />
+      </GitHubProfileBody>
     </View>
   );
 }

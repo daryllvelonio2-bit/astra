@@ -1,5 +1,18 @@
 # Project Progress Tracker
 
+### [2026-09-28] - Home: 3-dot menu actions unrolled into section cards below the contribution graph
+- **Ask:** in the github page, in home there is a 3 dot button containing many actions, draft it all out below the contribution.
+- **`GitHubHomeActions.tsx` (new, 250 lines):** created dedicated action sections card component rendering all actions that were in the 3-dot menu into clean grouped cards:
+  - **My Work:** Issues assigned to me, Pull requests to review, Repositories, Organizations.
+  - **Quick Actions:** New repository, New gist.
+  - **Community & Activity:** Activity, Followers, Following.
+  - **Explore:** Search code, Search users.
+  - **Account:** Sign out of GitHub (when onSignOut provided).
+  - Each item renders an authentic themed icon container, label, hint, and chevron right with active touch handlers.
+- **`GitHubProfileBody.tsx` (330 lines):** added `children?: React.ReactNode` support so when `showList={false}` (Home screen), children are rendered directly inside the ScrollView below the header and contribution graph.
+- **`GitHubHomeView.tsx` (108 lines):** renders `<GitHubHomeActions>` as children of `GitHubProfileBody`.
+- **Verification:** `npx tsc --noEmit` → No errors found. All files well under 500-line limit (250, 330, 108 lines). Metro live hot reload updates the connected device immediately.
+
 ### [2026-09-27] - Home: repo list removed; its destinations moved into the ⋯ menu (counters now navigate)
 - **Ask:** remove the repository list from Home and put those buttons (Repositories / Followers / Following / Activity) in the ⋯ menu instead. Chosen behaviour: counters stay and **navigate** to screens, and ⋯ carries the four list entries.
 - **`GitHubProfileBody.tsx` (327):** new `showList` (default true) — when false the surface is header-only (identity + counters + graph) inside a ScrollView, with no tab bar and no list. Counters call `open(tab, route)`: with a list they switch tabs, without one they push the matching route. New `initialTab` (with a sync effect, so an already-mounted body follows a pushed route's tab). `ProfileTab` now comes from the nav module (avoids a body ↔ nav import cycle).

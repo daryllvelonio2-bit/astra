@@ -50,6 +50,7 @@ export function GitHubProfileBody({
   showList = true,
   initialTab = "repos",
   headerTrailing,
+  children,
 }: {
   login: string;
   nav: GitHubNavigation;
@@ -78,6 +79,7 @@ export function GitHubProfileBody({
    * the avatar — Home puts its ⋯ shortcuts menu there.
    */
   headerTrailing?: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   const { theme } = useTheme();
   const [tab, setTab] = useState<ProfileTab>(initialTab);
@@ -167,6 +169,7 @@ export function GitHubProfileBody({
     return (
       <ScrollView showsVerticalScrollIndicator={false} style={styles.wrap}>
         {head}
+        {children}
       </ScrollView>
     );
   }
