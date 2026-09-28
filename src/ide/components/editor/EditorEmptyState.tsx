@@ -9,6 +9,7 @@ interface EditorEmptyStateProps {
   onExitProject?: () => void;
   onToggleSidebar?: () => void;
   onOpenSettings?: () => void;
+  onOpenSearch?: () => void;
   sidebar?: React.ReactNode;
 }
 
@@ -17,6 +18,7 @@ export function EditorEmptyState({
   onExitProject,
   onToggleSidebar,
   onOpenSettings,
+  onOpenSearch,
   sidebar,
 }: EditorEmptyStateProps) {
   return (
@@ -28,6 +30,7 @@ export function EditorEmptyState({
         onExitProject={onExitProject}
         onToggleSidebar={onToggleSidebar}
         onOpenSettings={onOpenSettings}
+        onOpenSearch={onOpenSearch}
       />
       <View style={styles.contentRow}>
         {sidebar}

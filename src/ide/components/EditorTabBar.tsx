@@ -35,6 +35,10 @@ interface EditorTabBarProps {
   onResetZoom?: () => void;
   /** Open the CodeMirror find & replace panel. */
   onOpenFind?: () => void;
+  /** Open the global project search modal. */
+  onOpenSearch?: () => void;
+  /** Delete the active file. */
+  onDeleteFile?: () => void;
   /** Unsaved-changes indicator for the title bar dirty dot. */
   isDirty?: boolean;
 }
@@ -64,6 +68,8 @@ function EditorTabBarInner({
   onZoomOut,
   onResetZoom,
   onOpenFind,
+  onOpenSearch,
+  onDeleteFile,
   isDirty = false,
 }: EditorTabBarProps) {
   const { theme } = useTheme();
@@ -90,17 +96,23 @@ function EditorTabBarInner({
   // their own surfaces (handlers still wired, just no menu buttons).
   const menuActions: EditorMenuAction[] = useMemo(() => {
     const items: EditorMenuAction[] = [];
+    if (onOpenSearch) {
+      items.push({ key: "search", label: "Search in Project", icon: "search-outline", run: onOpenSearch });
+    }
     if (onOpenFind) {
-      items.push({ key: "find", label: "Find & Replace", icon: "search-outline", run: onOpenFind });
+      items.push({ key: "find", label: "Find & Replace", icon: "document-text-outline", run: onOpenFind });
     }
     if (onOpenSettings) {
       items.push({ key: "settings", label: "Settings", icon: "settings-outline", run: onOpenSettings });
+    }
+    if (fileName && onDeleteFile) {
+      items.push({ key: "delete", label: "Delete File", icon: "trash-outline", destructive: true, run: onDeleteFile });
     }
     if (onExitProject) {
       items.push({ key: "exit", label: "Exit Project", icon: "exit-outline", destructive: true, run: onExitProject });
     }
     return items;
-  }, [onOpenFind, onOpenSettings, onExitProject]);
+  }, [onOpenSearch, onOpenFind, onOpenSettings, fileName, onDeleteFile, onExitProject]);
 
   return (
     <>

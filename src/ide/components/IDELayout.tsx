@@ -303,11 +303,12 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
   const {
     selectedNode, modalMode, setModalMode, modalInput, setModalInput, menuPosition,
     handleLongPressNode, confirmAndDeleteNode, handleRenameSubmit, handleCreateNode,
-    handleMoveNode, handleRunActiveFile,
+    handleMoveNode, handleRunActiveFile, handleDeleteActiveFile,
   } = useWorkspaceFileActions({
     workspace, setWorkspace, activeFile, setActiveFile, refreshWorkspace,
     onOpenTerminal,
     onOpenPreview: handleOpenInBrowser,
+    onRemoveRecentFile: removeRecentFile,
   });
 
   // Speed: stable callbacks so memoized children don't re-render per parent tick.
@@ -389,6 +390,8 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
                 visible={bottomTab === "editor"}
                 jumpSignal={pendingJump}
                 onJumpConsumed={clearJump}
+                onOpenSearch={handleOpenSearch}
+                onDeleteFile={handleDeleteActiveFile}
                 sidebar={
                   <Animated.View style={sidebarAnimStyle} pointerEvents={isSidebarOpen ? "auto" : "none"}>
                     <PanelErrorBoundary panelName="Explorer" resetKey={workspace?.id}>

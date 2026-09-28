@@ -20,6 +20,7 @@ interface UseWorkspaceFileActionsProps {
   refreshWorkspace: () => Promise<void>;
   onOpenTerminal?: () => void;
   onOpenPreview?: (url: string) => void;
+  onRemoveRecentFile?: (filePath: string) => void;
 }
 
 export function useWorkspaceFileActions({
@@ -30,6 +31,7 @@ export function useWorkspaceFileActions({
   refreshWorkspace,
   onOpenTerminal,
   onOpenPreview,
+  onRemoveRecentFile,
 }: UseWorkspaceFileActionsProps) {
   const [selectedNode, setSelectedNode] = useState<FileNode | null>(null);
   const [modalMode, setModalMode] = useState<"none" | "options" | "rename" | "add">("none");
@@ -72,6 +74,7 @@ export function useWorkspaceFileActions({
             await refreshWorkspace();
             const af = activeFileRef.current;
             if (af && (af.id === sel.id || af.path === sel.path)) {
+              onRemoveRecentFile?.(targetPath);
               setActiveFile(null);
             }
             setModalMode("none");
@@ -81,7 +84,35 @@ export function useWorkspaceFileActions({
         },
       },
     ] });
-  }, [refreshWorkspace, setActiveFile]);
+  }, [refreshWorkspace, setActiveFile, onRemoveRecentFile]);
+
+  const handleDeleteActiveFile = useCallback(() => {
+    const ws = workspaceRef.current;
+    const af = activeFileRef.current;
+    if (!ws || !af) return;
+    const targetPath = af.path || af.name;
+    showAppDialog({
+      title: "Delete File?",
+      message: `Are you sure you want to delete "${af.name}"? This cannot be undone.`,
+      buttons: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteNodeInWorkspace(ws.id, targetPath);
+              await refreshWorkspace();
+              onRemoveRecentFile?.(targetPath);
+              setActiveFile(null);
+            } catch {
+              showAppDialog({ title: "Error", message: "Failed to delete file" });
+            }
+          },
+        },
+      ],
+    });
+  }, [refreshWorkspace, setActiveFile, onRemoveRecentFile]);
 
   const handleRenameSubmit = useCallback(async () => {
     const ws = workspaceRef.current;
@@ -185,6 +216,7 @@ export function useWorkspaceFileActions({
     setMenuPosition,
     handleLongPressNode,
     confirmAndDeleteNode,
+    handleDeleteActiveFile,
     handleRenameSubmit,
     handleCreateNode,
     handleMoveNode,

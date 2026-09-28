@@ -41,6 +41,8 @@ interface EditorViewProps {
   jumpSignal?: { path: string; line: number; nonce: number } | null;
   onJumpConsumed?: () => void;
   sidebar?: React.ReactNode;
+  onOpenSearch?: () => void;
+  onDeleteFile?: () => void;
 }
 
 function EditorViewInner({
@@ -61,6 +63,8 @@ function EditorViewInner({
   jumpSignal,
   onJumpConsumed,
   sidebar,
+  onOpenSearch,
+  onDeleteFile,
 }: EditorViewProps) {
   const { theme } = useTheme();
   const { editorSettings, keyboardMouseMode } = useEditorConfig();
@@ -197,6 +201,7 @@ function EditorViewInner({
         onExitProject={onExitProject}
         onToggleSidebar={onToggleSidebar}
         onOpenSettings={onOpenSettings}
+        onOpenSearch={onOpenSearch}
         sidebar={sidebar}
       />
     );
@@ -236,6 +241,8 @@ function EditorViewInner({
         onZoomOut={gestures.zoomOut}
         onResetZoom={gestures.resetZoom}
         onOpenFind={handleOpenFind}
+        onOpenSearch={onOpenSearch}
+        onDeleteFile={onDeleteFile}
       />
 
       <View style={styles.contentRow}>
