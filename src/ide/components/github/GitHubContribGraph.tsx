@@ -1,11 +1,11 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useTheme } from "../../../theme/themeContext";
 import { fetchContributionCalendar } from "../../services/gitHubAccountService";
 import { ContribCalendar } from "../../services/gitHubTypes";
 import { useGitHubResource } from "./useGitHubResource";
 import { ContribCell, CELL, GAP, ROWS, SKY, gridWidth } from "./contribPlan";
-import { useContribAnimation } from "./useContribAnimation";
+import { CellAnim, useContribAnimation } from "./useContribAnimation";
 import { ContribAnimOverlay } from "./ContribAnimOverlay";
 
 interface DaySlot {
@@ -45,12 +45,92 @@ function formatContribCount(count: number): string {
   return `${count.toLocaleString()} contributions`;
 }
 
+interface ContribSquareProps {
+  slot: DaySlot | null;
+  col: number;
+  row: number;
+  isSelected: boolean;
+  squareAnim?: CellAnim;
+  emptyTrack: string;
+  accentColor: string;
+  onPress: (slot: DaySlot, col: number, row: number) => void;
+}
+
 /**
- * Year contributions graph:
- * - Clean total on top without extra modals or screen-shifting banners.
- * - Tapping any square floats a compact tooltip directly above the tapped box.
- * - Selection ring highlights the tapped square with scale.
- * - Background animations (snake/plane) remain intact.
+ * Individual memoized square:
+ * - delayPressIn={0} eliminates Android's 130ms press delay.
+ * - React.memo skips re-rendering 369 out of 371 cells on tap.
+ */
+const ContribSquare = React.memo(function ContribSquare({
+  slot,
+  col,
+  row,
+  isSelected,
+  squareAnim,
+  emptyTrack,
+  accentColor,
+  onPress,
+}: ContribSquareProps) {
+  if (!slot || slot.count === 0) {
+    return (
+      <TouchableOpacity
+        key={slot?.key ?? `e${col}-${row}`}
+        activeOpacity={0.7}
+        delayPressIn={0}
+        disabled={!slot}
+        onPress={() => slot && onPress(slot, col, row)}
+        style={[
+          styles.cell,
+          { backgroundColor: emptyTrack },
+          isSelected && styles.cellSelected,
+        ]}
+        accessibilityLabel={slot ? `No contributions on ${slot.date}` : "Empty"}
+      >
+        {isSelected && (
+          <View
+            style={[styles.selectionRing, { borderColor: accentColor }]}
+            pointerEvents="none"
+          />
+        )}
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      key={slot.key}
+      activeOpacity={0.7}
+      delayPressIn={0}
+      onPress={() => onPress(slot, col, row)}
+      style={[
+        styles.cell,
+        { backgroundColor: emptyTrack },
+        isSelected && styles.cellSelected,
+      ]}
+      accessibilityLabel={`${slot.count} contributions on ${slot.date}`}
+    >
+      <Animated.View
+        style={[
+          styles.fill,
+          { backgroundColor: slot.color },
+          squareAnim && { opacity: squareAnim.value, transform: [{ scale: squareAnim.scale }] },
+        ]}
+      />
+      {isSelected && (
+        <View
+          style={[styles.selectionRing, { borderColor: accentColor }]}
+          pointerEvents="none"
+        />
+      )}
+    </TouchableOpacity>
+  );
+});
+
+/**
+ * High-performance interactive contributions graph:
+ * - 30-minute in-memory GraphQL cache with in-flight deduplication.
+ * - Instant touch feedback with delayPressIn={0} and memoized cells.
+ * - Compact tooltip above the tapped box without extra modals.
  */
 export function GitHubContribGraph({ login }: { login: string }) {
   const { theme } = useTheme();
@@ -61,6 +141,7 @@ export function GitHubContribGraph({ login }: { login: string }) {
   const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null);
 
   const emptyTrack = theme.bgTertiary;
+  const accentColor = theme.accentCyan || theme.accent;
 
   const columns = useMemo(() => {
     if (!data) return [];
@@ -96,6 +177,14 @@ export function GitHubContribGraph({ login }: { login: string }) {
 
   const anim = useContribAnimation(alive, columns.length);
 
+  const handlePress = useCallback((slot: DaySlot, col: number, row: number) => {
+    setSelectedDay((prev) =>
+      prev?.key === slot.key
+        ? null
+        : { key: slot.key, date: slot.date, count: slot.count, color: slot.color, col, row }
+    );
+  }, []);
+
   if (cal.error && !data) return null;
   if (!data) {
     return <View style={[styles.placeholder, { backgroundColor: theme.bgSecondary }]} />;
@@ -122,71 +211,20 @@ export function GitHubContribGraph({ login }: { login: string }) {
               <View key={`w${wi}`} style={styles.col}>
                 {slots.map((slot, di) => {
                   const isSelected = Boolean(selectedDay && slot && selectedDay.key === slot.key);
+                  const squareAnim = slot ? anim.cells.get(slot.key) : undefined;
 
-                  if (!slot || slot.count === 0) {
-                    return (
-                      <TouchableOpacity
-                        key={slot?.key ?? `e${wi}-${di}`}
-                        activeOpacity={0.7}
-                        disabled={!slot}
-                        onPress={() => {
-                          if (!slot) return;
-                          setSelectedDay((prev) =>
-                            prev?.key === slot.key
-                              ? null
-                              : { key: slot.key, date: slot.date, count: 0, color: emptyTrack, col: wi, row: di }
-                          );
-                        }}
-                        style={[
-                          styles.cell,
-                          { backgroundColor: emptyTrack },
-                          isSelected && styles.cellSelected,
-                        ]}
-                        accessibilityLabel={slot ? `No contributions on ${slot.date}` : "Empty"}
-                      >
-                        {isSelected && (
-                          <View
-                            style={[styles.selectionRing, { borderColor: theme.accentCyan || theme.accent }]}
-                            pointerEvents="none"
-                          />
-                        )}
-                      </TouchableOpacity>
-                    );
-                  }
-
-                  const square = anim.cells.get(slot.key);
                   return (
-                    <TouchableOpacity
-                      key={slot.key}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        setSelectedDay((prev) =>
-                          prev?.key === slot.key
-                            ? null
-                            : { key: slot.key, date: slot.date, count: slot.count, color: slot.color, col: wi, row: di }
-                        );
-                      }}
-                      style={[
-                        styles.cell,
-                        { backgroundColor: emptyTrack },
-                        isSelected && styles.cellSelected,
-                      ]}
-                      accessibilityLabel={`${slot.count} contributions on ${slot.date}`}
-                    >
-                      <Animated.View
-                        style={[
-                          styles.fill,
-                          { backgroundColor: slot.color },
-                          square && { opacity: square.value, transform: [{ scale: square.scale }] },
-                        ]}
-                      />
-                      {isSelected && (
-                        <View
-                          style={[styles.selectionRing, { borderColor: theme.accentCyan || theme.accent }]}
-                          pointerEvents="none"
-                        />
-                      )}
-                    </TouchableOpacity>
+                    <ContribSquare
+                      key={slot?.key ?? `e${wi}-${di}`}
+                      slot={slot}
+                      col={wi}
+                      row={di}
+                      isSelected={isSelected}
+                      squareAnim={squareAnim}
+                      emptyTrack={emptyTrack}
+                      accentColor={accentColor}
+                      onPress={handlePress}
+                    />
                   );
                 })}
               </View>

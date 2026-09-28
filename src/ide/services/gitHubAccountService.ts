@@ -284,26 +284,47 @@ export { mapUser as mapGitHubUser, mapUserDetail as mapGitHubUserDetail };
 
 const CONTRIB_QUERY = `query($login:String!){user(login:$login){contributionsCollection{contributionCalendar{totalContributions weeks{contributionDays{date contributionCount color}}}}}}`;
 
+const contribCalendarCache = new Map<string, { data: ContribCalendar; at: number }>();
+const inFlightCalendar = new Map<string, Promise<GitHubResult<ContribCalendar>>>();
+const CALENDAR_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes cache
+
+export function invalidateContributionCalendarCache(login?: string): void {
+  if (login) {
+    contribCalendarCache.delete(login.trim());
+  } else {
+    contribCalendarCache.clear();
+  }
+}
+
 /**
  * Full-year contributions calendar via GraphQL (REST has no equivalent).
- * Colors are GitHub's own per-day greens. Null user (orgs) or GraphQL
- * errors surface as a normal GitHubResult error — callers render nothing.
+ * Colors are GitHub's own per-day greens. Results are cached in-memory
+ * (30-min TTL + in-flight deduplication) for instantaneous subsequent opens.
  */
 export async function fetchContributionCalendar(login: string): Promise<GitHubResult<ContribCalendar>> {
   const handle = (login || "").trim();
   if (!handle) {
     return { ok: false, error: { status: 0, rateLimited: false, scopeMissing: false, message: "Missing login." } };
   }
-  const res = await ghPost<any>("/graphql", { query: CONTRIB_QUERY, variables: { login: handle } });
-  if (!res.ok) return { ok: false, error: res.error };
-  try {
-    const payload = res.data;
-    if (payload?.errors?.length) throw new Error(payload.errors[0]?.message || "GraphQL error.");
-    const cal = payload?.data?.user?.contributionsCollection?.contributionCalendar;
-    if (!cal || !Array.isArray(cal.weeks)) throw new Error("No calendar.");
-    return {
-      ok: true,
-      data: {
+
+  const cached = contribCalendarCache.get(handle);
+  if (cached && Date.now() - cached.at < CALENDAR_CACHE_TTL_MS) {
+    return { ok: true, data: cached.data };
+  }
+
+  if (inFlightCalendar.has(handle)) {
+    return inFlightCalendar.get(handle)!;
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      const res = await ghPost<any>("/graphql", { query: CONTRIB_QUERY, variables: { login: handle } });
+      if (!res.ok) return { ok: false as const, error: res.error };
+      const payload = res.data;
+      if (payload?.errors?.length) throw new Error(payload.errors[0]?.message || "GraphQL error.");
+      const cal = payload?.data?.user?.contributionsCollection?.contributionCalendar;
+      if (!cal || !Array.isArray(cal.weeks)) throw new Error("No calendar.");
+      const data: ContribCalendar = {
         total: cal.totalContributions ?? 0,
         weeks: cal.weeks.map((w: any) =>
           (w?.contributionDays || []).map((d: any) => ({
@@ -312,9 +333,19 @@ export async function fetchContributionCalendar(login: string): Promise<GitHubRe
             color: String(d?.color || "#ebedf0"),
           }))
         ),
-      },
-    };
-  } catch (e: any) {
-    return { ok: false, error: { status: 200, rateLimited: false, scopeMissing: false, message: e?.message || "Could not load contributions." } };
-  }
+      };
+      contribCalendarCache.set(handle, { data, at: Date.now() });
+      return { ok: true as const, data };
+    } catch (e: any) {
+      return {
+        ok: false as const,
+        error: { status: 200, rateLimited: false, scopeMissing: false, message: e?.message || "Could not load contributions." },
+      };
+    } finally {
+      inFlightCalendar.delete(handle);
+    }
+  })();
+
+  inFlightCalendar.set(handle, fetchPromise);
+  return fetchPromise;
 }
