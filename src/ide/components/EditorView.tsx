@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import {
-  View, StyleSheet, Keyboard,
+  View, StyleSheet, Keyboard, TouchableOpacity,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { EditorTabBar } from "./EditorTabBar";
 import { ProblemsPanel } from "./ProblemsPanel";
 import { useEditorAssists } from "./useEditorAssists";
@@ -24,6 +25,7 @@ import {
 
 interface EditorViewProps {
   fileName?: string;
+  workspaceName?: string;
   activeFilePath?: string;
   content: string;
   onChangeContent: (text: string) => void;
@@ -47,6 +49,7 @@ interface EditorViewProps {
 
 function EditorViewInner({
   fileName,
+  workspaceName,
   activeFilePath,
   content,
   onChangeContent,
@@ -198,6 +201,7 @@ function EditorViewInner({
     return (
       <EditorEmptyState
         theme={theme}
+        workspaceName={workspaceName}
         onExitProject={onExitProject}
         onToggleSidebar={onToggleSidebar}
         onOpenSettings={onOpenSettings}
@@ -218,6 +222,7 @@ function EditorViewInner({
     >
       <EditorTabBar
         fileName={fileName}
+        workspaceName={workspaceName}
         activeFilePath={activeFilePath}
         recentFiles={recentFiles}
         onSelectRecentFile={onSelectRecentFile}
@@ -279,6 +284,21 @@ function EditorViewInner({
             onJumpConsumed={activeJump ? onJumpConsumed : undefined}
           />
 
+          {/* Floating Edit/Lock Button (no background) */}
+          <TouchableOpacity
+            style={styles.floatingLockBtn}
+            onPress={handleToggleEdit}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={isEditing ? "Lock editor" : "Unlock editor to edit"}
+          >
+            <Ionicons
+              name={isEditing ? "lock-open" : "lock-closed"}
+              size={20}
+              color={isEditing ? theme.accent : theme.textMuted}
+            />
+          </TouchableOpacity>
+
           <EditorStatusBar
             isEditing={isEditing}
             matchStatus={assists.matchStatus}
@@ -308,4 +328,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, position: "relative" },
   contentRow: { flex: 1, flexDirection: "row" },
   codeArea: { flex: 1, position: "relative" },
+  floatingLockBtn: {
+    position: "absolute",
+    right: 14,
+    bottom: 34,
+    padding: 6,
+    zIndex: 30,
+  },
 });

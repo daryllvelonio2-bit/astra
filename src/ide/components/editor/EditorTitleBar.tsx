@@ -7,29 +7,27 @@ import { getFileIcon } from "../fileExplorerUtils";
 interface EditorTitleBarProps {
   theme: ThemeColors;
   fileName?: string;
-  isEditing: boolean;
+  workspaceName?: string;
   isDirty?: boolean;
   errorCount?: number;
   warningCount?: number;
   onToggleSidebar?: () => void;
-  onToggleEdit: () => void;
   onShowProblems?: () => void;
 }
 
 /**
  * EditorTitleBar — file identity block of the editor header.
- * Shows sidebar toggle, file icon + name, dirty dot, diagnostics badge,
- * and a clear icon-only Edit/Done toggle.
+ * Shows sidebar toggle, workspace name, active file identity, dirty dot,
+ * and diagnostics badge.
  */
 export function EditorTitleBar({
   theme,
   fileName,
-  isEditing,
+  workspaceName,
   isDirty = false,
   errorCount = 0,
   warningCount = 0,
   onToggleSidebar,
-  onToggleEdit,
   onShowProblems,
 }: EditorTitleBarProps) {
   const problemCount = errorCount > 0 ? errorCount : warningCount;
@@ -46,21 +44,44 @@ export function EditorTitleBar({
           <Ionicons name="menu" size={20} color={theme.textSecondary} />
         </TouchableOpacity>
       )}
-      <View style={styles.iconWrap}>
-        {fileName ? (
-          getFileIcon(fileName)
-        ) : (
-          <Ionicons name="document-text-outline" size={16} color={theme.textMuted} />
-        )}
-      </View>
-      <Text
-        style={[styles.title, { color: fileName ? theme.textPrimary : theme.textMuted }]}
-        numberOfLines={1}
-        ellipsizeMode="middle"
-      >
-        {fileName ?? "No file open"}
-      </Text>
+
+      {workspaceName ? (
+        <Text
+          style={[styles.wsTitle, { color: theme.textSecondary }]}
+          numberOfLines={1}
+        >
+          {workspaceName}
+        </Text>
+      ) : null}
+
+      {workspaceName && fileName ? (
+        <Text style={[styles.sep, { color: theme.textMuted }]}>/</Text>
+      ) : null}
+
+      {fileName ? (
+        <>
+          <View style={styles.iconWrap}>{getFileIcon(fileName)}</View>
+          <Text
+            style={[styles.title, { color: theme.textPrimary }]}
+            numberOfLines={1}
+            ellipsizeMode="middle"
+          >
+            {fileName}
+          </Text>
+        </>
+      ) : !workspaceName ? (
+        <>
+          <View style={styles.iconWrap}>
+            <Ionicons name="document-text-outline" size={16} color={theme.textMuted} />
+          </View>
+          <Text style={[styles.title, { color: theme.textMuted }]}>
+            No file open
+          </Text>
+        </>
+      ) : null}
+
       {isDirty && <View style={[styles.dirtyDot, { backgroundColor: theme.accentGold }]} />}
+
       {fileName && problemCount > 0 && (
         <TouchableOpacity
           style={[
@@ -79,24 +100,6 @@ export function EditorTitleBar({
           <Text style={[styles.diagBadgeText, { color: problemColor }]}>{problemCount}</Text>
         </TouchableOpacity>
       )}
-      {fileName && (
-        <TouchableOpacity
-          style={[
-            styles.editToggle,
-            { backgroundColor: theme.bgElevated, borderColor: theme.border },
-            isEditing && { backgroundColor: theme.accent, borderColor: theme.accent },
-          ]}
-          onPress={onToggleEdit}
-          activeOpacity={0.7}
-          accessibilityLabel={isEditing ? "Finish editing" : "Edit file"}
-        >
-          <Ionicons
-            name={isEditing ? "checkmark" : "pencil"}
-            size={14}
-            color={isEditing ? "#fff" : theme.textSecondary}
-          />
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
@@ -105,7 +108,7 @@ const styles = StyleSheet.create({
   titleBlock: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
     flexShrink: 1,
     minWidth: 0,
   },
@@ -113,13 +116,24 @@ const styles = StyleSheet.create({
     marginRight: 2,
     padding: 4,
   },
+  wsTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    maxWidth: 110,
+    flexShrink: 1,
+  },
+  sep: {
+    fontSize: 12,
+    marginHorizontal: 1,
+    opacity: 0.6,
+  },
   iconWrap: {
     marginRight: 0,
   },
   title: {
-    fontSize: 13,
-    fontWeight: "500",
-    maxWidth: 130,
+    fontSize: 12.5,
+    fontWeight: "600",
+    maxWidth: 120,
     flexShrink: 1,
   },
   dirtyDot: {
@@ -139,13 +153,5 @@ const styles = StyleSheet.create({
   diagBadgeText: {
     fontSize: 10.5,
     fontWeight: "700",
-  },
-  editToggle: {
-    alignItems: "center",
-    justifyContent: "center",
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    borderWidth: 1,
   },
 });

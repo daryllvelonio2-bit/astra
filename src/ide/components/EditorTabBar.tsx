@@ -11,9 +11,10 @@ import { EditorActionMenu, EditorMenuAction } from "./editor/EditorActionMenu";
 
 interface EditorTabBarProps {
   fileName?: string;
+  workspaceName?: string;
   activeFilePath?: string;
-  isEditing: boolean;
-  onToggleEdit: () => void;
+  isEditing?: boolean;
+  onToggleEdit?: () => void;
   onDoneEdit?: () => void;
   onRunFile?: () => void;
   onExitProject?: () => void;
@@ -45,8 +46,9 @@ interface EditorTabBarProps {
 
 function EditorTabBarInner({
   fileName,
+  workspaceName,
   activeFilePath,
-  isEditing,
+  isEditing = false,
   onToggleEdit,
   onDoneEdit: _onDoneEdit,
   onRunFile,
@@ -120,12 +122,11 @@ function EditorTabBarInner({
         <EditorTitleBar
           theme={theme}
           fileName={fileName}
-          isEditing={isEditing}
+          workspaceName={workspaceName}
           isDirty={isDirty}
           errorCount={errorCount}
           warningCount={warningCount}
           onToggleSidebar={onToggleSidebar}
-          onToggleEdit={onToggleEdit}
           onShowProblems={onShowProblems}
         />
 

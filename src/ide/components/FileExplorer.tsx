@@ -254,7 +254,7 @@ function FileExplorerInner({
     >
       <View style={styles.headerContainer}>
         <Text style={[styles.header, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>
-          {projectName ? projectName.toUpperCase() : "EXPLORER"}
+          EXPLORER
         </Text>
       </View>
       {isCreating && (

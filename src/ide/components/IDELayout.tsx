@@ -375,6 +375,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
               <PanelErrorBoundary panelName="Editor" resetKey={activeFile?.id || workspace?.id}>
               <EditorView
                 fileName={activeFile?.name}
+                workspaceName={workspace.name}
                 activeFilePath={activeFile?.path}
                 content={activeFile?.content || ""}
                 onChangeContent={handleContentChange}

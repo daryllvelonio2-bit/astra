@@ -6,6 +6,7 @@ import { ThemeColors } from "../../../theme/themeContext";
 
 interface EditorEmptyStateProps {
   theme: ThemeColors;
+  workspaceName?: string;
   onExitProject?: () => void;
   onToggleSidebar?: () => void;
   onOpenSettings?: () => void;
@@ -15,6 +16,7 @@ interface EditorEmptyStateProps {
 
 export function EditorEmptyState({
   theme,
+  workspaceName,
   onExitProject,
   onToggleSidebar,
   onOpenSettings,
@@ -24,6 +26,7 @@ export function EditorEmptyState({
   return (
     <View style={[styles.container, { backgroundColor: theme.bgPrimary }]}>
       <EditorTabBar
+        workspaceName={workspaceName}
         isEditing={false}
         onToggleEdit={() => {}}
         onDoneEdit={() => {}}
