@@ -1,6 +1,13 @@
 # Project Progress Tracker
 
-### [2026-09-28] - Home: 3-dot button removed from header
+### [2026-09-28] - Metro & Wireless Debugging: Set up Metro server via WiFi / Hotspot
+- **Ask:** in docs, project, astra i want you to set up the metro server via wifi, the wifi is the device ill be debugging the app, os it works without usb.
+- **`metro.sh`:** updated to automatically detect host LAN IP (`192.168.43.106`) and phone gateway (`192.168.43.1`), auto-connect to wireless ADB (`adb connect $GATEWAY_IP:5555`), set up `adb reverse tcp:8081 tcp:8081` on all connected devices, auto-configure `debug_http_host` in `com.janelle.aicoder` shared preferences to `$LAN_IP:8081`, export `REACT_NATIVE_PACKAGER_HOSTNAME=$LAN_IP`, clean up stale port 8081 listeners, and launch Expo Metro with `--dev-client --lan --clear --port 8081`.
+- **`metro-wifi.sh`:** updated to delegate cleanly to `metro.sh`.
+- **`start-wifi.sh`:** updated to launch `metro.sh` inside an external terminal window (kitty).
+- **`build-debug-apk.sh`:** added wireless ADB auto-connect and device targeting so debug APK builds and installs work over WiFi without USB cable.
+- **Verification:** Kitty window launched running Metro dev server listening on `0.0.0.0:8081` with LAN IP `192.168.43.106`. Device wireless ADB connected (`192.168.43.1:5555`). Logcat confirmed `isMetroRunning(): Async result = true` and `loadJSBundleFromMetro()` over WiFi.
+
 - **Ask:** remove the 3dot botton.
 - **`GitHubHomeView.tsx` (106 lines):** removed `HomeMenuButton` import and `headerTrailing` prop. The actions are now fully hosted in `GitHubHomeActions` below the contribution graph.
 - **`GitHubHomeMenu.tsx` (deleted):** deleted dead component file, zero remaining references across `src/`.

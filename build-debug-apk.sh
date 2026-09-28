@@ -25,12 +25,19 @@ cp app/build/outputs/apk/debug/app-debug.apk /home/janelle/Downloads/app-debug.a
 echo "Debug APK copied to:"
 ls -lh /home/janelle/Downloads/app-debug.apk
 
-if adb get-state >/dev/null 2>&1; then
-  echo "=== Installing Debug APK to connected device ==="
-  adb reverse tcp:8081 tcp:8081 || true
-  adb install -r app/build/outputs/apk/debug/app-debug.apk || true
+# Connect to phone wireless ADB if phone is the WiFi gateway
+GATEWAY_IP=$(ip route | grep default | awk '{print $3}' | head -n 1)
+if [ -n "$GATEWAY_IP" ]; then
+  adb connect "$GATEWAY_IP:5555" >/dev/null 2>&1 || true
+fi
+
+TARGET_DEVICE=$(adb devices | awk 'NR>1 && $2=="device" {print $1; exit}')
+if [ -n "$TARGET_DEVICE" ]; then
+  echo "=== Installing Debug APK to connected device ($TARGET_DEVICE) ==="
+  adb -s "$TARGET_DEVICE" reverse tcp:8081 tcp:8081 || true
+  adb -s "$TARGET_DEVICE" install -r app/build/outputs/apk/debug/app-debug.apk || true
   echo "=== Launching Debug App ==="
-  adb shell am start -n com.janelle.aicoder/.MainActivity || true
+  adb -s "$TARGET_DEVICE" shell am start -n com.janelle.aicoder/.MainActivity || true
 else
   echo "=== No ADB device connected, APK ready in Downloads ==="
 fi
