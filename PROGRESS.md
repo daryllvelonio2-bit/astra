@@ -1,5 +1,16 @@
 # Project Progress Tracker
 
+### [2026-09-28] - Snake Target Hit Restriction (1 color per 2-4s) & Tooltip Popup on Eat
+- **Ask:** for the snake, it should only eat 1 color within 2-4 seconds. not 2 or more colors, also trigger the contribution pop up if it eats one.
+- **`contribPlan.ts` (444 lines):**
+  - Updated `buildRoute` to track explicit target hits (`eats`), while blocking all other uneaten green squares so the snake never steps on or eats multiple colors.
+  - Added waypoint looping when targets are close (< 10 steps) to guarantee the 2-4 second interval (>= 2200ms) between meals.
+  - Built `visitAt` schedule strictly from intentional `allEats`, preventing any accidental square bites during intermediate traversal.
+- **`useContribAnimation.ts` (293 lines) & `GitHubContribGraph.tsx` (344 lines):**
+  - Generalized `onTargetHit` callback so it triggers for both snake meals and jet bombs.
+  - Positioned floating contribution tooltip over the eaten color square, persisting until the next meal/bomb.
+- **Verification:** `npx tsc --noEmit` passed with 0 errors. All touched files under 500 lines. Live reloaded via Metro.
+
 ### [2026-09-28] - Jet Bombing Tooltip: Persist until next bombed target appears
 - **Ask:** id like it if the contribution pop up lasts until a new one appears.
 - **`GitHubContribGraph.tsx` (344 lines):** removed the 1-second auto-dismiss timeout in `onBombHit`. The popup above the bombed square now stays visible until the next bomb strikes a new square, smoothly tracking each target.

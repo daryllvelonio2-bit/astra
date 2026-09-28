@@ -185,8 +185,8 @@ export function GitHubContribGraph({ login }: { login: string }) {
     return map;
   }, [columns]);
 
-  // Contribution popup lasts until a new one appears
-  const onBombHit = useCallback((key: string) => {
+  // Contribution popup follows the animation target (eaten or bombed)
+  const onTargetHit = useCallback((key: string) => {
     const item = slotByKey.get(key);
     if (!item) return;
     const { slot, col, row } = item;
@@ -200,7 +200,7 @@ export function GitHubContribGraph({ login }: { login: string }) {
     });
   }, [slotByKey]);
 
-  const anim = useContribAnimation(alive, columns.length, onBombHit);
+  const anim = useContribAnimation(alive, columns.length, onTargetHit);
 
   const handlePress = useCallback((slot: DaySlot, col: number, row: number) => {
     setSelectedDay((prev) =>

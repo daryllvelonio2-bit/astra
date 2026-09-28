@@ -54,10 +54,10 @@ export interface ContribAnimationState {
 export function useContribAnimation(
   alive: ContribCell[],
   cols: number,
-  onBombHit?: (key: string) => void
+  onTargetHit?: (key: string) => void
 ): ContribAnimationState {
-  const onBombHitRef = React.useRef(onBombHit);
-  onBombHitRef.current = onBombHit;
+  const onTargetHitRef = React.useRef(onTargetHit);
+  onTargetHitRef.current = onTargetHit;
   // One value per green square, kept across cycles so the grid never has to
   // rebuild while an animation is playing.
   const cells = React.useMemo(() => {
@@ -180,8 +180,8 @@ export function useContribAnimation(
           timers.push(
             setTimeout(() => {
               if (unmounted || cellGen.get(key) !== gen) return;
-              if (plan.mode === "plane" && onBombHitRef.current) {
-                onBombHitRef.current(key);
+              if (onTargetHitRef.current) {
+                onTargetHitRef.current(key);
               }
               const bite = Animated.timing(cell.value, {
                 toValue: 0,

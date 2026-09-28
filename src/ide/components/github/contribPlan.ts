@@ -288,7 +288,7 @@ function buildRoute(
   c0: number,
   c1: number,
   carry?: SnakeStep[]
-): { route: SnakeStep[]; carried: number } {
+): { route: SnakeStep[]; carried: number; eats: Array<{ stepIndex: number; key: string }> } {
   const at = (s: SnakeStep): string => `${s.col}:${s.row}`;
   // The carry joints only when its tip is the start cell; a stale carry is
   // dropped, never jumped to.
@@ -299,12 +299,11 @@ function buildRoute(
   let head = { col: first.col, row: first.row };
   // Jointed: the tip is already laid as the last carry cell. Fresh: lay it.
   if (!route.length) route.push(head);
+  const eats: Array<{ stepIndex: number; key: string }> = [];
   // Squares eaten so far (the start square dies under the head at t=0).
   const eaten = new Set<string>([at(head)]);
+  eats.push({ stepIndex: route.length - 1, key: first.key });
   let next = 1;
-  let lastEatStep = route.length - 1;
-  // Target 10-16 steps between meals: 10 * 220ms = 2200ms (>= 2s), up to 3520ms (<= 4s)
-  let targetEatSteps = 10 + Math.floor(Math.random() * 7);
 
   // Fail-safe: the stepper always returns a move, but a corrupt grid must
   // never spin — bail out instead of looping forever.
@@ -315,38 +314,72 @@ function buildRoute(
     while (next < lunch.length && eaten.has(at(lunch[next]))) next++;
     if (next >= lunch.length) break;
     const target = lunch[next];
-    const dist = Math.abs(head.col - target.col) + Math.abs(head.row - target.row);
 
-    // Cells the visible body covers right now (the tail tip sits just outside
-    // this window: it vacates as the head arrives, so it stays enterable).
-    const occupied = new Set<string>();
-    for (let k = Math.max(0, route.length - SNAKE_BODY_CELLS); k < route.length; k++) {
-      occupied.add(`${route[k].col}:${route[k].row}`);
-    }
-
-    // Until enough steps elapsed (2-4 sec), treat uneaten green squares as obstacles
-    // so the snake stalks/slithers without eating prey prematurely.
-    if (route.length - lastEatStep < targetEatSteps - dist) {
-      for (let m = next; m < lunch.length; m++) {
-        const lk = at(lunch[m]);
-        if (!eaten.has(lk)) occupied.add(lk);
+    // Pick a waypoint if target is too close (< 10 steps) to guarantee 2-4 seconds (no less than 2s)
+    const directDist = Math.abs(head.col - target.col) + Math.abs(head.row - target.row);
+    let waypoint: SnakeStep | null = null;
+    if (directDist < 10) {
+      const needed = 11 + Math.floor(Math.random() * 4);
+      const offset = Math.max(2, Math.ceil(needed / 2));
+      const candWps: SnakeStep[] = [
+        { col: Math.min(c1, Math.max(c0, head.col + offset)), row: Math.max(0, Math.min(6, head.row + 2)) },
+        { col: Math.min(c1, Math.max(c0, head.col - offset)), row: Math.max(0, Math.min(6, head.row - 2)) },
+        { col: Math.min(c1, Math.max(c0, head.col + offset)), row: head.row },
+        { col: Math.min(c1, Math.max(c0, head.col - offset)), row: head.row },
+      ];
+      for (const wp of candWps) {
+        if (wp.col !== target.col || wp.row !== target.row) {
+          waypoint = wp;
+          break;
+        }
       }
     }
 
-    // The vacating tail tip, for the fully-surrounded escape in nextStep.
-    const tailTip = route.length >= SNAKE_BODY_CELLS + 1 ? route[route.length - SNAKE_BODY_CELLS - 1] : null;
-    const prev = route.length >= 2 ? route[route.length - 2] : null;
-    head = nextStep(head, prev, target, occupied, tailTip, c0, c1);
-    route.push(head);
+    let activeDest = waypoint || target;
+    let reachedWaypoint = !waypoint;
+    let legCount = 0;
 
-    if (head.col === target.col && head.row === target.row) {
-      eaten.add(at(head));
-      lastEatStep = route.length - 1;
-      targetEatSteps = 10 + Math.floor(Math.random() * 7);
+    while (legCount < 60 && route.length < maxSteps) {
+      legCount++;
+      const occupied = new Set<string>();
+      for (let k = Math.max(0, route.length - SNAKE_BODY_CELLS); k < route.length; k++) {
+        occupied.add(`${route[k].col}:${route[k].row}`);
+      }
+
+      // Block all other uneaten greens so snake never steps on/eats multiple colors
+      for (let m = 0; m < lunch.length; m++) {
+        const lk = at(lunch[m]);
+        if (!eaten.has(lk)) {
+          if (!reachedWaypoint || lk !== at(target)) {
+            occupied.add(lk);
+          }
+        }
+      }
+
+      const tailTip = route.length >= SNAKE_BODY_CELLS + 1 ? route[route.length - SNAKE_BODY_CELLS - 1] : null;
+      const prev = route.length >= 2 ? route[route.length - 2] : null;
+      head = nextStep(head, prev, activeDest, occupied, tailTip, c0, c1);
+      route.push(head);
+
+      if (!reachedWaypoint && ((waypoint && head.col === waypoint.col && head.row === waypoint.row) || legCount >= 8)) {
+        reachedWaypoint = true;
+        activeDest = target;
+      }
+
+      if (reachedWaypoint && head.col === target.col && head.row === target.row) {
+        eaten.add(at(head));
+        eats.push({ stepIndex: route.length - 1, key: target.key });
+        next++;
+        break;
+      }
+    }
+
+    if (legCount >= 60 && !eaten.has(at(target))) {
+      eaten.add(at(target));
       next++;
     }
   }
-  return { route, carried: joint && tail ? tail.length : 0 };
+  return { route, carried: joint && tail ? tail.length : 0, eats };
 }
 
 export function buildSnakePlan(
@@ -373,12 +406,17 @@ export function buildSnakePlan(
   // visible stop-and-swap happens every few minutes, not every minute. Every
   // batch starts where the last ended; only the first lays the carried tail.
   const route: SnakeStep[] = [];
+  const allEats: Array<{ stepIndex: number; key: string }> = [];
   let headStart = 0;
   let curStart = start;
   let curCarry = carry && carry.length ? carry : [];
   for (let b = 0; b < HUNT_BATCHES; b++) {
     const lunch = huntOrder(alive, curStart);
     const seg = buildRoute(lunch, c0, c1, curCarry);
+    const offset = route.length === 0 ? 0 : route.length - seg.carried;
+    seg.eats.forEach((e) => {
+      allEats.push({ stepIndex: e.stepIndex + offset, key: e.key });
+    });
     // The segment re-lays its carry up front — keep those cells once.
     route.push(...(route.length === 0 ? seg.route : seg.route.slice(seg.carried)));
     if (b === 0) headStart = seg.carried > 0 ? seg.carried - 1 : 0;
@@ -390,19 +428,11 @@ export function buildSnakePlan(
   // floor keeps a bare year readable, the cap a crowded one from crawling.
   const cycleMs = Math.min(MAX_CYCLE_MS, Math.max(SNAKE_MIN_MS, route.length * SNAKE_MS_PER_CELL));
   const span = Math.max(1, route.length - 1);
-  // Every walk over a green eats it — first visits and revisits alike — so a
-  // square that respawned behind the head dies again when walked over. The
-  // carried tail ahead of headStart is body layout, never re-walked.
-  const coordToKey = new Map<string, string>();
-  alive.forEach((c) => coordToKey.set(`${c.col}:${c.row}`, c.key));
+  // Only intentional target hits eat squares (1 color per 2-4 seconds)
   const visitAt = new Map<string, number[]>();
-  route.forEach((s, j) => {
-    if (j < headStart) return;
-    const key = coordToKey.get(`${s.col}:${s.row}`);
-    if (!key) return;
-    // Timed from the walk's start: the head stands on headStart at t=0, so
-    // step j is reached (j - headStart) ticks in — the bite fires under it.
-    const t = ((j - headStart) / span) * cycleMs;
+  allEats.forEach(({ stepIndex, key }) => {
+    if (stepIndex < headStart) return;
+    const t = ((stepIndex - headStart) / span) * cycleMs;
     const arr = visitAt.get(key);
     if (arr) arr.push(t);
     else visitAt.set(key, [t]);
