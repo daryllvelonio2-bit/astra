@@ -78,6 +78,8 @@ html, body {
     term.loadAddon(links);
   } catch (e) {}
   term.open(document.getElementById('terminal'));
+  // Debug handle for CDP inspection (role-scoped: read-only state access).
+  try { window.__astraTerm = term; } catch (e) {}
   // Soft-keyboard input is owned by the React Native hidden catcher (it
   // ingests Gboard composition bursts reliably; xterm 5.3's textarea races
   // and drops fast input). Disabling the helper textarea keeps it from
@@ -147,17 +149,6 @@ html, body {
       return !!(term.buffer && term.buffer.active && term.buffer.active.type === 'alternate');
     } catch (e) {
       return false;
-    }
-  };
-  var lastReportedMouseMode = 'none';
-  var lastReportedAlt = false;
-  var reportModes = function () {
-    var m = appMouseMode();
-    var a = isAltScreen();
-    if (m !== lastReportedMouseMode || a !== lastReportedAlt) {
-      lastReportedMouseMode = m;
-      lastReportedAlt = a;
-      post({ type: 'modes', mouseMode: m, isAlt: a });
     }
   };
   var cellAt = function (px, py) {
@@ -421,7 +412,6 @@ html, body {
       var bin = atob(b64), n = bin.length, bytes = new Uint8Array(n);
       for (var i = 0; i < n; i++) bytes[i] = bin.charCodeAt(i);
       term.write(bytes, function () {
-        reportModes();
         if (kbVisible) {
           scrollCursorIntoView();
         }

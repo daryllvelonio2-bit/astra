@@ -48,20 +48,14 @@ interface XtermViewProps {
 }
 
 interface GlueMessage {
-  type: "ready" | "data" | "resize" | "selection" | "tap" | "link" | "fontSize" | "modes";
+  type: "ready" | "data" | "resize" | "selection" | "tap" | "link" | "fontSize";
   data?: string;
   cols?: number;
   rows?: number;
   text?: string;
   url?: string;
   size?: number;
-  mouseMode?: string;
-  isAlt?: boolean;
 }
-
-// Retain active terminal modes (mouse tracking, alternate screen) across
-// session switches and remounts so TUIs (opencode, vim, htop) never lose them.
-const sessionModesMap = new Map<string, { mouseMode: string; isAlt: boolean }>();
 
 // Max base64 chars per injected write; keeps injectJavaScript calls small.
 const WRITE_SLICE = 65536;
@@ -194,15 +188,7 @@ export const XtermView = memo(
       // Replay-only query sanitizing: stale device queries in the snapshot
       // must not trigger ghost replies into the new shell's stdin.
       const cleanHist = stripReplayQueries(stripLeakedTerminalText(hist || ""));
-      const savedModes = sessionModesMap.get(id);
-      let modePreamble = "";
-      if (savedModes?.isAlt) {
-        modePreamble += "\x1b[?1049h";
-      }
-      if (savedModes?.mouseMode && savedModes.mouseMode !== "none") {
-        modePreamble += "\x1b[?1000h\x1b[?1002h\x1b[?1006h";
-      }
-      injectWrite(utf8ToB64(bannerRef.current + modePreamble + cleanHist));
+      injectWrite(utf8ToB64(bannerRef.current + cleanHist));
       paintFitRef.current = lastFitRef.current ? { ...lastFitRef.current } : null;
       if (!isKeyboardVisibleRef.current) {
         webRef.current?.injectJavaScript("window.__astraFit&&window.__astraFit();true;");
@@ -356,11 +342,6 @@ export const XtermView = memo(
       keyboardRef.current?.();
     } else if (msg.type === "fontSize" && typeof msg.size === "number") {
       onFontSizeChange?.(msg.size);
-    } else if (msg.type === "modes" && typeof msg.mouseMode === "string") {
-      sessionModesMap.set(sessionRef.current, {
-        mouseMode: msg.mouseMode,
-        isAlt: !!msg.isAlt,
-      });
     } else if (msg.type === "link" && typeof msg.url === "string") {
       // CLI login links (and any terminal URL): open the system browser so
       // the real Google/ChatGPT session + passkeys are available. http(s)
