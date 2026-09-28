@@ -10,8 +10,9 @@ import { ContribCell, cellCenterX, gridWidth, JET_W, rowCenterY } from "./contri
 export const LASER_FLIGHT_MS = 130;
 /** Duration of the block fragment explosion. */
 export const EXPLOSION_MS = 220;
-/** Gap between consecutive shots fired by the jet (1 shot per 2 seconds). */
-const SHOT_GAP_MS = 2000;
+/** Gap between consecutive shots fired by the jet (no bombing in less than 2 sec). */
+const MIN_SHOT_GAP_MS = 2200;
+const MAX_SHOT_GAP_MS = 2600;
 /** Maximum targets engaged in one shooting round. */
 const MAX_ROUND_TARGETS = 14;
 
@@ -108,7 +109,8 @@ export function buildShooterPlan(alive: ContribCell[], cols: number): ShooterPla
     });
 
     vanishAt.set(target.key, landAt);
-    t += SHOT_GAP_MS;
+    const shotGap = MIN_SHOT_GAP_MS + Math.floor(Math.random() * (MAX_SHOT_GAP_MS - MIN_SHOT_GAP_MS));
+    t += shotGap;
   });
 
   return {

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useTheme } from "../../../theme/themeContext";
 import { fetchContributionCalendar } from "../../services/gitHubAccountService";
@@ -175,7 +175,47 @@ export function GitHubContribGraph({ login }: { login: string }) {
     return squares;
   }, [columns]);
 
-  const anim = useContribAnimation(alive, columns.length);
+  const slotByKey = useMemo(() => {
+    const map = new Map<string, { slot: DaySlot; col: number; row: number }>();
+    columns.forEach((slots, wi) => {
+      slots.forEach((s, di) => {
+        if (s) map.set(s.key, { slot: s, col: wi, row: di });
+      });
+    });
+    return map;
+  }, [columns]);
+
+  const bombTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onBombHit = useCallback((key: string) => {
+    const item = slotByKey.get(key);
+    if (!item) return;
+    const { slot, col, row } = item;
+    setSelectedDay({
+      key: slot.key,
+      date: slot.date,
+      count: slot.count,
+      color: slot.color,
+      col,
+      row,
+    });
+
+    if (bombTimerRef.current) {
+      clearTimeout(bombTimerRef.current);
+    }
+    // Closes in 1 second after bombing
+    bombTimerRef.current = setTimeout(() => {
+      setSelectedDay((prev) => (prev?.key === key ? null : prev));
+    }, 1000);
+  }, [slotByKey]);
+
+  useEffect(() => {
+    return () => {
+      if (bombTimerRef.current) clearTimeout(bombTimerRef.current);
+    };
+  }, []);
+
+  const anim = useContribAnimation(alive, columns.length, onBombHit);
 
   const handlePress = useCallback((slot: DaySlot, col: number, row: number) => {
     setSelectedDay((prev) =>

@@ -1,5 +1,17 @@
 # Project Progress Tracker
 
+### [2026-09-28] - Jet Bombing Tooltip Auto-Popup & Cadence Tuning (Snake 2-4s, Jet >= 2s)
+- **Ask:** when in jet mode animation, the color that it bombs should display the pop up, which closes in 1 second after; snake eat every 2-4 seconds no less than 2 seconds; bombing no less than 2 sec.
+- **`GitHubContribGraph.tsx` (359 lines) & `useContribAnimation.ts` (293 lines):**
+  - Added `onBombHit` hook callback that triggers whenever a jet bomb strikes a cell (`hitAt` in plane mode).
+  - Automatically pops up the tooltip above the bombed cell and schedules a 1-second auto-dismiss timer (`bombTimerRef`).
+- **`contribShooterPlan.ts` (123 lines):**
+  - Enforced `MIN_SHOT_GAP_MS = 2200` and `MAX_SHOT_GAP_MS = 2600`, ensuring the jet fires and impacts at strictly >= 2.2 seconds between bombs (never less than 2 seconds).
+- **`contribPlan.ts` (414 lines):**
+  - Calibrated snake speed to `SNAKE_MS_PER_CELL = 220ms` and enforced 10-16 stalking steps (`targetEatSteps`) between target meals (`2200ms - 3520ms`).
+  - Added obstacle guarding during stalking so the snake avoids uneaten green squares until its meal interval (2-4 seconds, >= 2 seconds) has elapsed.
+- **Verification:** `npx tsc --noEmit` passed with 0 errors. All files within 500-line cap. Changes loaded live via Metro.
+
 ### [2026-09-28] - Contribution Graph: Speed optimization, in-memory GraphQL caching & zero-latency touch
 - **Ask:** it responds too slow, we need to optimize it, is the data cached? or what its just too slow, our priority is speed.
 - **Root Causes of Slowness:**

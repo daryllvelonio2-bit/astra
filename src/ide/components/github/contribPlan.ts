@@ -65,8 +65,8 @@ export const EXIT_MS = ms(260);
 const PASS_GAP_MS = ms(170);
 /** Longest a single animation may run: multi-batch hunts cruise for minutes. */
 const MAX_CYCLE_MS = ms(600000);
-/** Cruise pace: one deliberate tick per block of the hunt (350ms effective). */
-const SNAKE_MS_PER_CELL = ms(175);
+/** Cruise pace: one deliberate tick per block of the hunt (220ms effective). */
+const SNAKE_MS_PER_CELL = ms(220);
 /** Full grid sweeps chained into one hunt: fewer handoffs, fewer visible stops. */
 const HUNT_BATCHES = 3;
 const SNAKE_MIN_MS = ms(1300);
@@ -302,6 +302,10 @@ function buildRoute(
   // Squares eaten so far (the start square dies under the head at t=0).
   const eaten = new Set<string>([at(head)]);
   let next = 1;
+  let lastEatStep = route.length - 1;
+  // Target 10-16 steps between meals: 10 * 220ms = 2200ms (>= 2s), up to 3520ms (<= 4s)
+  let targetEatSteps = 10 + Math.floor(Math.random() * 7);
+
   // Fail-safe: the stepper always returns a move, but a corrupt grid must
   // never spin — bail out instead of looping forever.
   const maxSteps = Math.max(500, lunch.length * 50);
@@ -311,19 +315,36 @@ function buildRoute(
     while (next < lunch.length && eaten.has(at(lunch[next]))) next++;
     if (next >= lunch.length) break;
     const target = lunch[next];
+    const dist = Math.abs(head.col - target.col) + Math.abs(head.row - target.row);
+
     // Cells the visible body covers right now (the tail tip sits just outside
     // this window: it vacates as the head arrives, so it stays enterable).
     const occupied = new Set<string>();
     for (let k = Math.max(0, route.length - SNAKE_BODY_CELLS); k < route.length; k++) {
       occupied.add(`${route[k].col}:${route[k].row}`);
     }
+
+    // Until enough steps elapsed (2-4 sec), treat uneaten green squares as obstacles
+    // so the snake stalks/slithers without eating prey prematurely.
+    if (route.length - lastEatStep < targetEatSteps - dist) {
+      for (let m = next; m < lunch.length; m++) {
+        const lk = at(lunch[m]);
+        if (!eaten.has(lk)) occupied.add(lk);
+      }
+    }
+
     // The vacating tail tip, for the fully-surrounded escape in nextStep.
-    const tail = route.length >= SNAKE_BODY_CELLS + 1 ? route[route.length - SNAKE_BODY_CELLS - 1] : null;
+    const tailTip = route.length >= SNAKE_BODY_CELLS + 1 ? route[route.length - SNAKE_BODY_CELLS - 1] : null;
     const prev = route.length >= 2 ? route[route.length - 2] : null;
-    head = nextStep(head, prev, target, occupied, tail, c0, c1);
+    head = nextStep(head, prev, target, occupied, tailTip, c0, c1);
     route.push(head);
-    eaten.add(at(head));
-    if (head.col === target.col && head.row === target.row) next++;
+
+    if (head.col === target.col && head.row === target.row) {
+      eaten.add(at(head));
+      lastEatStep = route.length - 1;
+      targetEatSteps = 10 + Math.floor(Math.random() * 7);
+      next++;
+    }
   }
   return { route, carried: joint && tail ? tail.length : 0 };
 }
