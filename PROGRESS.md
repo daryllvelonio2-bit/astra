@@ -1,5 +1,15 @@
 # Project Progress Tracker
 
+### [2026-09-29] - Feature-gap fixes: editor actions, CM engine, GitHub service layer, dead routes
+- **Audit:** docs/gap-analysis-2026-09-29.md (4 audit passes + grep-verified; 4 subagents).
+- **Editor UI:** overflow menu gains Undo / Redo / Save / Format code / Select line / Select all (all were engine-present-but-unreachable or missing; Save flushes the existing 700ms autosave). Undo/Redo route synthetic editor-scoped Ctrl+z / Ctrl+Shift+z keydown into .cm-content (historyKeymap; KeyboardEventInit dict — ctrlKey is a readonly IDL prop). Select line/all dispatch through bundled @codemirror/view's DOM-attached `root.view` handle (no engine expose needed). Theme serializer extracted to codemirrorThemeObj.ts (CodeMirrorEditorView back to 486).
+- **CM engine:** scripts/codemirror-extensions.js (NEW, 79 lines; entry 530) — toggleComment bound Mod-/, EditorView.lineWrapping, bracketMatching, closeBrackets, lightweight document-word autocomplete (matchBefore /\w{2,}$/, capped 20, validFor). window.__cmToggleComment + __cmFeatureNames exposed; blob regenerated 611199 bytes (587.7 KB JS).
+- **GitHub services:** NEW gitHubReviewService.ts (submit/dismiss review — dismissals is PUT-only with a message + DISMISS event; inline review comments fetch/reply), gitHubReactionService.ts (content whitelist +1|-1|laugh|confused|heart|hooray|rocket|eyes), gitHubGistWriteService.ts (create/edit/delete/star/unstar/fork/comments); gitHubAccountService +unwatchRepo +fetchWatchState; gitHubPullService +updatePullTitleBody via existing patchPull (accepts Record<string,unknown>, rejects empty patches).
+- **GitHub UI:** dead routes wired — Home Quick Actions: Notifications, New pull request (owner=login caveat: no repo context at Home yet); repo menu: New issue (owner/repo/isPull), Create release; myRepos empty-state hint no longer references a nonexistent home 3-dot menu.
+- **Also fixed:** gitCommitSummary.ts broken imports after cleanup (loadConfig now); tsc was red before the fan-out.
+- **Verified:** root `npx tsc --noEmit` green after all changes; node --check on both CM scripts; blob regen + feature greps nonzero; all touched files under 500 lines; 5 commits (25a4e55 fix, f1ae45d engine, e33ceb0 editor UI, 025ef66 services, 62a296a routes).
+- **Left:** PR review/reactions/gist-write UI (service layer only), language intelligence (completion/hover/definition/rename), markdown highlighting, CRLF/BOM, clipboard, symbol outline, per-PR CI checks, pulls filter collapse, remaining Phase B items in docs/gap-analysis-2026-09-29.md.
+
 ### [2026-09-29] - Import browser: chrome cut ~106px, file list +33%
 - **Ask (verbatim):** "i want to improve the ui theres so much small space for the files and navigation too many things taking up most of the space, unecessary quick locations, larghe file location and large header".
 - **Surface:** the import browser (`ImportPickerModal`) — the only place with quick locations and a file-location bar.
