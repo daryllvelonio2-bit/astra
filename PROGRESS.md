@@ -1,5 +1,10 @@
 # Project Progress Tracker
 
+### [2026-09-28] - Jet Bombing Tooltip: Persist until next bombed target appears
+- **Ask:** id like it if the contribution pop up lasts until a new one appears.
+- **`GitHubContribGraph.tsx` (344 lines):** removed the 1-second auto-dismiss timeout in `onBombHit`. The popup above the bombed square now stays visible until the next bomb strikes a new square, smoothly tracking each target.
+- **Verification:** `npx tsc --noEmit` passed with 0 errors. File size is 344 lines. Live reloaded via Metro.
+
 ### [2026-09-28] - Jet Bombing Tooltip Auto-Popup & Cadence Tuning (Snake 2-4s, Jet >= 2s)
 - **Ask:** when in jet mode animation, the color that it bombs should display the pop up, which closes in 1 second after; snake eat every 2-4 seconds no less than 2 seconds; bombing no less than 2 sec.
 - **`GitHubContribGraph.tsx` (359 lines) & `useContribAnimation.ts` (293 lines):**

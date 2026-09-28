@@ -185,8 +185,7 @@ export function GitHubContribGraph({ login }: { login: string }) {
     return map;
   }, [columns]);
 
-  const bombTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+  // Contribution popup lasts until a new one appears
   const onBombHit = useCallback((key: string) => {
     const item = slotByKey.get(key);
     if (!item) return;
@@ -199,21 +198,7 @@ export function GitHubContribGraph({ login }: { login: string }) {
       col,
       row,
     });
-
-    if (bombTimerRef.current) {
-      clearTimeout(bombTimerRef.current);
-    }
-    // Closes in 1 second after bombing
-    bombTimerRef.current = setTimeout(() => {
-      setSelectedDay((prev) => (prev?.key === key ? null : prev));
-    }, 1000);
   }, [slotByKey]);
-
-  useEffect(() => {
-    return () => {
-      if (bombTimerRef.current) clearTimeout(bombTimerRef.current);
-    };
-  }, []);
 
   const anim = useContribAnimation(alive, columns.length, onBombHit);
 
