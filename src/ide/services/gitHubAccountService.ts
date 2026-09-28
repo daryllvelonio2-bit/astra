@@ -189,6 +189,22 @@ export function watchRepo(owner: string, repo: string): Promise<GitHubResult<unk
   return ghPut(`/repos/${owner}/${repo}/subscription`, { subscribed: true });
 }
 
+/** Unwatch a repository (stops its notifications without touching the star). */
+export function unwatchRepo(owner: string, repo: string): Promise<GitHubResult<unknown>> {
+  return ghDelete(`/repos/${owner}/${repo}/subscription`);
+}
+
+/** Watch state the signed-in user has on a repository (ignoring = no notifications even when mentioned). */
+export function fetchWatchState(
+  owner: string,
+  repo: string
+): Promise<GitHubResult<{ subscribed: boolean; ignored: boolean }>> {
+  return ghGet<any>(`/repos/${owner}/${repo}/subscription`).then((res) => {
+    if (!res.ok) return { ok: false as const, error: res.error };
+    return { ok: true as const, data: { subscribed: !!res.data?.subscribed, ignored: !!res.data?.ignored } };
+  });
+}
+
 export function forkRepo(owner: string, repo: string): Promise<GitHubResult<unknown>> {
   return ghPost(`/repos/${owner}/${repo}/forks`);
 }

@@ -216,3 +216,22 @@ export async function setPullReady(
 ): Promise<GitHubResult<GitHubPull>> {
   return patchPull(owner, repo, number, { draft: !ready });
 }
+
+/** Edit a PR's title and/or body (both optional; at least one required). */
+export async function updatePullTitleBody(
+  owner: string,
+  repo: string,
+  number: number,
+  patch: { title?: string; body?: string }
+): Promise<GitHubResult<GitHubPull>> {
+  const fields: Record<string, unknown> = {};
+  if (patch.title !== undefined) fields.title = patch.title;
+  if (patch.body !== undefined) fields.body = patch.body;
+  if (Object.keys(fields).length === 0) {
+    return {
+      ok: false,
+      error: { status: 0, rateLimited: false, scopeMissing: false, message: "Nothing to update — pass a title or a body." },
+    };
+  }
+  return patchPull(owner, repo, number, fields);
+}
