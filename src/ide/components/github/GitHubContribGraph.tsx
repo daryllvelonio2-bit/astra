@@ -1,6 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { fetchContributionCalendar } from "../../services/gitHubAccountService";
 import { ContribCalendar } from "../../services/gitHubTypes";
@@ -21,21 +20,15 @@ interface SelectedDay {
   date: string;
   count: number;
   color: string;
+  col: number;
+  row: number;
 }
 
-interface ColorTier {
-  color: string;
-  min: number;
-  max: number;
-  count: number;
-}
-
-function formatContribDate(dateStr: string): string {
+function formatShortDate(dateStr: string): string {
   if (!dateStr) return "";
   try {
     const d = new Date(`${dateStr}T00:00:00Z`);
     return d.toLocaleDateString("en-US", {
-      weekday: "short",
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -53,11 +46,11 @@ function formatContribCount(count: number): string {
 }
 
 /**
- * Interactive year contributions graph (GitHub's green squares):
- * - Total contributions header + interactive inspection of any square or color level.
- * - Clicking a square highlights it and reveals its exact count and date.
- * - Clicking a palette tier in the legend highlights all matching days and displays its range.
- * - Preserves background animations (snake/plane) through non-blocking overlays.
+ * Year contributions graph:
+ * - Clean total on top without extra modals or screen-shifting banners.
+ * - Tapping any square floats a compact tooltip directly above the tapped box.
+ * - Selection ring highlights the tapped square with scale.
+ * - Background animations (snake/plane) remain intact.
  */
 export function GitHubContribGraph({ login }: { login: string }) {
   const { theme } = useTheme();
@@ -66,7 +59,6 @@ export function GitHubContribGraph({ login }: { login: string }) {
   const scrollRef = useRef<ScrollView>(null);
 
   const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null);
-  const [selectedColor, setSelectedColor] = useState<ColorTier | null>(null);
 
   const emptyTrack = theme.bgTertiary;
 
@@ -92,25 +84,6 @@ export function GitHubContribGraph({ login }: { login: string }) {
     });
   }, [data]);
 
-  const palette = useMemo(() => {
-    if (!data) return [];
-    const colorMap = new Map<string, ColorTier>();
-    data.weeks.forEach((w) => {
-      w.forEach((d) => {
-        if (!d.color) return;
-        const existing = colorMap.get(d.color);
-        if (existing) {
-          existing.min = Math.min(existing.min, d.count);
-          existing.max = Math.max(existing.max, d.count);
-          existing.count += 1;
-        } else {
-          colorMap.set(d.color, { color: d.color, min: d.count, max: d.count, count: 1 });
-        }
-      });
-    });
-    return Array.from(colorMap.values()).sort((a, b) => a.min - b.min);
-  }, [data]);
-
   const alive = useMemo(() => {
     const squares: ContribCell[] = [];
     columns.forEach((slots, col) => {
@@ -128,79 +101,13 @@ export function GitHubContribGraph({ login }: { login: string }) {
     return <View style={[styles.placeholder, { backgroundColor: theme.bgSecondary }]} />;
   }
 
+  const totalGridW = gridWidth(columns.length);
+
   return (
     <View style={styles.wrap}>
-      {/* Interactive header inspection banner */}
-      <View style={styles.header}>
-        {selectedDay ? (
-          <View style={styles.activeRow}>
-            <View
-              style={[
-                styles.swatch,
-                {
-                  backgroundColor: selectedDay.count > 0 ? selectedDay.color : emptyTrack,
-                  borderColor: theme.border,
-                },
-              ]}
-            />
-            <View style={styles.activeTextWrap}>
-              <Text style={[styles.activeTitle, { color: theme.textPrimary }]}>
-                {formatContribCount(selectedDay.count)}
-              </Text>
-              <Text style={[styles.activeSubtitle, { color: theme.textSecondary }]}>
-                {formatContribDate(selectedDay.date)}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.dismissBtn, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}
-              onPress={() => setSelectedDay(null)}
-              activeOpacity={0.7}
-              accessibilityLabel="Clear selection"
-            >
-              <Octicons name="x" size={12} color={theme.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        ) : selectedColor ? (
-          <View style={styles.activeRow}>
-            <View
-              style={[
-                styles.swatch,
-                {
-                  backgroundColor: selectedColor.min === 0 ? emptyTrack : selectedColor.color,
-                  borderColor: theme.border,
-                },
-              ]}
-            />
-            <View style={styles.activeTextWrap}>
-              <Text style={[styles.activeTitle, { color: theme.textPrimary }]}>
-                {selectedColor.min === 0 && selectedColor.max === 0
-                  ? "0 contributions"
-                  : selectedColor.min === selectedColor.max
-                  ? formatContribCount(selectedColor.min)
-                  : `${selectedColor.min}–${selectedColor.max} contributions`}
-              </Text>
-              <Text style={[styles.activeSubtitle, { color: theme.textSecondary }]}>
-                {selectedColor.count} day{selectedColor.count === 1 ? "" : "s"} at this level
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.dismissBtn, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}
-              onPress={() => setSelectedColor(null)}
-              activeOpacity={0.7}
-              accessibilityLabel="Clear selection"
-            >
-              <Octicons name="x" size={12} color={theme.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.defaultHeader}>
-            <Text style={[styles.total, { color: theme.textPrimary }]}>
-              {data.total.toLocaleString()} contributions in the last year
-            </Text>
-            <Text style={[styles.hint, { color: theme.textMuted }]}>Tap any square or color to inspect</Text>
-          </View>
-        )}
-      </View>
+      <Text style={[styles.total, { color: theme.textSecondary }]}>
+        {data.total.toLocaleString()} contributions in the last year
+      </Text>
 
       <ScrollView
         ref={scrollRef}
@@ -209,17 +116,12 @@ export function GitHubContribGraph({ login }: { login: string }) {
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
         contentContainerStyle={styles.scrollContent}
       >
-        <View style={[styles.stage, { width: gridWidth(columns.length) }]}>
+        <View style={[styles.stage, { width: totalGridW }]}>
           <View style={styles.grid}>
             {columns.map((slots, wi) => (
               <View key={`w${wi}`} style={styles.col}>
                 {slots.map((slot, di) => {
-                  const isSelected = selectedDay?.key === slot?.key;
-                  const isDimmed = selectedColor
-                    ? slot?.count === 0
-                      ? selectedColor.min !== 0
-                      : slot?.color !== selectedColor.color
-                    : false;
+                  const isSelected = Boolean(selectedDay && slot && selectedDay.key === slot.key);
 
                   if (!slot || slot.count === 0) {
                     return (
@@ -229,19 +131,18 @@ export function GitHubContribGraph({ login }: { login: string }) {
                         disabled={!slot}
                         onPress={() => {
                           if (!slot) return;
-                          setSelectedColor(null);
                           setSelectedDay((prev) =>
                             prev?.key === slot.key
                               ? null
-                              : { key: slot.key, date: slot.date, count: 0, color: emptyTrack }
+                              : { key: slot.key, date: slot.date, count: 0, color: emptyTrack, col: wi, row: di }
                           );
                         }}
                         style={[
                           styles.cell,
                           { backgroundColor: emptyTrack },
-                          isDimmed && { opacity: 0.28 },
                           isSelected && styles.cellSelected,
                         ]}
+                        accessibilityLabel={slot ? `No contributions on ${slot.date}` : "Empty"}
                       >
                         {isSelected && (
                           <View
@@ -259,19 +160,18 @@ export function GitHubContribGraph({ login }: { login: string }) {
                       key={slot.key}
                       activeOpacity={0.7}
                       onPress={() => {
-                        setSelectedColor(null);
                         setSelectedDay((prev) =>
                           prev?.key === slot.key
                             ? null
-                            : { key: slot.key, date: slot.date, count: slot.count, color: slot.color }
+                            : { key: slot.key, date: slot.date, count: slot.count, color: slot.color, col: wi, row: di }
                         );
                       }}
                       style={[
                         styles.cell,
                         { backgroundColor: emptyTrack },
-                        isDimmed && { opacity: 0.28 },
                         isSelected && styles.cellSelected,
                       ]}
+                      accessibilityLabel={`${slot.count} contributions on ${slot.date}`}
                     >
                       <Animated.View
                         style={[
@@ -292,69 +192,51 @@ export function GitHubContribGraph({ login }: { login: string }) {
               </View>
             ))}
           </View>
+
           <ContribAnimOverlay anim={anim} />
+
+          {/* Floating tooltip directly above the tapped box */}
+          {selectedDay && (
+            <View
+              style={[
+                styles.tooltip,
+                {
+                  top: Math.max(0, SKY + selectedDay.row * (CELL + GAP) - 27),
+                  left: Math.max(
+                    2,
+                    Math.min(
+                      totalGridW - 170,
+                      selectedDay.col * (CELL + GAP) + CELL / 2 - 85
+                    )
+                  ),
+                  backgroundColor: theme.bgSecondary,
+                  borderColor: theme.border,
+                },
+              ]}
+              pointerEvents="none"
+            >
+              <View
+                style={[
+                  styles.tooltipSwatch,
+                  { backgroundColor: selectedDay.count > 0 ? selectedDay.color : emptyTrack },
+                ]}
+              />
+              <Text style={[styles.tooltipText, { color: theme.textPrimary }]} numberOfLines={1}>
+                <Text style={styles.tooltipBold}>{formatContribCount(selectedDay.count)}</Text>
+                {" · "}
+                <Text style={{ color: theme.textSecondary }}>{formatShortDate(selectedDay.date)}</Text>
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
-
-      {/* Legend with interactive color tiers */}
-      {palette.length > 0 && (
-        <View style={styles.footerRow}>
-          <Text style={[styles.footerHint, { color: theme.textMuted }]}>
-            {selectedDay || selectedColor ? "Tap again or ✕ to clear" : "Activity levels"}
-          </Text>
-          <View style={styles.legend}>
-            <Text style={[styles.legendText, { color: theme.textMuted }]}>Less</Text>
-            <View style={styles.legendColors}>
-              {palette.map((tier) => {
-                const isTierSelected = selectedColor?.color === tier.color;
-                return (
-                  <TouchableOpacity
-                    key={tier.color}
-                    style={[
-                      styles.legendCell,
-                      { backgroundColor: tier.min === 0 ? emptyTrack : tier.color },
-                      isTierSelected && [
-                        styles.selectedLegendCell,
-                        { borderColor: theme.accentCyan || theme.accent },
-                      ],
-                    ]}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      setSelectedDay(null);
-                      setSelectedColor((prev) => (prev?.color === tier.color ? null : tier));
-                    }}
-                    accessibilityLabel={`${tier.min} to ${tier.max} contributions`}
-                  />
-                );
-              })}
-            </View>
-            <Text style={[styles.legendText, { color: theme.textMuted }]}>More</Text>
-          </View>
-        </View>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 12, paddingVertical: 10 },
-  header: { minHeight: 36, marginBottom: 8, justifyContent: "center" },
-  defaultHeader: { gap: 1 },
-  total: { fontSize: 12, fontWeight: "700" },
-  hint: { fontSize: 10.5 },
-  activeRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  swatch: { width: 14, height: 14, borderRadius: 3, borderWidth: StyleSheet.hairlineWidth },
-  activeTextWrap: { flex: 1, gap: 1 },
-  activeTitle: { fontSize: 12.5, fontWeight: "700" },
-  activeSubtitle: { fontSize: 10.5 },
-  dismissBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  total: { fontSize: 11.5, fontWeight: "600", marginBottom: 8 },
   scrollContent: { flexGrow: 1, justifyContent: "center" },
   stage: { position: "relative", paddingTop: SKY },
   grid: { flexDirection: "row", gap: GAP },
@@ -369,17 +251,31 @@ const styles = StyleSheet.create({
   },
   fill: { ...StyleSheet.absoluteFillObject, borderRadius: 2, opacity: 1 },
   placeholder: { height: 118, marginHorizontal: 12, marginVertical: 10, borderRadius: 6, opacity: 0.5 },
-  footerRow: {
+  tooltip: {
+    position: "absolute",
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 8,
-    paddingHorizontal: 2,
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    zIndex: 50,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
   },
-  footerHint: { fontSize: 10.5 },
-  legend: { flexDirection: "row", alignItems: "center", gap: 5 },
-  legendColors: { flexDirection: "row", gap: 3 },
-  legendCell: { width: 10, height: 10, borderRadius: 2 },
-  selectedLegendCell: { borderWidth: 1.5, transform: [{ scale: 1.25 }] },
-  legendText: { fontSize: 10 },
+  tooltipSwatch: {
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+  },
+  tooltipText: {
+    fontSize: 10.5,
+  },
+  tooltipBold: {
+    fontWeight: "700",
+  },
 });
