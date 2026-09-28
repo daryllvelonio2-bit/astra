@@ -1,5 +1,19 @@
 # Project Progress Tracker
 
+### [2026-09-28] - Fix Landscape Split Terminal Height Overflow on Orientation Cycle
+- **Symptom:** Landscape split screen works initially, but rotating to portrait and back to landscape broke vertical visibility: bottom contents (and input typing area) could not be scrolled into view because they were rendered below the bottom of the screen.
+- **Root Cause Identified (Empirically Measured via Device & CDP):**
+  1. In `TerminalView.tsx`, `splitWrapper` had `!isLandscape && closedContainerHeight > 0 ? { height: closedContainerHeight - EXTRA_KEYS_BAR_HEIGHT, flex: 0 } : undefined`. When rotating to portrait, `height` was set to portrait height (~821px). When rotating back to landscape (`!isLandscape` became false), React Native / Yoga did not reset the explicit `height` property on the native View when passed `undefined`, locking the container to 821px (double the 424px landscape screen height).
+  2. `paneContainer` was applying `{ width: 0 } : { height: 0 }`, conflicting with standard flexbox stretching when rotating between column and row layouts.
+  3. In `useTerminalKeyboardPad.ts`, `closedLandscapeHeightRef` was being contaminated with portrait container heights (~822px) because orientation change effects ran before the layout recomputed, and `Math.max` permanently latched the portrait height.
+- **Fix:**
+  - **`src/ide/components/TerminalView.tsx` (479 lines):** Removed explicit height locking and width/height overrides from `splitWrapper` and `paneContainer`; allowed standard flexbox (`flex: 1`, `flexDirection: isLandscape ? "row" : "column"`) to naturally fill the available container space in all orientations without residual dimension leaks.
+  - **`src/ide/components/terminal/useTerminalKeyboardPad.ts` (102 lines):** Clamped recorded container heights per orientation (`h <= minScreenDim` in landscape, `h <= maxScreenDim` in portrait) to prevent cross-orientation contamination on rotation events.
+- **Verification:**
+  - Cycled rotation: landscape -> portrait -> landscape.
+  - Inspected WebView layout via CDP: before fix, `inner.h` was 820px (overflowing 424px screen). After fix, `inner.h` is 311px, perfectly fitting the landscape viewport with zero off-screen clipping. Bottom input text and scroll contents are fully visible and responsive.
+  - `npx tsc --noEmit` passed with 0 errors. All files under 500 lines (`TerminalView.tsx`: 479, `useTerminalKeyboardPad.ts`: 102).
+
 ### [2026-09-28] - Fix TUI Scroll Sluggishness: In-Place Primary Pane Persistence & DEC Mode Restoration
 - **Symptom:** User still experienced sluggish scrolling in `opencode` after split->unsplit.
 - **Root Cause Identified (Empirically Measured via CDP):**

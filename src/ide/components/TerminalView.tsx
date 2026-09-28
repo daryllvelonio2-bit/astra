@@ -263,13 +263,7 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
         <View
           style={
             isSplit && splitSessionId
-              ? [
-                  styles.splitWrapper,
-                  isLandscape ? styles.splitRow : styles.splitCol,
-                  !isLandscape && closedContainerHeight > 0
-                    ? { height: closedContainerHeight - EXTRA_KEYS_BAR_HEIGHT, flex: 0 }
-                    : undefined,
-                ]
+              ? [styles.splitWrapper, isLandscape ? styles.splitRow : styles.splitCol]
               : styles.viewport
           }
         >
@@ -283,7 +277,6 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
                       borderColor: focusedPane === "primary" ? appTheme.accent : appTheme.border,
                       borderWidth: 1,
                     },
-                    isLandscape ? { width: 0 } : { height: 0 },
                   ]
                 : styles.viewport
             }
@@ -355,7 +348,6 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
                     borderColor: focusedPane === "secondary" ? appTheme.accent : appTheme.border,
                     borderWidth: 1,
                   },
-                  isLandscape ? { width: 0 } : { height: 0 },
                 ]}
                 onStartShouldSetResponderCapture={() => {
                   if (focusedPane !== "secondary") {

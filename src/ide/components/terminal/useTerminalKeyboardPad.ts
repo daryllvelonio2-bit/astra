@@ -15,10 +15,13 @@ import { useOrientation } from "../../../theme/useOrientation";
  * - On iOS, padding is applied using keyboardOffset.
  */
 export function useTerminalKeyboardPad(visible = true) {
-  const { isLandscape, height: screenHeight } = useOrientation();
+  const { isLandscape, height: screenHeight, width: screenWidth } = useOrientation();
   const { isKeyboardVisible, keyboardOffset } = useAccurateKeyboard(0);
   const effectiveKeyboardHeight = isKeyboardVisible ? keyboardOffset : 0;
   const [containerHeight, setContainerHeight] = useState(0);
+
+  const minScreenDim = Math.min(screenWidth, screenHeight);
+  const maxScreenDim = Math.max(screenWidth, screenHeight);
 
   const closedPortraitHeightRef = useRef(0);
   const closedLandscapeHeightRef = useRef(0);
@@ -30,13 +33,13 @@ export function useTerminalKeyboardPad(visible = true) {
 
   useEffect(() => {
     if (!isKeyboardVisible && containerHeight > 0) {
-      if (isLandscape) {
+      if (isLandscape && containerHeight <= minScreenDim) {
         closedLandscapeHeightRef.current = Math.max(closedLandscapeHeightRef.current, containerHeight);
-      } else {
+      } else if (!isLandscape && containerHeight <= maxScreenDim) {
         closedPortraitHeightRef.current = Math.max(closedPortraitHeightRef.current, containerHeight);
       }
     }
-  }, [isKeyboardVisible, containerHeight, isLandscape]);
+  }, [isKeyboardVisible, containerHeight, isLandscape, minScreenDim, maxScreenDim]);
 
   const activeClosedRef = isLandscape ? closedLandscapeHeightRef : closedPortraitHeightRef;
   const closedHeight = activeClosedRef.current > 0 ? activeClosedRef.current : (containerHeight > 0 ? containerHeight : screenHeight);
@@ -86,9 +89,9 @@ export function useTerminalKeyboardPad(visible = true) {
       const h = e?.nativeEvent?.layout?.height;
       if (h && h > 0) {
         if (!isKeyboardVisible) {
-          if (isLandscape) {
+          if (isLandscape && h <= minScreenDim) {
             closedLandscapeHeightRef.current = Math.max(closedLandscapeHeightRef.current, h);
-          } else {
+          } else if (!isLandscape && h <= maxScreenDim) {
             closedPortraitHeightRef.current = Math.max(closedPortraitHeightRef.current, h);
           }
         }
