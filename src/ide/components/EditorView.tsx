@@ -45,6 +45,11 @@ interface EditorViewProps {
   sidebar?: React.ReactNode;
   onOpenSearch?: () => void;
   onDeleteFile?: () => void;
+  isSidebarOpen?: boolean;
+  onPullStart?: () => void;
+  onPullMove?: (dx: number) => void;
+  onPullEnd?: (vx?: number) => void;
+  edgePanHandlers?: any;
 }
 
 function EditorViewInner({
@@ -68,6 +73,11 @@ function EditorViewInner({
   sidebar,
   onOpenSearch,
   onDeleteFile,
+  isSidebarOpen,
+  onPullStart,
+  onPullMove,
+  onPullEnd,
+  edgePanHandlers,
 }: EditorViewProps) {
   const { theme } = useTheme();
   const { editorSettings, keyboardMouseMode } = useEditorConfig();
@@ -207,6 +217,8 @@ function EditorViewInner({
         onOpenSettings={onOpenSettings}
         onOpenSearch={onOpenSearch}
         sidebar={sidebar}
+        isSidebarOpen={isSidebarOpen}
+        edgePanHandlers={edgePanHandlers}
       />
     );
   }
@@ -282,7 +294,16 @@ function EditorViewInner({
             visible={visible}
             jumpSignal={activeJump}
             onJumpConsumed={activeJump ? onJumpConsumed : undefined}
+            isSidebarOpen={isSidebarOpen}
+            onPullStart={onPullStart}
+            onPullMove={onPullMove}
+            onPullEnd={onPullEnd}
           />
+
+          {/* Left edge swipe trigger when sidebar is closed */}
+          {!isSidebarOpen && edgePanHandlers && (
+            <View style={styles.leftEdgeStrip} {...edgePanHandlers} />
+          )}
 
           {/* Floating Edit/Lock Button (no background) */}
           <TouchableOpacity
@@ -334,5 +355,13 @@ const styles = StyleSheet.create({
     bottom: 34,
     padding: 6,
     zIndex: 30,
+  },
+  leftEdgeStrip: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 25,
+    zIndex: 25,
   },
 });

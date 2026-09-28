@@ -328,7 +328,10 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
   });
 
   // Smooth 60fps native sidebar dragging with auto-minimize on swipe-all-the-way
-  const { sidebarWidthAnim, isDraggingSidebar, resizerPanHandlers } = useSidebarResizer(130, handleToggleCollapse, isSidebarOpen);
+  const {
+    sidebarWidthAnim, isDraggingSidebar, resizerPanHandlers,
+    edgePanHandlers, handlePullStart, handlePullMove, handlePullEnd,
+  } = useSidebarResizer(130, handleToggleCollapse, isSidebarOpen, handleShowSidebar);
   useKeyboardShortcuts({ enabled: keyboardMouseMode, onSwitchTab: safeSetBottomTab });
 
   const backNav = useSystemBackHandler({ onEditModeChange: handleEditModeChange, onCloseProject: handleBackToPicker, ideVisible: !!isActive });
@@ -393,6 +396,9 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
                 onJumpConsumed={clearJump}
                 onOpenSearch={handleOpenSearch}
                 onDeleteFile={handleDeleteActiveFile}
+                isSidebarOpen={isSidebarOpen}
+                onPullStart={handlePullStart} onPullMove={handlePullMove} onPullEnd={handlePullEnd}
+                edgePanHandlers={edgePanHandlers}
                 sidebar={
                   <Animated.View style={sidebarAnimStyle} pointerEvents={isSidebarOpen ? "auto" : "none"}>
                     <PanelErrorBoundary panelName="Explorer" resetKey={workspace?.id}>
@@ -409,8 +415,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
                       onMoveNode={handleMoveNode}
                       onRefresh={refreshWorkspace}
                       onOpenSearch={handleOpenSearch}
-                      resizerPanHandlers={resizerPanHandlers}
-                      isDraggingSidebar={isDraggingSidebar}
+                      resizerPanHandlers={resizerPanHandlers} isDraggingSidebar={isDraggingSidebar}
                     />
                     </PanelErrorBoundary>
                   </Animated.View>

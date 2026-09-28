@@ -12,6 +12,8 @@ interface EditorEmptyStateProps {
   onOpenSettings?: () => void;
   onOpenSearch?: () => void;
   sidebar?: React.ReactNode;
+  isSidebarOpen?: boolean;
+  edgePanHandlers?: any;
 }
 
 export function EditorEmptyState({
@@ -22,6 +24,8 @@ export function EditorEmptyState({
   onOpenSettings,
   onOpenSearch,
   sidebar,
+  isSidebarOpen,
+  edgePanHandlers,
 }: EditorEmptyStateProps) {
   return (
     <View style={[styles.container, { backgroundColor: theme.bgPrimary }]}>
@@ -38,6 +42,9 @@ export function EditorEmptyState({
       <View style={styles.contentRow}>
         {sidebar}
         <View style={[styles.emptyContainer, { backgroundColor: theme.bgPrimary }]}>
+          {!isSidebarOpen && edgePanHandlers && (
+            <View style={styles.leftEdgeStrip} {...edgePanHandlers} />
+          )}
           <Ionicons name="code-working-outline" size={48} color={theme.textMuted} />
           <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
             Select a file from the explorer to begin editing
@@ -62,8 +69,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: 12,
+    position: "relative",
   },
   emptyText: {
     fontSize: 14,
+  },
+  leftEdgeStrip: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 25,
+    zIndex: 25,
   },
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Animated, Easing, PanResponder } from "react-native";
 import { setWorkspaceWatcherPaused, cancelInFlightFingerprint } from "./useWorkspaceAutoRefresh";
 
@@ -10,7 +10,8 @@ const COLLAPSE_WIDTH_THRESHOLD = 65;
 export function useSidebarResizer(
   initialWidth: number = 130,
   onCollapse?: () => void,
-  isOpen: boolean = true
+  isOpen: boolean = true,
+  onExpand?: () => void
 ) {
   const sidebarWidthAnim = useRef(new Animated.Value(initialWidth)).current;
   const currentWidthRef = useRef(initialWidth);
@@ -18,6 +19,8 @@ export function useSidebarResizer(
   const lastValidWidthRef = useRef(initialWidth);
   const onCollapseRef = useRef(onCollapse);
   onCollapseRef.current = onCollapse;
+  const onExpandRef = useRef(onExpand);
+  onExpandRef.current = onExpand;
   const isCollapsingRef = useRef(false);
   const prevIsOpenRef = useRef(isOpen);
   const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
@@ -146,9 +149,105 @@ export function useSidebarResizer(
     })
   ).current;
 
+  const handlePullStart = useCallback(() => {
+    if (isOpen || isCollapsingRef.current) return;
+    cancelInFlightFingerprint();
+    sidebarWidthAnim.stopAnimation();
+    currentWidthRef.current = 0;
+    sidebarWidthAnim.setValue(0);
+    setIsDraggingSidebar(true);
+    setWorkspaceWatcherPaused(true);
+  }, [isOpen, sidebarWidthAnim]);
+
+  const handlePullMove = useCallback(
+    (dx: number) => {
+      if (isOpen || isCollapsingRef.current) return;
+      let targetWidth: number;
+      if (dx > MAX_WIDTH) {
+        targetWidth = MAX_WIDTH + (dx - MAX_WIDTH) * 0.2;
+      } else {
+        targetWidth = Math.max(0, dx);
+      }
+      currentWidthRef.current = targetWidth;
+      sidebarWidthAnim.setValue(targetWidth);
+    },
+    [isOpen, sidebarWidthAnim]
+  );
+
+  const handlePullEnd = useCallback(
+    (vx: number = 0) => {
+      if (isOpen || isCollapsingRef.current) return;
+      const currentW = currentWidthRef.current;
+      const shouldOpen = currentW >= 60 || vx > 0.3;
+
+      if (shouldOpen && onExpandRef.current) {
+        const targetWidth = Math.max(
+          MIN_WIDTH,
+          lastValidWidthRef.current || initialWidth
+        );
+        currentWidthRef.current = targetWidth;
+        lastValidWidthRef.current = targetWidth;
+
+        Animated.spring(sidebarWidthAnim, {
+          toValue: targetWidth,
+          useNativeDriver: false,
+          bounciness: 2,
+          speed: 18,
+        }).start(() => {
+          setIsDraggingSidebar(false);
+          setWorkspaceWatcherPaused(false);
+          onExpandRef.current?.();
+        });
+      } else {
+        Animated.timing(sidebarWidthAnim, {
+          toValue: 0,
+          duration: 120,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }).start(() => {
+          currentWidthRef.current = 0;
+          setIsDraggingSidebar(false);
+          setWorkspaceWatcherPaused(false);
+        });
+      }
+    },
+    [isOpen, initialWidth, sidebarWidthAnim]
+  );
+
+  const edgePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        if (isOpen) return false;
+        return gestureState.dx > 8 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+      },
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+        if (isOpen) return false;
+        return gestureState.dx > 8 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+      },
+      onPanResponderGrant: () => {
+        handlePullStart();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        handlePullMove(gestureState.dx);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        handlePullEnd(gestureState.vx);
+      },
+      onPanResponderTerminate: () => {
+        handlePullEnd(0);
+      },
+    })
+  ).current;
+
   return {
     sidebarWidthAnim,
     isDraggingSidebar,
     resizerPanHandlers: resizerPanResponder.panHandlers,
+    edgePanHandlers: edgePanResponder.panHandlers,
+    handlePullStart,
+    handlePullMove,
+    handlePullEnd,
   };
 }

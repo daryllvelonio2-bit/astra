@@ -82,6 +82,10 @@ interface CodeMirrorEditorViewProps {
   /** Jump-to-line request; applied once the WebView is ready (file switch safe). */
   jumpSignal?: { line: number; nonce: number } | null;
   onJumpConsumed?: () => void;
+  isSidebarOpen?: boolean;
+  onPullStart?: () => void;
+  onPullMove?: (dx: number) => void;
+  onPullEnd?: (vx: number) => void;
 }
 
 // Phase 1 anti-echo: CodeMirror is source-of-truth while typing. React
@@ -123,6 +127,10 @@ export const CodeMirrorEditorView = memo(
         visible = true,
         jumpSignal,
         onJumpConsumed,
+        isSidebarOpen,
+        onPullStart,
+        onPullMove,
+        onPullEnd,
       },
       ref
     ) {
@@ -255,6 +263,7 @@ export const CodeMirrorEditorView = memo(
               inject(`window.__cmSetTheme && window.__cmSetTheme(${buildCmThemeObj(theme)})`);
               inject(`window.__cmSetKeyboardMouseMode && window.__cmSetKeyboardMouseMode(${!!keyboardMouseMode})`);
               inject(`window.__cmSetReadOnly && window.__cmSetReadOnly(${!isEditing})`);
+              inject(`window.__cmSetSidebarPullEnabled && window.__cmSetSidebarPullEnabled(${!isSidebarOpen && !isEditing})`);
             } else if (data.type === "change" && typeof data.text === "string") {
               lastEmittedTextRef.current = data.text;
               try {
@@ -277,6 +286,12 @@ export const CodeMirrorEditorView = memo(
               onZoomOut?.(data.step || 1);
             } else if (data.type === "zoomReset") {
               onZoomReset?.();
+            } else if (data.type === "editorPullStart") {
+              onPullStart?.();
+            } else if (data.type === "editorPullMove") {
+              onPullMove?.(data.dx || 0);
+            } else if (data.type === "editorPullEnd") {
+              onPullEnd?.(data.vx || 0);
             }
           } catch (_) {}
         },
@@ -307,8 +322,19 @@ export const CodeMirrorEditorView = memo(
           onZoomIn,
           onZoomOut,
           onZoomReset,
+          onPullStart,
+          onPullMove,
+          onPullEnd,
         ]
       );
+
+      // Sync sidebar pull enabled state
+      useEffect(() => {
+        if (!isReady) return;
+        inject(
+          `window.__cmSetSidebarPullEnabled && window.__cmSetSidebarPullEnabled(${!isSidebarOpen && !isEditing})`
+        );
+      }, [inject, isReady, isSidebarOpen, isEditing]);
 
       // Sync content when changed from outside (file switched, format,
       // disk reload). Typing echoes — including stale intermediate renders
