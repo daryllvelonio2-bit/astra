@@ -1,8 +1,9 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, TouchableOpacity, Modal, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, Modal, StyleSheet, StatusBar } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
+import { useOrientation } from "../../../theme/useOrientation";
 import { useGitHubNavigation, routeTitle, GitHubRoute } from "./useGitHubNavigation";
 import { GitHubHomeView } from "./GitHubHomeView";
 import { GitHubSearchView } from "./GitHubSearchView";
@@ -58,6 +59,7 @@ type EditorState = { owner: string; repo: string; path: string; ref: string; tex
 
 export function GitHubSuiteView({ visible, session, workspaceId, initialRoute, onClose, onSignedOut }: GitHubSuiteViewProps) {
   const { theme } = useTheme();
+  const { isLandscape } = useOrientation();
   const insets = useSafeAreaInsets();
   const nav = useGitHubNavigation();
   // Fresh entry stack on every open: popToRoot + replace collapses to
@@ -112,7 +114,8 @@ export function GitHubSuiteView({ visible, session, workspaceId, initialRoute, o
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={() => (nav.canGoBack ? nav.pop() : onClose())} statusBarTranslucent>
-      <View style={[styles.screen, { backgroundColor: theme.bgPrimary, paddingTop: insets.top }]}>
+      <StatusBar hidden={isLandscape} />
+      <View style={[styles.screen, { backgroundColor: theme.bgPrimary, paddingTop: isLandscape ? 0 : insets.top }]}>
         {/* Top bar: back / title — same height as the Git tab's header bar */}
         <View style={[styles.topBar, { borderBottomColor: theme.border, backgroundColor: theme.bgSecondary }]}>
           {nav.canGoBack ? (
