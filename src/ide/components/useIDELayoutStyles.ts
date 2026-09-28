@@ -1,10 +1,8 @@
 import { useMemo } from "react";
 import { StyleSheet } from "react-native";
 import { Animated } from "react-native";
-import { RunningTask } from "../types/runningTask";
 
 interface StylesParams {
-  runningTasks: RunningTask[];
   bgPrimary: string;
   bgSecondary?: string;
   isLandscape: boolean;
@@ -14,12 +12,8 @@ interface StylesParams {
   sidebarWidthAnim: Animated.Value;
 }
 
-/** Memoized layout styles + running count. Same visuals, stable refs. */
+/** Memoized layout styles. Same visuals, stable refs. */
 export function useIDELayoutStyles(p: StylesParams) {
-  const runningTaskCount = useMemo(
-    () => p.runningTasks.reduce((n, t) => (t.status === "running" ? n + 1 : n), 0),
-    [p.runningTasks]
-  );
   const containerStyle = useMemo(
     () => [
       styles.container,
@@ -61,7 +55,6 @@ export function useIDELayoutStyles(p: StylesParams) {
     [p.sidebarWidthAnim, p.bgSecondary, p.bgPrimary]
   );
   return {
-    runningTaskCount,
     containerStyle,
     workspaceStyle,
     editorContainerStyle,

@@ -75,10 +75,6 @@ export async function deleteRepo(owner: string, repo: string): Promise<GitHubRes
   return res;
 }
 
-export function transferRepo(owner: string, repo: string, newOwner: string): Promise<GitHubResult<unknown>> {
-  return ghPost(`/repos/${owner}/${repo}/transfer`, { new_owner: newOwner });
-}
-
 export function createBranch(
   owner: string,
   repo: string,
@@ -91,11 +87,7 @@ export function createBranch(
   });
 }
 
-export function deleteBranch(owner: string, repo: string, branch: string): Promise<GitHubResult<unknown>> {
-  return ghDelete(`/repos/${owner}/${repo}/git/refs/heads/${branch}`);
-}
-
-export function createRelease(
+export async function createRelease(
   owner: string,
   repo: string,
   payload: {

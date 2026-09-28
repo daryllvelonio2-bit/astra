@@ -9,15 +9,6 @@ export interface ModelOption {
   description?: string;
 }
 
-export const SUPPORTED_MODELS: ModelOption[] = [
-  { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash Lite", description: "Default ultra-fast & lightweight" },
-  { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash", description: "High speed multimodal reasoning" },
-  { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", description: "Advanced fast agentic intelligence" },
-  { id: "gemini-flash-latest", name: "Gemini Flash Latest", description: "Always latest stable Flash model" },
-  { id: "gemini-pro-latest", name: "Gemini Pro Latest", description: "Complex coding & deep reasoning" },
-  { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview", description: "Cutting-edge frontier model" },
-];
-
 const CONFIG_FILE = `${FileSystem.documentDirectory}config.json`;
 
 export type AppTheme = "dark" | "light" | "midnight" | (string & {});
@@ -235,49 +226,6 @@ export async function saveConfig(config: Partial<AppConfig>): Promise<void> {
     }
   });
   return _configWriteQueue;
-}
-
-export async function saveApiKeys(keys: string[]): Promise<void> {
-  await saveConfig({ apiKeys: keys });
-}
-
-export async function loadApiKeys(): Promise<string[]> {
-  const config = await loadConfig();
-  return config.apiKeys || (config.apiKey ? [config.apiKey] : []);
-}
-
-export async function saveApiKey(apiKey: string): Promise<void> {
-  await saveConfig({ apiKey: apiKey.trim() });
-}
-
-export async function loadApiKey(): Promise<string> {
-  const config = await loadConfig();
-  const keys = config.apiKeys || [];
-  if (keys.length > 0) {
-    const idx = (config.activeKeyIndex ?? 0) % keys.length;
-    return keys[idx] || keys[0] || "";
-  }
-  return config.apiKey || "";
-}
-
-export async function rollNextApiKey(): Promise<string> {
-  const config = await loadConfig();
-  const keys = config.apiKeys || [];
-  if (keys.length <= 1) {
-    return keys[0] || config.apiKey || "";
-  }
-  const nextIndex = ((config.activeKeyIndex ?? 0) + 1) % keys.length;
-  await saveConfig({ activeKeyIndex: nextIndex });
-  return keys[nextIndex];
-}
-
-export async function saveSelectedModel(model: string): Promise<void> {
-  await saveConfig({ selectedModel: model });
-}
-
-export async function loadSelectedModel(): Promise<string> {
-  const config = await loadConfig();
-  return config.selectedModel || DEFAULT_MODEL_ID;
 }
 
 export async function saveTheme(theme: AppTheme): Promise<void> {

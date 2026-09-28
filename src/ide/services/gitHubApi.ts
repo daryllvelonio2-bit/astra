@@ -209,61 +209,6 @@ export function ghGraphQL<T>(
   return request<T>("POST", "/graphql", { body: { query, variables: variables || {} } });
 }
 
-/** Follow `Link: rel="next"` up to `maxPages`; returns everything collected. */
-export async function ghListAll<T>(
-  path: string,
-  options?: RequestOptions,
-  maxPages = 3
-): Promise<GitHubResult<T[]>> {
-  const collected: T[] = [];
-  let nextPath: string | null = buildUrl(path, options?.params);
-  let page = 0;
-
-  while (nextPath && page < maxPages) {
-    page++;
-    const token = await getGitHubToken();
-    let response: Response;
-    try {
-      response = await fetch(nextPath, {
-        method: "GET",
-        headers: {
-          Accept: options?.accept || "application/vnd.github+json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          "User-Agent": "astra-mobile-ide",
-        },
-      });
-    } catch (e: any) {
-      if (collected.length > 0) return { ok: true, data: collected };
-      return {
-        ok: false,
-        error: { status: 0, rateLimited: false, scopeMissing: false, message: e?.message || "Network request failed." },
-      };
-    }
-
-    if (!response.ok) {
-      if (collected.length > 0) return { ok: true, data: collected };
-      const text = await response.text().catch(() => "");
-      let payload: any = null;
-      try {
-        payload = text ? JSON.parse(text) : null;
-      } catch (_) {
-        payload = text;
-      }
-      return { ok: false, error: describeError(response.status, response.headers, payload) };
-    }
-
-    const batch = (await response.json().catch(() => [])) as T[];
-    if (Array.isArray(batch)) collected.push(...batch);
-
-    const link = response.headers.get("link") || "";
-    const match = link.split(",").find((part) => part.includes('rel="next"'));
-    const href = match?.match(/<([^>]+)>/)?.[1];
-    nextPath = href || null;
-  }
-
-  return { ok: true, data: collected };
-}
-
 /** First page of a list endpoint (most callers only want 30-100 rows). */
 export function ghList<T>(path: string, params?: RequestOptions["params"]): Promise<GitHubResult<T[]>> {
   return ghGet<T[]>(path, { params });

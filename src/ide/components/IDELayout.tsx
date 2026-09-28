@@ -299,10 +299,9 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
   const backNav = useSystemBackHandler({ onEditModeChange: handleEditModeChange, onCloseProject: handleBackToPicker, ideVisible: !!isActive });
 
   const {
-    runningTaskCount, containerStyle, sidebarAnimStyle,
+    containerStyle, sidebarAnimStyle,
     workspaceStyle, editorContainerStyle, tabContentStyle,
   } = useIDELayoutStyles({
-    runningTasks: [],
     bgPrimary: theme.bgPrimary,
     bgSecondary: theme.bgSecondary,
     isLandscape,
@@ -418,7 +417,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
         <IDEBottomBar
           bottomTab={bottomTab}
           onChangeTab={safeSetBottomTab}
-          runningTaskCount={runningTaskCount}
+          runningTaskCount={0}
           compact={isLandscape}
           visibleTabs={visibleTabs}
           isLandscapeNavbarHidden={isLandscapeNavbarHidden}

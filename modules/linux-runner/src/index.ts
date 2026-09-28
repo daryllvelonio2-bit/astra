@@ -78,17 +78,6 @@ export function stopCommand(commandId: string): boolean {
   return false;
 }
 
-export function stopAllCommands(): boolean {
-  if (LinuxRunnerModule?.stopAllCommands) {
-    try {
-      return LinuxRunnerModule.stopAllCommands();
-    } catch (e) {
-      console.warn("Failed to stop all commands", e);
-    }
-  }
-  return false;
-}
-
 export async function startTerminalSession(
   sessionId: string,
   workspaceId?: string
@@ -121,17 +110,6 @@ export async function getSessionHistory(sessionId: string): Promise<string> {
     }
   }
   return "";
-}
-
-export async function listActiveSessions(): Promise<string[]> {
-  if (LinuxRunnerModule?.listActiveSessions) {
-    try {
-      return (await LinuxRunnerModule.listActiveSessions()) || [];
-    } catch (_) {
-      return [];
-    }
-  }
-  return [];
 }
 
 export async function stopTerminalSession(sessionId: string): Promise<void> {
@@ -233,13 +211,6 @@ export async function installPackages(
   return executeCommand(`DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${packages.join(" ")}`, workspaceId);
 }
 
-export async function runArtisan(
-  projectPath: string,
-  args: string[]
-): Promise<ExecutionResult> {
-  return executeCommand(`cd /workspace/${projectPath} && php artisan ${args.join(" ")}`);
-}
-
 export function showSystemNotification(title: string, body: string): boolean {
   if (!LinuxRunnerModule?.showSystemNotification) return false;
   try {
@@ -289,7 +260,6 @@ export function getStringFromClipboard(): string {
   return "";
 }
 
-
 export function isIgnoringBatteryOptimizations(): boolean {
   if (LinuxRunnerModule?.isIgnoringBatteryOptimizations) {
     try {
@@ -337,5 +307,3 @@ export async function openAppDetailsSettings(): Promise<boolean> {
 export * from "./fileSystem";
 export * from "./provisioning";
 export { LinuxRunnerModule };
-
-

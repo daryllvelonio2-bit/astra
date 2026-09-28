@@ -216,25 +216,3 @@ export async function setPullReady(
 ): Promise<GitHubResult<GitHubPull>> {
   return patchPull(owner, repo, number, { draft: !ready });
 }
-
-/** Merge the base branch into the PR branch, as the "Update branch" button does. */
-export async function updatePullBranch(
-  owner: string,
-  repo: string,
-  number: number
-): Promise<GitHubResult<unknown>> {
-  return ghPut(`/repos/${owner}/${repo}/pulls/${number}/update-branch`, {});
-}
-
-export async function requestReviewers(
-  owner: string,
-  repo: string,
-  number: number,
-  reviewers: string[],
-  teamReviewers: string[] = []
-): Promise<GitHubResult<unknown>> {
-  return ghPost(`/repos/${owner}/${repo}/pulls/${number}/requested_reviewers`, {
-    ...(reviewers.length ? { reviewers } : {}),
-    ...(teamReviewers.length ? { team_reviewers: teamReviewers } : {}),
-  });
-}

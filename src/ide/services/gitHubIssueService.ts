@@ -181,25 +181,3 @@ export async function addIssueComment(
   if (!res.ok) return { ok: false, error: res.error };
   return { ok: true, data: mapComment(res.data) };
 }
-
-export async function updateComment(
-  owner: string,
-  repo: string,
-  commentId: number,
-  body: string
-): Promise<GitHubResult<GitHubComment>> {
-  const res = await ghPatch<any>(`/repos/${owner}/${repo}/issues/comments/${commentId}`, { body });
-  if (!res.ok) return { ok: false, error: res.error };
-  return { ok: true, data: mapComment(res.data) };
-}
-
-export async function lockIssue(
-  owner: string,
-  repo: string,
-  number: number,
-  lock: boolean,
-  reason: "off-topic" | "too heated" | "resolved" | "spam" = "resolved"
-): Promise<GitHubResult<unknown>> {
-  if (lock) return ghPut(`/repos/${owner}/${repo}/issues/${number}/lock`, { lock_reason: reason });
-  return ghDelete(`/repos/${owner}/${repo}/issues/${number}/lock`);
-}

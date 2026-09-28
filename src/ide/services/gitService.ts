@@ -35,15 +35,6 @@ function formatRelativeTime(epochSeconds: number): string {
   return new Date(epochSeconds * 1000).toLocaleDateString();
 }
 
-export async function checkIsGitRepo(workspaceId?: string): Promise<boolean> {
-  try {
-    const res = await executeCommand("git rev-parse --is-inside-work-tree", workspaceId);
-    return (res.stdout || "").trim() === "true";
-  } catch (_) {
-    return false;
-  }
-}
-
 export async function initGitRepo(workspaceId?: string): Promise<boolean> {
   try {
     const res = await executeCommand("git init && git branch -M main", workspaceId);

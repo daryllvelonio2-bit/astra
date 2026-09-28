@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import * as WebBrowser from "expo-web-browser";
-import { RunningTask } from "../types/runningTask";
 import { WebBrowserNavBar } from "./browser/WebBrowserNavBar";
 import { WebBrowserErrorView } from "./browser/WebBrowserErrorView";
 import { WebBrowserEmptyView } from "./browser/WebBrowserEmptyView";
@@ -27,7 +26,6 @@ export function WebBrowserPreview({
   const [canGoForward, setCanGoForward] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [runningTasks] = useState<RunningTask[]>([]);
 
   const webViewRef = useRef<WebView>(null);
 
@@ -122,15 +120,11 @@ export function WebBrowserPreview({
 
       <View style={[styles.previewContainer, { backgroundColor: theme.bgPrimary }]}>
         {!url ? (
-          <WebBrowserEmptyView
-            runningTasks={runningTasks}
-            onNavigate={handleNavigate}
-          />
+          <WebBrowserEmptyView onNavigate={handleNavigate} />
         ) : hasError ? (
           <WebBrowserErrorView
             url={url}
             errorMessage={errorMessage}
-            runningTasks={runningTasks}
             onNavigate={handleNavigate}
             onReload={handleReload}
             onOpenExternal={handleOpenExternal}
@@ -159,7 +153,6 @@ export function WebBrowserPreview({
               <WebBrowserErrorView
                 url={url}
                 errorMessage={errorDesc || "net::ERR_CONNECTION_REFUSED"}
-                runningTasks={runningTasks}
                 onNavigate={handleNavigate}
                 onReload={handleReload}
                 onOpenExternal={handleOpenExternal}
