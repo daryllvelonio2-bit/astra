@@ -4,6 +4,18 @@ import { useTheme } from "../../../theme/themeContext";
 import { CELL, BULLET_H, BULLET_W, JET_H, JET_W } from "./contribPlan";
 import { ContribAnimationState } from "./useContribAnimation";
 
+/** Head bead is a touch larger than a grid cell; the tail tapers from there. */
+const SNAKE_HEAD_SIZE = CELL + 2;
+
+function snakeSegmentSize(index: number): number {
+  return Math.max(CELL * 0.45, SNAKE_HEAD_SIZE - index * 1.1);
+}
+
+function snakeSegmentOpacity(index: number): number {
+  if (index === 0) return 1;
+  return Math.max(0.42, 0.92 - index * 0.07);
+}
+
 /**
  * Draws the running graph animation over the squares: either the snake eating
  * its way along the weeks, or the right-side blaster shooting at the colors.
@@ -19,16 +31,84 @@ export function ContribAnimOverlay({ anim }: { anim: ContribAnimationState }) {
     <Animated.View style={styles.layer} pointerEvents="none">
       {snake && (
         <Animated.View style={[styles.layer, { opacity: snake.fade }]}>
-          {snake.segments.map((segment, i) => (
-            <Animated.View
-              key={`seg${i}`}
-              style={[
-                styles.segment,
-                { backgroundColor: theme.accentGreen, opacity: i === 0 ? 1 : 0.72 },
-                { transform: [{ translateX: segment.x }, { translateY: segment.y }] },
-              ]}
-            />
-          ))}
+          {snake.segments.map((segment, i) => {
+            const size = snakeSegmentSize(i);
+            return (
+              <Animated.View
+                key={`seg${i}`}
+                style={[
+                  styles.segment,
+                  {
+                    width: size,
+                    height: size,
+                    borderRadius: size / 2,
+                    left: -size / 2,
+                    top: -size / 2,
+                    backgroundColor: theme.accent,
+                    borderColor: theme.border,
+                    borderWidth: size > 8 ? 1 : 0.5,
+                    opacity: snakeSegmentOpacity(i),
+                  },
+                  { transform: [{ translateX: segment.x }, { translateY: segment.y }] },
+                ]}
+              >
+                {i === 0 && (
+                  <>
+                    <View
+                      style={[
+                        styles.eye,
+                        {
+                          left: size * 0.23,
+                          top: size * 0.21,
+                          width: size * 0.24,
+                          height: size * 0.24,
+                          borderRadius: size * 0.12,
+                          backgroundColor: theme.bgPrimary,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={{
+                          position: "absolute",
+                          left: size * 0.07,
+                          top: size * 0.07,
+                          width: size * 0.10,
+                          height: size * 0.10,
+                          borderRadius: size * 0.05,
+                          backgroundColor: theme.textPrimary,
+                        }}
+                      />
+                    </View>
+                    <View
+                      style={[
+                        styles.eye,
+                        {
+                          left: size * 0.53,
+                          top: size * 0.21,
+                          width: size * 0.24,
+                          height: size * 0.24,
+                          borderRadius: size * 0.12,
+                          backgroundColor: theme.bgPrimary,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={{
+                          position: "absolute",
+                          left: size * 0.07,
+                          top: size * 0.07,
+                          width: size * 0.10,
+                          height: size * 0.10,
+                          borderRadius: size * 0.05,
+                          backgroundColor: theme.textPrimary,
+                        }}
+                      />
+                    </View>
+                  </>
+                )}
+              </Animated.View>
+            );
+          })}
         </Animated.View>
       )}
 
@@ -161,7 +241,8 @@ export function ContribAnimOverlay({ anim }: { anim: ContribAnimationState }) {
 
 const styles = StyleSheet.create({
   layer: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
-  segment: { position: "absolute", left: -1, top: -1, width: CELL + 2, height: CELL + 2, borderRadius: 4 },
+  segment: { position: "absolute", overflow: "hidden" },
+  eye: { position: "absolute" },
   jet: { position: "absolute", left: 0, top: 0, width: JET_W, height: JET_H },
   jetFuselage: { position: "absolute", left: 3, top: 7, width: 14, height: 4, borderRadius: 2 },
   jetNose: { position: "absolute", left: 0, top: 7.5, width: 5, height: 3, borderRadius: 1.5 },

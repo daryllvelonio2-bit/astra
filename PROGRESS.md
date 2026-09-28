@@ -1,5 +1,11 @@
 # Project Progress Tracker
 
+### [2026-09-28] - Contribution snake visual pass
+- **Ask:** The snake looked bad on the contribution graph.
+- **`contribSnakeAnim.ts` (52 lines):** Segment nodes now carry cell centers instead of top-left edges, so the overlay can size each bead independently without misaligning head/tail.
+- **`ContribAnimOverlay.tsx` (264 lines):** Snake renders as tapered circular beads (head `CELL + 2`, tail down to 45% of a cell), `theme.accent` fill with a `theme.border` outline, and opacity along the body. Head gets two eyes with pupils. Replaces the previous blocky, same-size `accentGreen` squares that blended into the GitHub greens.
+- **Verification:** `npx tsc --noEmit` passed with 0 errors. Touched files under 500 lines.
+
 ### [2026-09-28] - GitHub suite: home landing, tab bar removal, repo delete scope, floating header collapse
 - **Ask:** Default GitHub landing to Home (not profile); remove Inbox/You bottom tabs; remove clone button from My Repositories list; fix "Must have admin rights" on repo delete; fix white band at bottom of README when header collapses on scroll.
 - **`GitHubDesktopView.tsx`:** `initialRoute` changed from `{name:"profile", login}` to `{name:"home"}` (no login field — the home route doesn't declare one).

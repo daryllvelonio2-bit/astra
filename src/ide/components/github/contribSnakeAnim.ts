@@ -6,6 +6,10 @@ import { CELL, SNAKE_BODY_CELLS, SnakePlan, SnakeStep, cellCenterX, rowCenterY }
  * by cell (0 -> last step), and each body segment replays where the head was a
  * whole number of cells ago — exactly how the game trails its tail. One
  * running animation, one steady easing, no per-frame JS.
+ *
+ * The nodes carry CELL CENTERS, not top-left edges: the overlay owns segment
+ * sizing (tapered beads), so centering there keeps the head/tail aligned no
+ * matter what size a segment renders at.
  */
 
 export interface SnakeSegment {
@@ -30,16 +34,16 @@ export function buildSnakeNodes(plan: SnakePlan): SnakeNodes | null {
 
   const progress = new Animated.Value(plan.headStart);
   const inputRange = route.map((_, i) => i);
-  const left = (step: SnakeStep): number => cellCenterX(step.col) - CELL / 2;
-  const top = (step: SnakeStep): number => rowCenterY(step.row) - CELL / 2;
+  const centerX = (step: SnakeStep): number => cellCenterX(step.col);
+  const centerY = (step: SnakeStep): number => rowCenterY(step.row);
 
   const segments: SnakeSegment[] = [];
   for (let k = 0; k <= SNAKE_BODY_CELLS; k++) {
     // Segment k sits where the head was k cells ago; before the head has
     // walked that far it stacks on the first cell, so the tail unrolls.
     segments.push({
-      x: progress.interpolate({ inputRange, outputRange: route.map((_, j) => left(route[Math.max(0, j - k)])) }),
-      y: progress.interpolate({ inputRange, outputRange: route.map((_, j) => top(route[Math.max(0, j - k)])) }),
+      x: progress.interpolate({ inputRange, outputRange: route.map((_, j) => centerX(route[Math.max(0, j - k)])) }),
+      y: progress.interpolate({ inputRange, outputRange: route.map((_, j) => centerY(route[Math.max(0, j - k)])) }),
     });
   }
 
