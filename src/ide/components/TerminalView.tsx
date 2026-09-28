@@ -259,32 +259,36 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
       />
 
       {/* Terminal Viewport: Split mode (2 panes) or Single mode */}
-      {isSplit && splitSessionId ? (
+      {isXterm ? (
         <View
-          style={[
-            styles.splitWrapper,
-            isLandscape ? styles.splitRow : styles.splitCol,
-            !isLandscape && closedContainerHeight > 0
-              ? { height: closedContainerHeight - EXTRA_KEYS_BAR_HEIGHT, flex: 0 }
-              : undefined,
-          ]}
+          style={
+            isSplit && splitSessionId
+              ? [
+                  styles.splitWrapper,
+                  isLandscape ? styles.splitRow : styles.splitCol,
+                  !isLandscape && closedContainerHeight > 0
+                    ? { height: closedContainerHeight - EXTRA_KEYS_BAR_HEIGHT, flex: 0 }
+                    : undefined,
+                ]
+              : styles.viewport
+          }
         >
-          {/* Primary Pane */}
+          {/* Primary Pane: stays mounted in-place across split/unsplit to preserve TUI state */}
           <View
-            style={[
-              styles.paneContainer,
-              {
-                borderColor: focusedPane === "primary" ? appTheme.accent : appTheme.border,
-                borderWidth: 1,
-              },
-              isLandscape ? { width: 0 } : { height: 0 },
-            ]}
+            style={
+              isSplit && splitSessionId
+                ? [
+                    styles.paneContainer,
+                    {
+                      borderColor: focusedPane === "primary" ? appTheme.accent : appTheme.border,
+                      borderWidth: 1,
+                    },
+                    isLandscape ? { width: 0 } : { height: 0 },
+                  ]
+                : styles.viewport
+            }
             onStartShouldSetResponderCapture={() => {
-              // Pane focus switch only — never raise the keyboard here.
-              // Scroll gestures begin with the same touch-down; raising the
-              // IME on capture is what popped the keyboard on every scroll.
-              // Genuine taps raise it via XtermView onRequestKeyboard.
-              if (focusedPane !== "primary") {
+              if (isSplit && focusedPane !== "primary") {
                 setFocusedPane("primary");
                 xtermRef.current?.focusTerminal();
               }
@@ -292,12 +296,21 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
             }}
           >
             <View
-              style={[
-                styles.paneViewport,
-                isLandscape && isKeyboardVisible
-                  ? { paddingBottom: keyboardPad + EXTRA_KEYS_BAR_HEIGHT }
-                  : undefined,
-              ]}
+              style={
+                isSplit && splitSessionId
+                  ? [
+                      styles.paneViewport,
+                      isLandscape && isKeyboardVisible
+                        ? { paddingBottom: keyboardPad + EXTRA_KEYS_BAR_HEIGHT }
+                        : undefined,
+                    ]
+                  : [
+                      styles.viewport,
+                      isKeyboardVisible
+                        ? { paddingBottom: keyboardPad + EXTRA_KEYS_BAR_HEIGHT }
+                        : undefined,
+                    ]
+              }
             >
               <XtermView
                 ref={xtermRef}
@@ -307,107 +320,83 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
                 background={theme.background}
                 foreground={theme.foreground}
                 cursor={theme.cursor}
-                banner={getBannerCompact(workspaceId)}
+                banner={
+                  isSplit || isLandscape
+                    ? getBannerCompact(workspaceId)
+                    : getBannerTitle(workspaceId, theme.id !== "light")
+                }
                 onRequestKeyboard={() => {
-                  setFocusedPane("primary");
-                  xtermRef.current?.focusTerminal();
+                  if (isSplit) {
+                    setFocusedPane("primary");
+                    xtermRef.current?.focusTerminal();
+                  }
                   handleFocusTerminal();
                 }}
                 visible={visible}
-                isKeyboardVisible={focusedPane === "primary" && isKeyboardVisible}
-                visibleRows={focusedPane === "primary" ? visibleRows : 0}
+                isKeyboardVisible={isSplit ? focusedPane === "primary" && isKeyboardVisible : isKeyboardVisible}
+                visibleRows={isSplit ? (focusedPane === "primary" ? visibleRows : 0) : visibleRows}
               />
             </View>
           </View>
 
-          {/* Divider */}
-          <View
-            style={[
-              isLandscape ? styles.dividerVertical : styles.dividerHorizontal,
-              { backgroundColor: appTheme.border },
-            ]}
-          />
-
-          {/* Secondary Pane */}
-          <View
-            style={[
-              styles.paneContainer,
-              {
-                borderColor: focusedPane === "secondary" ? appTheme.accent : appTheme.border,
-                borderWidth: 1,
-              },
-              isLandscape ? { width: 0 } : { height: 0 },
-            ]}
-            onStartShouldSetResponderCapture={() => {
-              // Same as primary pane: focus switch only, no IME raise —
-              // otherwise every scroll in this pane pops the keyboard.
-              if (focusedPane !== "secondary") {
-                setFocusedPane("secondary");
-                xtermRefSecondary.current?.focusTerminal();
-              }
-              return false;
-            }}
-          >
-            <View
-              style={[
-                styles.paneViewport,
-                isLandscape && isKeyboardVisible
-                  ? { paddingBottom: keyboardPad + EXTRA_KEYS_BAR_HEIGHT }
-                  : (!isLandscape && focusedPane === "secondary" && isKeyboardVisible
-                      ? { paddingBottom: keyboardPad }
-                      : undefined),
-              ]}
-            >
-              <XtermView
-                ref={xtermRefSecondary}
-                sessionId={splitSessionId}
-                fontSize={fontSize}
-                theme={theme}
-                background={theme.background}
-                foreground={theme.foreground}
-                cursor={theme.cursor}
-                banner={getBannerCompact(workspaceId)}
-                onRequestKeyboard={() => {
-                  setFocusedPane("secondary");
-                  xtermRefSecondary.current?.focusTerminal();
-                  handleFocusTerminal();
-                }}
-                visible={visible}
-                isKeyboardVisible={focusedPane === "secondary" && isKeyboardVisible}
-                visibleRows={focusedPane === "secondary" ? visibleRows : 0}
+          {/* Divider & Secondary Pane (only present when split is active) */}
+          {isSplit && splitSessionId && (
+            <>
+              <View
+                style={[
+                  isLandscape ? styles.dividerVertical : styles.dividerHorizontal,
+                  { backgroundColor: appTheme.border },
+                ]}
               />
-            </View>
-          </View>
-        </View>
-      ) : isXterm ? (
-        <View
-          style={[
-            styles.viewport,
-            isKeyboardVisible
-              ? { paddingBottom: keyboardPad + EXTRA_KEYS_BAR_HEIGHT }
-              : undefined,
-          ]}
-        >
-          <XtermView
-            ref={xtermRef}
-            sessionId={activeSessionId}
-            fontSize={fontSize}
-            theme={theme}
-            background={theme.background}
-            foreground={theme.foreground}
-            cursor={theme.cursor}
-            // Landscape panes are short: full card eats a third of the
-            // screen — paint the dim one-line path header instead.
-            banner={
-              isLandscape
-                ? getBannerCompact(workspaceId)
-                : getBannerTitle(workspaceId, theme.id !== "light")
-            }
-            onRequestKeyboard={handleFocusTerminal}
-            visible={visible}
-            isKeyboardVisible={isKeyboardVisible}
-            visibleRows={visibleRows}
-          />
+              <View
+                style={[
+                  styles.paneContainer,
+                  {
+                    borderColor: focusedPane === "secondary" ? appTheme.accent : appTheme.border,
+                    borderWidth: 1,
+                  },
+                  isLandscape ? { width: 0 } : { height: 0 },
+                ]}
+                onStartShouldSetResponderCapture={() => {
+                  if (focusedPane !== "secondary") {
+                    setFocusedPane("secondary");
+                    xtermRefSecondary.current?.focusTerminal();
+                  }
+                  return false;
+                }}
+              >
+                <View
+                  style={[
+                    styles.paneViewport,
+                    isLandscape && isKeyboardVisible
+                      ? { paddingBottom: keyboardPad + EXTRA_KEYS_BAR_HEIGHT }
+                      : (!isLandscape && focusedPane === "secondary" && isKeyboardVisible
+                          ? { paddingBottom: keyboardPad }
+                          : undefined),
+                  ]}
+                >
+                  <XtermView
+                    ref={xtermRefSecondary}
+                    sessionId={splitSessionId}
+                    fontSize={fontSize}
+                    theme={theme}
+                    background={theme.background}
+                    foreground={theme.foreground}
+                    cursor={theme.cursor}
+                    banner={getBannerCompact(workspaceId)}
+                    onRequestKeyboard={() => {
+                      setFocusedPane("secondary");
+                      xtermRefSecondary.current?.focusTerminal();
+                      handleFocusTerminal();
+                    }}
+                    visible={visible}
+                    isKeyboardVisible={focusedPane === "secondary" && isKeyboardVisible}
+                    visibleRows={focusedPane === "secondary" ? visibleRows : 0}
+                  />
+                </View>
+              </View>
+            </>
+          )}
         </View>
       ) : (
         <ScrollView

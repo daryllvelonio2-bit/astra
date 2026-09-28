@@ -149,6 +149,17 @@ html, body {
       return false;
     }
   };
+  var lastReportedMouseMode = 'none';
+  var lastReportedAlt = false;
+  var reportModes = function () {
+    var m = appMouseMode();
+    var a = isAltScreen();
+    if (m !== lastReportedMouseMode || a !== lastReportedAlt) {
+      lastReportedMouseMode = m;
+      lastReportedAlt = a;
+      post({ type: 'modes', mouseMode: m, isAlt: a });
+    }
+  };
   var cellAt = function (px, py) {
     var r = { left: 0, top: 0 };
     try {
@@ -410,6 +421,7 @@ html, body {
       var bin = atob(b64), n = bin.length, bytes = new Uint8Array(n);
       for (var i = 0; i < n; i++) bytes[i] = bin.charCodeAt(i);
       term.write(bytes, function () {
+        reportModes();
         if (kbVisible) {
           scrollCursorIntoView();
         }

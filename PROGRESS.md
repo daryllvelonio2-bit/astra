@@ -1,5 +1,21 @@
 # Project Progress Tracker
 
+### [2026-09-28] - Fix TUI Scroll Sluggishness: In-Place Primary Pane Persistence & DEC Mode Restoration
+- **Symptom:** User still experienced sluggish scrolling in `opencode` after split->unsplit.
+- **Root Cause Identified (Empirically Measured via CDP):**
+  - In `ticks.log`, after split->unsplit, `mouse` switched from `on` to `off` (`className` on `.xterm` lost `enable-mouse-events`), and `xterm-viewport` started reporting `top=124 rng=124` (normal scrollback).
+  - Cause: In `TerminalView.tsx`, the primary `XtermView` was inside `{isSplit && splitSessionId ? (...) : (...)}`. When split mode toggled, React unmounted the old `XtermView` and mounted a brand new one.
+  - The new `Terminal` initialized with default `mouseTrackingMode: 'none'` and normal buffer. Replaying history didn't restore `\x1b[?1000h` / `\x1b[?1006h` because `historyBuffer` had trimmed earlier startup bytes or didn't re-emit them.
+  - With `appMouseMode() === 'none'`, `scrollByLines` never sent SGR wheel events to `opencode`; instead, it fell through to `term.scrollLines()`, scrolling only xterm's tiny local scrollback (a few lines per swipe).
+- **Fix:**
+  - **`src/ide/components/TerminalView.tsx` (487 lines):** Unified primary pane JSX hierarchy across split and single modes so `<XtermView ref={xtermRef} />` remains mounted in-place. React updates layout styles in-place; the WebView is never unmounted, preserving the live terminal instance, mouse mode, and alternate screen.
+  - **`scripts/build-xterm-html.js`:** Added `reportModes()` to report changes in `appMouseMode()` and `isAltScreen()` to React Native.
+  - **`src/ide/components/terminal/XtermView.tsx` (410 lines):** Added `sessionModesMap` to retain active DEC modes per session; on history replay, injects active mode preambles (`\x1b[?1049h`, `\x1b[?1000h\x1b[?1002h\x1b[?1006h`) as defense-in-depth.
+  - Regenerated `src/ide/components/terminal/xtermHtml.generated.ts`.
+- **Verification:**
+  - In `ticks.log`, after split->unsplit, `mouse=on` stayed active (`className` has `enable-mouse-events`), `TRACE: 42 RESIZE 57x46`, and drag swipes immediately dispatched `WHEEL x2, WHEEL x2, WHEEL x1` streams to `opencode`.
+  - `npx tsc --noEmit` passed with 0 errors. All files under 500 lines (`TerminalView.tsx`: 487, `XtermView.tsx`: 410).
+
 ### [2026-09-28] - Fix TUI Scroll Sluggishness After Split->Unsplit (issue-tui-scroll-after-split.md)
 - **Ask:** issue-tui-scroll-after-split.md read it and fixed it throughly.
 - **Root Cause Identified (Empirically Measured via CDP):**
