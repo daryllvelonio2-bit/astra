@@ -21,6 +21,8 @@ export function useSidebarResizer(
   onCollapseRef.current = onCollapse;
   const onExpandRef = useRef(onExpand);
   onExpandRef.current = onExpand;
+  const isOpenRef = useRef(isOpen);
+  isOpenRef.current = isOpen;
   const isCollapsingRef = useRef(false);
   const isPullOpeningRef = useRef(false);
   const prevIsOpenRef = useRef(isOpen);
@@ -156,18 +158,18 @@ export function useSidebarResizer(
   ).current;
 
   const handlePullStart = useCallback(() => {
-    if (isOpen || isCollapsingRef.current) return;
+    if (isOpenRef.current || isCollapsingRef.current) return;
     cancelInFlightFingerprint();
     sidebarWidthAnim.stopAnimation();
     currentWidthRef.current = 0;
     sidebarWidthAnim.setValue(0);
     setIsDraggingSidebar(true);
     setWorkspaceWatcherPaused(true);
-  }, [isOpen, sidebarWidthAnim]);
+  }, [sidebarWidthAnim]);
 
   const handlePullMove = useCallback(
     (dx: number) => {
-      if (isOpen || isCollapsingRef.current) return;
+      if (isOpenRef.current || isCollapsingRef.current) return;
       let targetWidth: number;
       if (dx > MAX_WIDTH) {
         targetWidth = MAX_WIDTH + (dx - MAX_WIDTH) * 0.2;
@@ -177,12 +179,12 @@ export function useSidebarResizer(
       currentWidthRef.current = targetWidth;
       sidebarWidthAnim.setValue(targetWidth);
     },
-    [isOpen, sidebarWidthAnim]
+    [sidebarWidthAnim]
   );
 
   const handlePullEnd = useCallback(
     (vx: number = 0) => {
-      if (isOpen || isCollapsingRef.current) return;
+      if (isOpenRef.current || isCollapsingRef.current) return;
       const currentW = currentWidthRef.current;
       const shouldOpen = currentW >= 60 || vx > 0.3;
 
@@ -220,32 +222,39 @@ export function useSidebarResizer(
         });
       }
     },
-    [isOpen, initialWidth, sidebarWidthAnim]
+    [initialWidth, sidebarWidthAnim]
   );
+
+  const handlePullStartRef = useRef(handlePullStart);
+  handlePullStartRef.current = handlePullStart;
+  const handlePullMoveRef = useRef(handlePullMove);
+  handlePullMoveRef.current = handlePullMove;
+  const handlePullEndRef = useRef(handlePullEnd);
+  handlePullEndRef.current = handlePullEnd;
 
   const edgePanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        if (isOpen) return false;
+        if (isOpenRef.current) return false;
         return gestureState.dx > 8 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
       },
       onMoveShouldSetPanResponderCapture: (_, gestureState) => {
-        if (isOpen) return false;
+        if (isOpenRef.current) return false;
         return gestureState.dx > 8 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
       },
       onPanResponderGrant: () => {
-        handlePullStart();
+        handlePullStartRef.current();
       },
       onPanResponderMove: (_, gestureState) => {
-        handlePullMove(gestureState.dx);
+        handlePullMoveRef.current(gestureState.dx);
       },
       onPanResponderRelease: (_, gestureState) => {
-        handlePullEnd(gestureState.vx);
+        handlePullEndRef.current(gestureState.vx);
       },
       onPanResponderTerminate: () => {
-        handlePullEnd(0);
+        handlePullEndRef.current(0);
       },
     })
   ).current;

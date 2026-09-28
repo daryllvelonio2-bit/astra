@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    width: 25,
+    width: 32,
     zIndex: 25,
   },
 });
