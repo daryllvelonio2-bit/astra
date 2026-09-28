@@ -22,12 +22,18 @@ export function useSidebarResizer(
   const onExpandRef = useRef(onExpand);
   onExpandRef.current = onExpand;
   const isCollapsingRef = useRef(false);
+  const isPullOpeningRef = useRef(false);
   const prevIsOpenRef = useRef(isOpen);
   const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
 
   // Sync animation when reopened externally or via toggle
   useEffect(() => {
     if (prevIsOpenRef.current === false && isOpen === true) {
+      if (isPullOpeningRef.current) {
+        // Already being animated via pull gesture spring; skip duplicate animation
+        prevIsOpenRef.current = true;
+        return;
+      }
       const targetWidth = Math.max(MIN_WIDTH, lastValidWidthRef.current || initialWidth);
       currentWidthRef.current = targetWidth;
       sidebarWidthAnim.setValue(0);
@@ -181,12 +187,15 @@ export function useSidebarResizer(
       const shouldOpen = currentW >= 60 || vx > 0.3;
 
       if (shouldOpen && onExpandRef.current) {
+        isPullOpeningRef.current = true;
         const targetWidth = Math.max(
           MIN_WIDTH,
           lastValidWidthRef.current || initialWidth
         );
         currentWidthRef.current = targetWidth;
         lastValidWidthRef.current = targetWidth;
+
+        onExpandRef.current?.();
 
         Animated.spring(sidebarWidthAnim, {
           toValue: targetWidth,
@@ -196,7 +205,7 @@ export function useSidebarResizer(
         }).start(() => {
           setIsDraggingSidebar(false);
           setWorkspaceWatcherPaused(false);
-          onExpandRef.current?.();
+          isPullOpeningRef.current = false;
         });
       } else {
         Animated.timing(sidebarWidthAnim, {
