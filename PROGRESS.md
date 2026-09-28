@@ -1,5 +1,14 @@
 # Project Progress Tracker
 
+### [2026-09-28] - GitHub Contribution Graph: Tooltip directly above tapped box & fix initial 5-box highlight bug
+- **Ask:** actually no need to pop up another big modal just to show the text, put the text above the tapped box, also there is a bug where in open it automatically highlights the5 boxes in current.
+- **Bug Root Cause Fixed:** In the current/last week, future null day slots evaluated `selectedDay?.key === slot?.key` as `undefined === undefined` (`true`) when `selectedDay` was null, falsely highlighting all 5 future days of the week on open. Fixed with strict existence check `Boolean(selectedDay && slot && selectedDay.key === slot.key)`.
+- **`GitHubContribGraph.tsx` (281 lines):**
+  - Removed top modal/banner and bottom legend to keep layout minimal and eliminate screen shifts.
+  - Added compact floating tooltip directly above the tapped square inside the scroller stage: displays color swatch, bold count ("X contributions" / "No contributions"), and short date ("Sep 28, 2026").
+  - Tooltip horizontally centers on the tapped column and clamps inside grid bounds with shadow and theme border.
+- **Verification:** `npx tsc --noEmit` passed with 0 errors. File size 281 lines (well under 500-line limit). Hot reloaded via Metro.
+
 ### [2026-09-28] - GitHub Contribution Graph: Interactive square inspection and color tier legend
 - **Ask:** in the contribution visualazations, i want you to make it interactive, when clicking a color, it should show how much contribution it is etc.
 - **`GitHubContribGraph.tsx` (385 lines):**
@@ -4982,3 +4991,9 @@
 - **User report:** language percentages (e.g. TypeScript 93%) had no color dot showing which color is which language.
 - **Fix (`GitHubRepoView.tsx`, 359 -> 423 lines):** legend row now renders an 8px color dot before each `name %` entry, using the same color as that language's bar segment. Added GitHub linguist color map (TypeScript #3178c6, Python, Go, Rust, etc.); unknown languages fall back to the old accent/shade rotation.
 - **Verification:** `tsc --noEmit` zero errors in `GitHubRepoView`; file under 500-line limit. No rebuild (JS-only, Metro reload).
+
+
+### [2026-09-28] - Terminal soft keyboard now double-tap gated
+- **User report:** every single tap in the terminal popped the virtual keyboard, making scrolling/reading output annoying.
+- **Fix (`scripts/build-xterm-html.js` WebView glue):** single taps no longer post `{type:'tap'}`; a new `raiseKeyboardOnDoubleTap()` posts it only when two taps land within 400ms. The synthetic click that follows a touch tap is recognized as the same gesture (750ms twin window) so it never counts as the second tap, and the existing scroll/pinch click guard is kept. Generated file rebuilt via `node scripts/build-xterm-html.js` (touchend + click paths both routed through the gate).
+- **Verification:** regenerated `xtermHtml.generated.ts` contains the gate (3 references, single remaining `post({type:'tap'})` inside it); `tsc --noEmit` 0 errors. JS/HTML-only change — Metro reload is enough, no APK rebuild.

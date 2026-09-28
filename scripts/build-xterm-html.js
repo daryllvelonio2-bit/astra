@@ -113,6 +113,23 @@ html, body {
     }
   };
 
+  // Double-tap gates the soft keyboard: a single tap only scrolls/reads, so
+  // browsing output never pops the IME. Two taps within 400ms post the tap
+  // that raises the RN keyboard catcher. The synthetic click that follows a
+  // touch tap is the same gesture — it must not count as a second tap.
+  var lastTapTime = 0;
+  var lastTouchTapAt = 0;
+  var raiseKeyboardOnDoubleTap = function (fromClick) {
+    var now = Date.now();
+    if (fromClick && now - lastTouchTapAt < 750) return; // touch-tap twin
+    if (now - lastTapTime < 400) {
+      lastTapTime = 0;
+      post({ type: 'tap' });
+    } else {
+      lastTapTime = now;
+    }
+  };
+
   // Fullscreen TUIs (opencode, vim, htop) run on the alternate screen, which
   // has no scrollback: term.scrollLines() is a no-op there. Those apps opt
   // into mouse reporting instead (bubbletea enables SGR mouse mode), so
@@ -284,12 +301,14 @@ html, body {
 
   termEl.addEventListener('touchend', function (e) {
     if (e.touches.length === 0) {
+      var tapNow = Date.now();
       var wasGesture = isTouchScrolling || pinchStartDist !== 0;
       if (wasGesture) {
-        lastGestureEnd = Date.now();
+        lastGestureEnd = tapNow;
       }
       if (!isTouchScrolling && pinchStartDist === 0) {
-        post({ type: 'tap' });
+        lastTouchTapAt = tapNow;
+        raiseKeyboardOnDoubleTap();
       } else if (isTouchScrolling && Math.abs(touchVelocityY) > 0.15) {
         var velocity = touchVelocityY;
         var rowH = getRowHeight();
@@ -370,9 +389,9 @@ html, body {
   });
   window.addEventListener('click', function () {
     // Drop the synthetic click that follows a scroll/pinch gesture —
-    // only genuine taps (already reported by touchend) may raise the IME.
+    // only genuine taps may raise the IME, and still double-tap gated.
     if (Date.now() - lastGestureEnd < 750) return;
-    post({ type: 'tap' });
+    raiseKeyboardOnDoubleTap(true);
   });
   window.addEventListener('resize', function () {
     if (resizeTimer) clearTimeout(resizeTimer);
