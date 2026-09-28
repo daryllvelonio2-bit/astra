@@ -279,26 +279,6 @@ function FileExplorerInner({
               <Text style={[styles.header, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>
                 {projectName ? projectName.toUpperCase() : "EXPLORER"}
               </Text>
-              {onOpenSearch && (
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPress={onOpenSearch}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityLabel="Search in project"
-                >
-                  <Ionicons name="search-outline" size={14} color={theme.textMuted} />
-                </TouchableOpacity>
-              )}
-              {onRefresh && (
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPress={onRefresh}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityLabel="Refresh Explorer"
-                >
-                  <Ionicons name="refresh-outline" size={14} color={theme.textMuted} />
-                </TouchableOpacity>
-              )}
             </View>
             {isCreating && (
               <View style={[styles.inlineCreateRow, { backgroundColor: theme.bgInput, borderColor: theme.accent }]}>
