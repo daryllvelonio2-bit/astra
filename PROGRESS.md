@@ -1,14 +1,15 @@
 # Project Progress Tracker
 
-### [2026-09-28] - Metro & Wireless Debugging: Set up Metro server via WiFi / Hotspot
-- **Ask:** in docs, project, astra i want you to set up the metro server via wifi, the wifi is the device ill be debugging the app, os it works without usb.
-- **`metro.sh`:** updated to automatically detect host LAN IP (`192.168.43.106`) and phone gateway (`192.168.43.1`), auto-connect to wireless ADB (`adb connect $GATEWAY_IP:5555`), set up `adb reverse tcp:8081 tcp:8081` on all connected devices, auto-configure `debug_http_host` in `com.janelle.aicoder` shared preferences to `$LAN_IP:8081`, export `REACT_NATIVE_PACKAGER_HOSTNAME=$LAN_IP`, clean up stale port 8081 listeners, and launch Expo Metro with `--dev-client --lan --clear --port 8081`.
-- **`metro-wifi.sh`:** updated to delegate cleanly to `metro.sh`.
-- **`start-wifi.sh`:** updated to launch `metro.sh` inside an external terminal window (kitty).
-- **`build-debug-apk.sh`:** added wireless ADB auto-connect and device targeting so debug APK builds and installs work over WiFi without USB cable.
-- **Verification:** Kitty window launched running Metro dev server listening on `0.0.0.0:8081` with LAN IP `192.168.43.106`. Device wireless ADB connected (`192.168.43.1:5555`). Logcat confirmed `isMetroRunning(): Async result = true` and `loadJSBundleFromMetro()` over WiFi.
+### [2026-09-28] - GitHub Contribution Graph: Interactive square inspection and color tier legend
+- **Ask:** in the contribution visualazations, i want you to make it interactive, when clicking a color, it should show how much contribution it is etc.
+- **`GitHubContribGraph.tsx` (385 lines):**
+  - Added interactive inspection banner above the scroller: displays color swatch, exact contribution count ("X contributions" or "No contributions"), and formatted date ("Monday, Sep 28, 2026") when a day is selected.
+  - Made every grid cell touchable: tapping a square highlights it with scale (`1.35x`), prominent accent selection ring, and accessibility label; tapping again or tapping ✕ deselects.
+  - Added bottom legend with interactive palette tiers (`Less` [■][■][■][■][■] `More`): tapping any color tier displays its contribution range and day count, and highlights/dims matching squares across the entire year grid.
+  - Background animations (snake, plane) remain fully preserved via `pointerEvents="none"` on overlays.
+- **Verification:** `npx tsc --noEmit` passed with 0 errors. File size is 385 lines (within 500-line cap). Changes loaded live via Metro.
 
-- **Ask:** remove the 3dot botton.
+### [2026-09-28] - Home: 3-dot button removed from header
 - **`GitHubHomeView.tsx` (106 lines):** removed `HomeMenuButton` import and `headerTrailing` prop. The actions are now fully hosted in `GitHubHomeActions` below the contribution graph.
 - **`GitHubHomeMenu.tsx` (deleted):** deleted dead component file, zero remaining references across `src/`.
 - **Verification:** `npx tsc --noEmit` → No errors found. Full grep across repo confirms 0 references. Metro live hot reload updates the connected device.
