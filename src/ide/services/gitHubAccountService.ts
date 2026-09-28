@@ -204,11 +204,6 @@ export async function fetchNotifications(
   return { ok: true, data: res.data.map(mapNotification) };
 }
 
-export async function fetchUnreadNotificationCount(): Promise<number> {
-  const res = await fetchNotifications({ limit: 1 });
-  if (!res.ok) return 0;
-  return res.data.filter((n) => n.unread).length;
-}
 
 export async function markNotificationRead(id: string): Promise<GitHubResult<unknown>> {
   return ghPatch(`/notifications/threads/${encodeURIComponent(id)}`);
@@ -229,21 +224,6 @@ export async function fetchGists(
   return { ok: true, data: res.data.map(mapGist) };
 }
 
-export async function fetchStarred(
-  login?: string,
-  limit = 100
-): Promise<GitHubResult<Array<{ repo: any; starredAt: string }>>> {
-  const path = login ? `/users/${encodeURIComponent(login)}/starred` : "/user/starred";
-  const res = await ghList<any>(path, { per_page: Math.min(100, Math.max(1, limit)) });
-  if (!res.ok) return res;
-  return {
-    ok: true,
-    data: res.data.map((json) => ({
-      repo: json?.repo ? json.repo : json,
-      starredAt: json?.starred_at || json?.updated_at || "",
-    })),
-  };
-}
 
 /** Orgs the signed-in user belongs to. */
 export async function fetchMyOrgs(limit = 50): Promise<GitHubResult<GitHubUserSummary[]>> {
@@ -266,21 +246,7 @@ export async function fetchUserEvents(
   return { ok: true, data: res.data.map(mapEvent) };
 }
 
-/** People the signed-in user follows, as a feed (@login/events won't do it). */
-export async function fetchReceivedEvents(
-  login: string,
-  limit = 50
-): Promise<GitHubResult<GitHubEvent[]>> {
-  const handle = (login || "").trim();
-  if (!handle) return { ok: true, data: [] };
-  const res = await ghList<any>(`/users/${encodeURIComponent(handle)}/received_events/public`, {
-    per_page: Math.min(100, Math.max(1, limit)),
-  });
-  if (!res.ok) return res;
-  return { ok: true, data: res.data.map(mapEvent) };
-}
 
-export { mapUser as mapGitHubUser, mapUserDetail as mapGitHubUserDetail };
 
 const CONTRIB_QUERY = `query($login:String!){user(login:$login){contributionsCollection{contributionCalendar{totalContributions weeks{contributionDays{date contributionCount color}}}}}}`;
 
@@ -288,13 +254,6 @@ const contribCalendarCache = new Map<string, { data: ContribCalendar; at: number
 const inFlightCalendar = new Map<string, Promise<GitHubResult<ContribCalendar>>>();
 const CALENDAR_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes cache
 
-export function invalidateContributionCalendarCache(login?: string): void {
-  if (login) {
-    contribCalendarCache.delete(login.trim());
-  } else {
-    contribCalendarCache.clear();
-  }
-}
 
 /**
  * Full-year contributions calendar via GraphQL (REST has no equivalent).
