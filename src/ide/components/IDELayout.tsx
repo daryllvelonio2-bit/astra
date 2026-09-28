@@ -4,16 +4,16 @@ import { showAppDialog } from "../services/appDialog";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FileExplorer } from "./FileExplorer";
 import { EditorView } from "./EditorView";
-import { FileActionModal } from "./FileActionModal";
 import { TerminalView } from "./TerminalView";
 import { WebBrowserPreview } from "./WebBrowserPreview";
 import { GitHubDesktopView } from "./git/GitHubDesktopView";
 import { IDEBottomBar } from "./IDEBottomBar";
 import { WorkspaceLoadingScreen } from "./WorkspaceLoadingScreen";
-import { ExtensionMarketplaceModal } from "./extensions/ExtensionMarketplaceModal";
+import { IDEModals } from "./IDEModals";
 import { FileNode } from "../types";
 import { useSidebarResizer } from "./useSidebarResizer";
 import { useWorkspaceFileActions } from "./useWorkspaceFileActions";
+import { useImportExport } from "./import/useImportExport";
 import { readFileContent, loadOrCreateDefaultWorkspace, Workspace } from "../services/workspaceService";
 import { loadWorkspaceShallow } from "../services/workspaceTreeService";
 import { useDebouncedFileSave } from "./useDebouncedFileSave";
@@ -22,11 +22,9 @@ import { useTheme } from "../../theme/themeContext";
 import { useOrientation } from "../../theme/useOrientation";
 import { useIdeActionBridge } from "./useIdeActionBridge";
 import { useKeyboardMouseMode } from "../context/KeyboardMouseContext";
-import { SettingsModal } from "./SettingsModal";
-import { ProjectSearchModal } from "./ProjectSearchModal";
 import { PanelErrorBoundary } from "./PanelErrorBoundary";
-import { resolveChatPathToRelative } from "../services/chatFileLinkService";
 import { useRecentFiles } from "./editor/useRecentFiles";
+import { useWorkspaceOpenFile } from "./useWorkspaceOpenFile";
 import { useIDELayoutCallbacks, addVisitedTab } from "./useIDELayoutCallbacks";
 import { useSystemBackHandler } from "./useSystemBackHandler";
 import { useIDELayoutStyles } from "./useIDELayoutStyles";
@@ -133,34 +131,19 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
 
   useEffect(() => { StatusBar.setHidden(isLandscape, "fade"); }, [isLandscape]);
 
-  // Open a raw agent/chat file path inside the given workspace, normalizing
-  // PRoot (/workspace, /workspaces/<id>) and file:// prefixes to relative paths.
-  const applyOpenFile = useCallback(async (targetWs: Workspace, rawPath: string, line?: number) => {
-    const relative = resolveChatPathToRelative(rawPath, targetWs.id);
-    if (!relative) return;
-    try {
-      const content = await readFileContent(targetWs.id, relative);
-      const fileName = relative.split("/").pop() || relative;
-      const fileNode: FileNode = { id: `${targetWs.id}::${relative}`, name: fileName, type: "file", path: relative, content: content || "" };
-      setActiveFile(fileNode);
-      recordRecentFile(fileNode, false);
-      safeSetBottomTab("editor");
-      // Search-result taps carry a line: queue a jump once the editor has
-      // loaded this exact file (EditorView consumes and clears the signal).
-      if (line && line > 0) requestJump(relative, line);
-      if (!content) showAppDialog({ title: "File opened", message: `${fileName} is empty or could not be read at:\n${relative}` });
-    } catch (e: any) {
-      showAppDialog({ title: "Could not open file", message: e?.message || relative });
-    }
-  }, [safeSetBottomTab, recordRecentFile, requestJump]);
+  // Keystroke-adjacent save loop lives here (needs activeFileRef).
+  const { scheduleSave, flush: flushPendingSave } = useDebouncedFileSave(workspace?.id, (filePath) => {
+    // Recent-files bump moved OFF the keystroke path: record once per typing
+    // pause (when the debounced write lands) instead of per character.
+    const current = activeFileRef.current;
+    if (current && (current.path || current.name) === filePath) recordRecentFile(current, true);
+  });
 
-  // Project-search result tap: open the matched file and queue the line jump.
-  const handleSearchOpenMatch = useCallback(
-    (path: string, line: number) => {
-      if (workspace) void applyOpenFile(workspace, path, line);
-    },
-    [workspace, applyOpenFile]
-  );
+  // Agent/chat links, project-search hits and explorer taps all open files here.
+  const { applyOpenFile, handleSearchOpenMatch, handleSelectFile } = useWorkspaceOpenFile({
+    workspace, setActiveFile, recordRecentFile, safeSetBottomTab, requestJump,
+    flushPendingSave,
+  });
 
   const handleOpenInBrowser = useCallback((u: string) => { setBrowserUrl(u); safeSetBottomTab("browser"); }, [safeSetBottomTab]);
   const onOpenTerminal = useCallback(() => safeSetBottomTab("terminal"), [safeSetBottomTab]);
@@ -212,12 +195,6 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
     return () => { cancelled = true; };
   }, [workspaceId, loadSeq]);
 
-  const { scheduleSave, flush: flushPendingSave } = useDebouncedFileSave(workspace?.id, (filePath) => {
-    // Recent-files bump moved OFF the keystroke path: record once per typing
-    // pause (when the debounced write lands) instead of per character.
-    const current = activeFileRef.current;
-    if (current && (current.path || current.name) === filePath) recordRecentFile(current, true);
-  });
   const handleBackToPicker = useCallback(() => { flushPendingSave(); onBackToPicker?.(); }, [flushPendingSave, onBackToPicker]);
 
   const refreshWorkspace = useCallback(async () => {
@@ -255,29 +232,6 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
   // fingerprint-gated, change-subscribed) independent of the active tab;
   // FileExplorer's pull-to-refresh still calls refreshWorkspace directly.
 
-  const handleSelectFile = useCallback(async (file: any) => {
-    if (!file || file.type === "folder" || !workspace) return;
-    const fileName = file.name || (file.path ? file.path.split("/").pop() : "") || "file";
-    const targetPath = file.path || file.name || fileName;
-    const selected: FileNode = {
-      ...file,
-      id: file.id || `${workspace.id}::${targetPath}`,
-      name: fileName,
-      path: targetPath,
-      type: "file",
-      content: file.content || "",
-    };
-    setActiveFile(selected);
-    recordRecentFile(selected, false);
-    safeSetBottomTab("editor");
-    // Explorer stays open on file select — it closes only on edit-mode start or manual collapse.
-    try {
-      await flushPendingSave();
-      const content = await readFileContent(workspace.id, targetPath);
-      setActiveFile((prev) => (prev && prev.id === selected.id ? { ...prev, content: content ?? "" } : prev));
-    } catch (_) {}
-  }, [workspace, safeSetBottomTab, flushPendingSave, recordRecentFile]);
-
   const handleContentChange = useCallback((newContent: string) => {
     const current = activeFileRef.current;
     if (!current) return;
@@ -309,6 +263,14 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
     onOpenTerminal,
     onOpenPreview: handleOpenInBrowser,
     onRemoveRecentFile: removeRecentFile,
+  });
+
+  // Import from phone storage + export project/file (3-dot menu).
+  const importExport = useImportExport({
+    workspaceId: workspace?.id,
+    projectName: workspace?.name,
+    activeFile,
+    refreshWorkspace,
   });
 
   // Speed: stable callbacks so memoized children don't re-render per parent tick.
@@ -396,6 +358,8 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
                 onJumpConsumed={clearJump}
                 onOpenSearch={handleOpenSearch}
                 onDeleteFile={handleDeleteActiveFile}
+                onImport={importExport.handleOpenImport}
+                onExport={importExport.handleOpenExport}
                 isSidebarOpen={isSidebarOpen}
                 onPullStart={handlePullStart} onPullMove={handlePullMove} onPullEnd={handlePullEnd}
                 edgePanHandlers={edgePanHandlers}
@@ -464,30 +428,19 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
         />
       )}
 
-      {/* File Action Modal */}
-      {modalMode !== "none" && (
-        <FileActionModal
-          modalMode={modalMode} selectedNode={selectedNode} menuPosition={menuPosition}
-          modalInput={modalInput} onChangeInput={setModalInput} onClose={handleCloseFileModal}
-          onSelectRename={handleSelectRename}
-          onSelectAdd={handleSelectAdd}
-          onDeleteConfirm={confirmAndDeleteNode} onRenameSubmit={handleRenameSubmit}
-          onAddSubmit={handleAddSubmit}
-          onBackToOptions={handleBackToOptions}
-        />
-      )}
-
-      {/* Settings & Marketplace Modals */}
-      <SettingsModal
-        visible={isSettingsModalVisible} onClose={handleCloseSettings}
-        workspaceId={workspace?.id} onSyncWorkspace={refreshWorkspace}
-      />
-      <ExtensionMarketplaceModal visible={isMarketplaceVisible} onClose={handleCloseMarketplace} />
-      <ProjectSearchModal
-        visible={isSearchVisible}
+      <IDEModals
+        modalMode={modalMode} selectedNode={selectedNode} menuPosition={menuPosition}
+        modalInput={modalInput} onChangeInput={setModalInput} onCloseFileModal={handleCloseFileModal}
+        onSelectRename={handleSelectRename} onSelectAdd={handleSelectAdd}
+        onDeleteConfirm={confirmAndDeleteNode} onRenameSubmit={handleRenameSubmit}
+        onAddSubmit={handleAddSubmit} onBackToOptions={handleBackToOptions}
         workspaceId={workspace?.id}
-        onClose={() => setSearchVisible(false)}
-        onOpenMatch={handleSearchOpenMatch}
+        isSettingsVisible={isSettingsModalVisible} onCloseSettings={handleCloseSettings}
+        refreshWorkspace={refreshWorkspace}
+        isMarketplaceVisible={isMarketplaceVisible} onCloseMarketplace={handleCloseMarketplace}
+        isSearchVisible={isSearchVisible} onCloseSearch={() => setSearchVisible(false)}
+        onSearchOpenMatch={handleSearchOpenMatch}
+        io={importExport} projectName={workspace?.name} fileName={activeFile?.name}
       />
     </View>
   );

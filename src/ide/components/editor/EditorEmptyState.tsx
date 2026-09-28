@@ -11,6 +11,8 @@ interface EditorEmptyStateProps {
   onToggleSidebar?: () => void;
   onOpenSettings?: () => void;
   onOpenSearch?: () => void;
+  onImport?: () => void;
+  onExport?: () => void;
   sidebar?: React.ReactNode;
   isSidebarOpen?: boolean;
   edgePanHandlers?: any;
@@ -23,6 +25,8 @@ export function EditorEmptyState({
   onToggleSidebar,
   onOpenSettings,
   onOpenSearch,
+  onImport,
+  onExport,
   sidebar,
   isSidebarOpen,
   edgePanHandlers,
@@ -38,6 +42,8 @@ export function EditorEmptyState({
         onToggleSidebar={onToggleSidebar}
         onOpenSettings={onOpenSettings}
         onOpenSearch={onOpenSearch}
+        onImport={onImport}
+        onExport={onExport}
       />
       <View style={styles.contentRow}>
         {sidebar}

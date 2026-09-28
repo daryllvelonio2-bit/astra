@@ -45,6 +45,10 @@ interface EditorViewProps {
   sidebar?: React.ReactNode;
   onOpenSearch?: () => void;
   onDeleteFile?: () => void;
+  /** Import a phone file/folder into the project. */
+  onImport?: () => void;
+  /** Export the project or the active file. */
+  onExport?: () => void;
   isSidebarOpen?: boolean;
   onPullStart?: () => void;
   onPullMove?: (dx: number) => void;
@@ -73,6 +77,8 @@ function EditorViewInner({
   sidebar,
   onOpenSearch,
   onDeleteFile,
+  onImport,
+  onExport,
   isSidebarOpen,
   onPullStart,
   onPullMove,
@@ -216,6 +222,8 @@ function EditorViewInner({
         onToggleSidebar={onToggleSidebar}
         onOpenSettings={onOpenSettings}
         onOpenSearch={onOpenSearch}
+        onImport={onImport}
+        onExport={onExport}
         sidebar={sidebar}
         isSidebarOpen={isSidebarOpen}
         edgePanHandlers={edgePanHandlers}
@@ -260,6 +268,8 @@ function EditorViewInner({
         onOpenFind={handleOpenFind}
         onOpenSearch={onOpenSearch}
         onDeleteFile={onDeleteFile}
+        onImport={onImport}
+        onExport={onExport}
       />
 
       <View style={styles.contentRow}>

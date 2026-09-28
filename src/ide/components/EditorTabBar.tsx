@@ -40,6 +40,10 @@ interface EditorTabBarProps {
   onOpenSearch?: () => void;
   /** Delete the active file. */
   onDeleteFile?: () => void;
+  /** Browse phone storage and import a file or folder into the project. */
+  onImport?: () => void;
+  /** Export the project as a .zip or the active file. */
+  onExport?: () => void;
   /** Unsaved-changes indicator for the title bar dirty dot. */
   isDirty?: boolean;
 }
@@ -72,6 +76,8 @@ function EditorTabBarInner({
   onOpenFind,
   onOpenSearch,
   onDeleteFile,
+  onImport,
+  onExport,
   isDirty = false,
 }: EditorTabBarProps) {
   const { theme } = useTheme();
@@ -107,6 +113,12 @@ function EditorTabBarInner({
     if (onOpenSettings) {
       items.push({ key: "settings", label: "Settings", icon: "settings-outline", run: onOpenSettings });
     }
+    if (onImport) {
+      items.push({ key: "import", label: "Import File / Folder", icon: "download-outline", run: onImport });
+    }
+    if (onExport) {
+      items.push({ key: "export", label: "Export…", icon: "share-outline", run: onExport });
+    }
     if (fileName && onDeleteFile) {
       items.push({ key: "delete", label: "Delete File", icon: "trash-outline", destructive: true, run: onDeleteFile });
     }
@@ -114,7 +126,7 @@ function EditorTabBarInner({
       items.push({ key: "exit", label: "Exit Project", icon: "exit-outline", destructive: true, run: onExitProject });
     }
     return items;
-  }, [onOpenSearch, onOpenFind, onOpenSettings, fileName, onDeleteFile, onExitProject]);
+  }, [onOpenSearch, onOpenFind, onOpenSettings, onImport, onExport, fileName, onDeleteFile, onExitProject]);
 
   return (
     <>
