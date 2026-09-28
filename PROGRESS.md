@@ -1,5 +1,11 @@
 # Project Progress Tracker
 
+### [2026-09-28] - Home: 3-dot button removed from header
+- **Ask:** remove the 3dot botton.
+- **`GitHubHomeView.tsx` (106 lines):** removed `HomeMenuButton` import and `headerTrailing` prop. The actions are now fully hosted in `GitHubHomeActions` below the contribution graph.
+- **`GitHubHomeMenu.tsx` (deleted):** deleted dead component file, zero remaining references across `src/`.
+- **Verification:** `npx tsc --noEmit` → No errors found. Full grep across repo confirms 0 references. Metro live hot reload updates the connected device.
+
 ### [2026-09-28] - Home: 3-dot menu actions unrolled into section cards below the contribution graph
 - **Ask:** in the github page, in home there is a 3 dot button containing many actions, draft it all out below the contribution.
 - **`GitHubHomeActions.tsx` (new, 250 lines):** created dedicated action sections card component rendering all actions that were in the 3-dot menu into clean grouped cards:

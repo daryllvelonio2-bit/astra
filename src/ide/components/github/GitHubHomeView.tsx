@@ -7,7 +7,6 @@ import { useGitHubResource } from "./useGitHubResource";
 import { GitHubSearchBar } from "./GitHubControls";
 import { GitHubNavigation } from "./useGitHubNavigation";
 import { GitHubProfileBody, ProfileStat } from "./GitHubProfileBody";
-import { HomeMenuButton } from "./GitHubHomeMenu";
 import { GitHubHomeActions } from "./GitHubHomeActions";
 
 /**
@@ -95,7 +94,6 @@ export function GitHubHomeView({
         showContribGraph
         listClone={false}
         showList={false}
-        headerTrailing={<HomeMenuButton nav={nav} login={login} onSignOut={onSignOut} />}
       >
         <GitHubHomeActions nav={nav} login={login} onSignOut={onSignOut} />
       </GitHubProfileBody>
