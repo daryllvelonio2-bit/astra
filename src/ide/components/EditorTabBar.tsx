@@ -36,6 +36,16 @@ interface EditorTabBarProps {
   onResetZoom?: () => void;
   /** Open the CodeMirror find & replace panel. */
   onOpenFind?: () => void;
+  /** Undo the last edit in the CodeMirror editor. */
+  onUndo?: () => void;
+  /** Redo the last undone edit in the CodeMirror editor. */
+  onRedo?: () => void;
+  /** Flush pending debounced edits to disk immediately. */
+  onSave?: () => void;
+  /** Select the cursor's current line in the CodeMirror editor. */
+  onSelectLine?: () => void;
+  /** Select the entire document in the CodeMirror editor. */
+  onSelectAll?: () => void;
   /** Open the global project search modal. */
   onOpenSearch?: () => void;
   /** Delete the active file. */
@@ -74,6 +84,11 @@ function EditorTabBarInner({
   onZoomOut,
   onResetZoom,
   onOpenFind,
+  onUndo,
+  onRedo,
+  onSave,
+  onSelectLine,
+  onSelectAll,
   onOpenSearch,
   onDeleteFile,
   onImport,
@@ -110,6 +125,26 @@ function EditorTabBarInner({
     if (onOpenFind) {
       items.push({ key: "find", label: "Find & Replace", icon: "document-text-outline", run: onOpenFind });
     }
+    // Touch-reachable manual-coding actions (all safe no-ops when the
+    // underlying handler is unavailable).
+    if (onUndo) {
+      items.push({ key: "undo", label: "Undo", icon: "arrow-undo-outline", run: onUndo });
+    }
+    if (onRedo) {
+      items.push({ key: "redo", label: "Redo", icon: "arrow-redo-outline", run: onRedo });
+    }
+    if (onSave) {
+      items.push({ key: "save", label: "Save", icon: "save-outline", run: onSave });
+    }
+    if (onFormat) {
+      items.push({ key: "format", label: "Format code", icon: "brush-outline", run: onFormat });
+    }
+    if (onSelectLine) {
+      items.push({ key: "selectLine", label: "Select line", icon: "text-outline", run: onSelectLine });
+    }
+    if (onSelectAll) {
+      items.push({ key: "selectAll", label: "Select all", icon: "checkbox-outline", run: onSelectAll });
+    }
     if (onOpenSettings) {
       items.push({ key: "settings", label: "Settings", icon: "settings-outline", run: onOpenSettings });
     }
@@ -126,7 +161,7 @@ function EditorTabBarInner({
       items.push({ key: "exit", label: "Exit Project", icon: "exit-outline", destructive: true, run: onExitProject });
     }
     return items;
-  }, [onOpenSearch, onOpenFind, onOpenSettings, onImport, onExport, fileName, onDeleteFile, onExitProject]);
+  }, [onOpenSearch, onOpenFind, onUndo, onRedo, onSave, onFormat, onSelectLine, onSelectAll, onOpenSettings, onImport, onExport, fileName, onDeleteFile, onExitProject]);
 
   return (
     <>

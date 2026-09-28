@@ -359,6 +359,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
                 onDeleteFile={handleDeleteActiveFile}
                 onImport={importExport.handleOpenImport}
                 onExport={importExport.handleOpenExport}
+                onManualSave={flushPendingSave}
                 isSidebarOpen={isSidebarOpen}
                 onPullStart={handlePullStart} onPullMove={handlePullMove} onPullEnd={handlePullEnd}
                 edgePanHandlers={edgePanHandlers}

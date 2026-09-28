@@ -49,6 +49,8 @@ interface EditorViewProps {
   onImport?: () => void;
   /** Export the project or the active file. */
   onExport?: () => void;
+  /** Flush pending debounced edits to disk immediately (manual Save). */
+  onManualSave?: () => void;
   isSidebarOpen?: boolean;
   onPullStart?: () => void;
   onPullMove?: (dx: number) => void;
@@ -79,6 +81,7 @@ function EditorViewInner({
   onDeleteFile,
   onImport,
   onExport,
+  onManualSave,
   isSidebarOpen,
   onPullStart,
   onPullMove,
@@ -186,6 +189,28 @@ function EditorViewInner({
     }
   }, []);
 
+  // ⋯ menu manual-coding actions: zero-arg, stable identities so the memo'd
+  // tab bar never re-renders from their creation.
+  const handleUndo = useCallback(() => {
+    cmRef.current?.undo();
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    cmRef.current?.redo();
+  }, []);
+
+  const handleSelectLine = useCallback(() => {
+    cmRef.current?.selectLine();
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    cmRef.current?.selectAll();
+  }, []);
+
+  const handleManualSave = useCallback(() => {
+    onManualSave?.();
+  }, [onManualSave]);
+
   // Search-result jump: only consume the signal for the file it belongs to
   // (a stale signal from another file must not move this editor's cursor).
   const activeJump = useMemo(
@@ -266,6 +291,11 @@ function EditorViewInner({
         onZoomOut={gestures.zoomOut}
         onResetZoom={gestures.resetZoom}
         onOpenFind={handleOpenFind}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        onSave={handleManualSave}
+        onSelectLine={handleSelectLine}
+        onSelectAll={handleSelectAll}
         onOpenSearch={onOpenSearch}
         onDeleteFile={onDeleteFile}
         onImport={onImport}

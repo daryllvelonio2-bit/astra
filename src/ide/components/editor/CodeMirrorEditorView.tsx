@@ -11,45 +11,13 @@ import React, {
 import { StyleSheet, View, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import { buildCodeMirrorHtml } from "./codemirrorHtml.generated";
+import { buildCmThemeObj } from "./codemirrorThemeObj";
 
 // Module-level cache: avoids replaceAll over the 500+ KB blob on every mount.
 // Key = bgPrimary + "|" + isDark.  The blob string itself is already cached
 // inside codemirrorHtml.generated (cachedBlob), so we only cache the result
 // of the two .replaceAll() calls on top of it.
 const _htmlCache = new Map<string, string>();
-
-/** Serialize the RN ThemeColors into the shape __cmSetTheme expects. */
-function buildCmThemeObj(theme: any): string {
-  const obj = {
-    isDark: theme.isDark !== false,
-    bgPrimary: theme.bgPrimary || "",
-    bgSecondary: theme.bgSecondary || "",
-    textPrimary: theme.textPrimary || "",
-    textMuted: theme.textMuted || "",
-    accent: theme.accent || "",
-    accentCyan: theme.accentCyan || "",
-    accentPurple: theme.accentPurple || "",
-    accentGold: theme.accentGold || "",
-    accentGreen: theme.accentGreen || "",
-    accentRed: theme.accentRed || "",
-    tokens: theme.tokenColors
-      ? {
-          keyword:  theme.tokenColors.keyword  || "",
-          comment:  theme.tokenColors.comment  || "",
-          string:   theme.tokenColors.string   || "",
-          number:   theme.tokenColors.number   || "",
-          type:     theme.tokenColors.jsx_tag  || "",
-          function: theme.tokenColors.function || "",
-          operator: theme.tokenColors.operator || "",
-          jsx_tag:  theme.tokenColors.jsx_tag  || "",
-          property: theme.tokenColors.property || "",
-          boolean:  theme.tokenColors.boolean  || "",
-          plain:    theme.tokenColors.plain    || "",
-        }
-      : undefined,
-  };
-  return JSON.stringify(obj);
-}
 
 export interface CodeMirrorEditorHandle {
   jumpToLine: (line: number) => void;
@@ -59,6 +27,10 @@ export interface CodeMirrorEditorHandle {
   blur: () => void;
   openFind: () => void;
   closeFind: () => void;
+  /** Select the cursor's current line (new). */
+  selectLine: () => void;
+  /** Select the entire document (new). */
+  selectAll: () => void;
 }
 
 interface CodeMirrorEditorViewProps {
@@ -219,10 +191,21 @@ export const CodeMirrorEditorView = memo(
             inject(`window.__cmJumpToLine && window.__cmJumpToLine(${line})`);
           },
           undo: () => {
-            inject(`window.__cmUndo && window.__cmUndo()`);
+            // Engine exposes no direct undo command (verified: bundle exposes
+            // no __cmUndo). Route via the editor's own keymap instead: a
+            // synthetic Ctrl+Z keydown on .cm-content runs historyKeymap.undo
+            // and the doc change posts back through the normal change channel.
+            // Modifiers MUST be in the KeyboardEventInit dict (ctrlKey is a
+            // readonly IDL prop after construction).
+            inject(
+              `try{var c=document.querySelector('.cm-content');if(c){var e=new KeyboardEvent('keydown',{key:'z',code:'KeyZ',keyCode:90,which:90,cancelable:true,bubbles:true,ctrlKey:true,altKey:false,metaKey:false,shiftKey:false});c.dispatchEvent(e);}}catch(_){}`
+            );
           },
           redo: () => {
-            inject(`window.__cmRedo && window.__cmRedo()`);
+            // Android keymap: historyKeymap redo binds Ctrl-Shift-z on Linux.
+            inject(
+              `try{var c=document.querySelector('.cm-content');if(c){var e=new KeyboardEvent('keydown',{key:'z',code:'KeyZ',keyCode:90,which:90,cancelable:true,bubbles:true,ctrlKey:true,altKey:false,metaKey:false,shiftKey:true});c.dispatchEvent(e);}}catch(_){}`
+            );
           },
           focus: () => {
             inject(`window.__cmFocus && window.__cmFocus()`);
@@ -232,6 +215,21 @@ export const CodeMirrorEditorView = memo(
           },
           closeFind: () => {
             inject(`window.__cmCloseFind && window.__cmCloseFind()`);
+          },
+          selectLine: () => {
+            // Engine exposes no editor instance (it stays in the entry
+            // closure); reach the live view through the DOM instead —
+            // @codemirror/view tiles (.cm-content) carry cmTile -> root.view.
+            inject(
+              `try{var c=document.querySelector('.cm-content');var t=c&&c.cmTile;var v=t&&t.root&&t.root.view;if(v){var s=v.state.selection.main,l=v.state.doc.lineAt(s.head);v.dispatch({selection:{anchor:l.from,head:l.to},scrollIntoView:true});}}catch(_){}`
+            );
+          },
+          selectAll: () => {
+            // Selection commands need the view; the tile route reaches it for
+            // the CURRENT editor instance (each WebView hosts exactly one).
+            inject(
+              `try{var c=document.querySelector('.cm-content');var t=c&&c.cmTile;var v=t&&t.root&&t.root.view;if(v){v.dispatch({selection:{anchor:0,head:v.state.doc.length},scrollIntoView:true});}}catch(_){}`
+            );
           },
           blur: triggerBlur,
         }),
