@@ -40,6 +40,7 @@ interface EditorViewProps {
   /** Queued jump request from project search (path must match this file). */
   jumpSignal?: { path: string; line: number; nonce: number } | null;
   onJumpConsumed?: () => void;
+  sidebar?: React.ReactNode;
 }
 
 function EditorViewInner({
@@ -59,6 +60,7 @@ function EditorViewInner({
   visible = true,
   jumpSignal,
   onJumpConsumed,
+  sidebar,
 }: EditorViewProps) {
   const { theme } = useTheme();
   const { editorSettings, keyboardMouseMode } = useEditorConfig();
@@ -195,6 +197,7 @@ function EditorViewInner({
         onExitProject={onExitProject}
         onToggleSidebar={onToggleSidebar}
         onOpenSettings={onOpenSettings}
+        sidebar={sidebar}
       />
     );
   }
@@ -235,53 +238,59 @@ function EditorViewInner({
         onOpenFind={handleOpenFind}
       />
 
-      <EditorFloatingHud
-        theme={theme}
-        splitToast={gestures.splitToast}
-        zoomBadge={gestures.zoomBadge}
-        formatToast={formatToast}
-      />
+      <View style={styles.contentRow}>
+        {sidebar}
 
-      <CodeMirrorEditorView
-        ref={cmRef}
-        content={content}
-        fileName={fileName}
-        onChangeContent={onChangeContent}
-        theme={theme}
-        fontSize={fontSize}
-        lineHeight={lineHeight}
-        isEditing={isEditing}
-        keyboardMouseMode={keyboardMouseMode}
-        onCursorChange={handleCursorChange}
-        onEnterEditMode={handleEnterEditMode}
-        onPinchStart={gestures.handlePinchStart}
-        onPinchMove={gestures.handlePinchMove}
-        onPinchEnd={gestures.handlePinchEnd}
-        onZoomIn={gestures.zoomIn}
-        onZoomOut={gestures.zoomOut}
-        onZoomReset={gestures.resetZoom}
-        visible={visible}
-        jumpSignal={activeJump}
-        onJumpConsumed={activeJump ? onJumpConsumed : undefined}
-      />
+        <View style={styles.codeArea}>
+          <EditorFloatingHud
+            theme={theme}
+            splitToast={gestures.splitToast}
+            zoomBadge={gestures.zoomBadge}
+            formatToast={formatToast}
+          />
 
-      <EditorStatusBar
-        isEditing={isEditing}
-        matchStatus={assists.matchStatus}
-        matchKind={assists.match?.kind}
-        currentLineDiag={currentLineDiag}
-        showProblems={showProblems}
-        onShowProblems={handleShowProblems}
-        theme={theme}
-      />
+          <CodeMirrorEditorView
+            ref={cmRef}
+            content={content}
+            fileName={fileName}
+            onChangeContent={onChangeContent}
+            theme={theme}
+            fontSize={fontSize}
+            lineHeight={lineHeight}
+            isEditing={isEditing}
+            keyboardMouseMode={keyboardMouseMode}
+            onCursorChange={handleCursorChange}
+            onEnterEditMode={handleEnterEditMode}
+            onPinchStart={gestures.handlePinchStart}
+            onPinchMove={gestures.handlePinchMove}
+            onPinchEnd={gestures.handlePinchEnd}
+            onZoomIn={gestures.zoomIn}
+            onZoomOut={gestures.zoomOut}
+            onZoomReset={gestures.resetZoom}
+            visible={visible}
+            jumpSignal={activeJump}
+            onJumpConsumed={activeJump ? onJumpConsumed : undefined}
+          />
 
-      {showProblems && (
-        <ProblemsPanel
-          diagnostics={assists.diagnostics}
-          onJumpToLine={jumpToLine}
-          onClose={handleCloseProblems}
-        />
-      )}
+          <EditorStatusBar
+            isEditing={isEditing}
+            matchStatus={assists.matchStatus}
+            matchKind={assists.match?.kind}
+            currentLineDiag={currentLineDiag}
+            showProblems={showProblems}
+            onShowProblems={handleShowProblems}
+            theme={theme}
+          />
+
+          {showProblems && (
+            <ProblemsPanel
+              diagnostics={assists.diagnostics}
+              onJumpToLine={jumpToLine}
+              onClose={handleCloseProblems}
+            />
+          )}
+        </View>
+      </View>
     </View>
   );
 }
@@ -290,4 +299,6 @@ export const EditorView = React.memo(EditorViewInner);
 
 const styles = StyleSheet.create({
   container: { flex: 1, position: "relative" },
+  contentRow: { flex: 1, flexDirection: "row" },
+  codeArea: { flex: 1, position: "relative" },
 });

@@ -368,29 +368,6 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
 
       {/* Main Workspace Area */}
       <View style={workspaceStyle}>
-        {bottomTab === "editor" && (
-          <Animated.View style={sidebarAnimStyle} pointerEvents={isSidebarOpen ? "auto" : "none"}>
-            <PanelErrorBoundary panelName="Explorer" resetKey={workspace?.id}>
-            <FileExplorer
-              projectName={workspace.name}
-              workspaceId={workspace.id}
-              files={workspace.root.children || []}
-              onSelectFile={handleSelectFile}
-              activeFileId={activeFile?.id}
-              onToggleCollapse={handleToggleCollapse}
-              onLongPressNode={handleLongPressNode}
-              onCreateFile={handleCreateNode}
-              onQuickAddFile={handleQuickAddFile}
-              onMoveNode={handleMoveNode}
-              onRefresh={refreshWorkspace}
-              onOpenSearch={handleOpenSearch}
-              resizerPanHandlers={resizerPanHandlers}
-              isDraggingSidebar={isDraggingSidebar}
-            />
-            </PanelErrorBoundary>
-          </Animated.View>
-        )}
-
         <View style={editorContainerStyle}>
           {visitedTabs.has("editor") && (
             <View style={[tabContentStyle, bottomTab !== "editor" && styles.hiddenTab]}>
@@ -412,6 +389,28 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
                 visible={bottomTab === "editor"}
                 jumpSignal={pendingJump}
                 onJumpConsumed={clearJump}
+                sidebar={
+                  <Animated.View style={sidebarAnimStyle} pointerEvents={isSidebarOpen ? "auto" : "none"}>
+                    <PanelErrorBoundary panelName="Explorer" resetKey={workspace?.id}>
+                    <FileExplorer
+                      projectName={workspace.name}
+                      workspaceId={workspace.id}
+                      files={workspace.root.children || []}
+                      onSelectFile={handleSelectFile}
+                      activeFileId={activeFile?.id}
+                      onToggleCollapse={handleToggleCollapse}
+                      onLongPressNode={handleLongPressNode}
+                      onCreateFile={handleCreateNode}
+                      onQuickAddFile={handleQuickAddFile}
+                      onMoveNode={handleMoveNode}
+                      onRefresh={refreshWorkspace}
+                      onOpenSearch={handleOpenSearch}
+                      resizerPanHandlers={resizerPanHandlers}
+                      isDraggingSidebar={isDraggingSidebar}
+                    />
+                    </PanelErrorBoundary>
+                  </Animated.View>
+                }
               />
               </PanelErrorBoundary>
             </View>
