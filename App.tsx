@@ -13,6 +13,11 @@ import { StartupWizard } from "./src/onboarding/StartupWizard";
 import { AppBootScreen } from "./src/onboarding/AppBootScreen";
 import { loadHasCompletedStartup, subscribeConfigChanges } from "./src/ide/services/configService";
 import { AppDialogHost } from "./src/ide/services/appDialog";
+import { GlobalNotificationBanner } from "./src/ide/components/GlobalNotificationBanner";
+import {
+  startGithubNotificationPoller,
+  stopGithubNotificationPoller,
+} from "./src/ide/services/githubNotificationPoller";
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -102,10 +107,12 @@ export default function App() {
       }
     });
     const unsubConfig = subscribeConfigChanges(() => {});
+    startGithubNotificationPoller();
 
     return () => {
       cancelled = true;
       clearTimeout(bootFallback);
+      stopGithubNotificationPoller();
       unsubSwitchWs();
       unsubConfig();
     };
@@ -151,6 +158,7 @@ export default function App() {
             )}
           </KeyboardMouseProvider>
           <RepoCloneIndicator />
+          <GlobalNotificationBanner />
           <AppDialogHost />
         </ThemeProvider>
       </ErrorBoundary>

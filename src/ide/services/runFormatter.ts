@@ -38,11 +38,29 @@ export function getRuntimeBadge(runtime?: string): string {
  * prints an IDE-grade header banner, tracks elapsed execution time, and displays a
  * color-coded process completion footer.
  */
+/** Escape for interpolation inside a double-quoted shell string in the
+ *  generated script ($ and backtick expand there; a file named `$(id).js`
+ *  would otherwise execute inside the guest). */
+function shellEscapeDouble(s: string): string {
+  return s
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, "\\$")
+    .replace(/`/g, "\\`");
+}
+
 export function buildRunnerScript(opts: RunFormatOptions): string {
   const badge = getRuntimeBadge(opts.runtime);
   const title = opts.fileName || opts.displayName;
-  const safeTitle = title.replace(/"/g, '\\"');
-  const safeBadge = badge.replace(/"/g, '\\"');
+  const safeTitle = shellEscapeDouble(title);
+  const safeBadge = shellEscapeDouble(badge);
+  // Marker line consumed by the terminal banner scanner (never painted).
+  const safeLabel =
+    shellEscapeDouble(
+      (opts.displayName || opts.fileName || "run")
+        .replace(/[|\r\n]+/g, " ")
+        .slice(0, 60)
+    ) || "run";
   const serverBanner =
     opts.isServer && opts.url
       ? `printf "\\033[1;33m⚡ Local Server:\\033[0m \\033[1;36m%s\\033[0m\\n\\n" "${opts.url}"\n`
@@ -63,6 +81,7 @@ else
   _dur="0.0s"
 fi
 printf "\\n\\033[2m────────────────────────────────────────────────────────────\\033[0m\\n"
+printf "__ASTRA_NOTIFY__%s|%s|%s\\n" "${safeLabel}" "$_code" "$_dur"
 if [ $_code -eq 0 ]; then
   printf "\\033[1;32m✔ Process finished\\033[0m \\033[2m(exit code 0)\\033[0m \\033[36m[%s]\\033[0m\\n" "$_dur"
 else

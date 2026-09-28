@@ -18,7 +18,14 @@ import {
 import { buildXtermHtml } from "./xtermHtml.generated";
 import { utf8ToB64 } from "./terminalEncoding";
 import { TerminalTheme, getXtermTheme } from "./terminalThemes";
-import { stripLeakedTerminalText, stripReplayQueries } from "./terminalBuffer";
+import {
+  createRunMarkerScanner,
+  stripLeakedTerminalText,
+  stripReplayQueries,
+  stripRunMarkersSilently,
+} from "./terminalBuffer";
+import { notify } from "../../services/notificationService";
+import { RUN_SESSION_ID } from "../../services/runService";
 
 export interface XtermViewHandle {
   focusTerminal: () => void;
@@ -109,6 +116,15 @@ export const XtermView = memo(
   // Hidden tab: skip bridge writes (queue keeps latest per MAX_QUEUE cap).
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
+  // Strips run-completion marker lines and raises global notifications.
+  const scannerRef = useRef(createRunMarkerScanner((m) => {
+    notify({
+      source: "terminal",
+      tone: m.code === 0 ? "success" : "error",
+      title: m.code === 0 ? `Run finished: ${m.label}` : `Run exited (${m.code}): ${m.label}`,
+      message: `exit ${m.code} · ${m.duration}`,
+    });
+  }));
 
   const activeBg = theme?.background || background || "#0d1117";
   const activeFg = theme?.foreground || foreground || "#f0f6fc";
@@ -187,7 +203,9 @@ export const XtermView = memo(
       // its own copy), and reset wiped the grid so it paints exactly once.
       // Replay-only query sanitizing: stale device queries in the snapshot
       // must not trigger ghost replies into the new shell's stdin.
-      const cleanHist = stripReplayQueries(stripLeakedTerminalText(hist || ""));
+      const cleanHist = stripRunMarkersSilently(
+        stripReplayQueries(stripLeakedTerminalText(hist || ""))
+      );
       injectWrite(utf8ToB64(bannerRef.current + cleanHist));
       paintFitRef.current = lastFitRef.current ? { ...lastFitRef.current } : null;
       if (!isKeyboardVisibleRef.current) {
@@ -207,9 +225,10 @@ export const XtermView = memo(
     // if the grid matches the previous session (dedupe would skip it).
     lastFitRef.current = null;
 
+    scannerRef.current.flush(); // drop a half-line marker from the previous session
     const dataSub = addTerminalDataListener(sessionId, (chunk: string) => {
       if (!readyRef.current) return;
-      const cleanChunk = stripLeakedTerminalText(chunk);
+      const cleanChunk = scannerRef.current.feed(stripLeakedTerminalText(chunk));
       if (!cleanChunk) return;
       enqueue(utf8ToB64(cleanChunk));
       if (!visibleRef.current) return;
@@ -226,6 +245,16 @@ export const XtermView = memo(
     const exitSub = addTerminalExitListener(sessionId, (code: number) => {
       enqueue(utf8ToB64(`\r\n[Process completed: exit ${code}]\r\n`));
       if (visibleRef.current) flushQueue();
+      // Shell crash / abnormal end: notify unless this is the Run session
+      // (its completion marker already reported) or a clean manual exit.
+      if (code !== 0 && sessionId !== RUN_SESSION_ID) {
+        notify({
+          source: "terminal",
+          tone: "error",
+          title: `Terminal exited (${code})`,
+          message: sessionId,
+        });
+      }
     });
 
     // Tab switch onto an already-loaded page: paint before latching ready.

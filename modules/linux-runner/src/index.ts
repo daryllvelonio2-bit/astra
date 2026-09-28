@@ -240,6 +240,33 @@ export async function runArtisan(
   return executeCommand(`cd /workspace/${projectPath} && php artisan ${args.join(" ")}`);
 }
 
+export function showSystemNotification(title: string, body: string): boolean {
+  if (!LinuxRunnerModule?.showSystemNotification) return false;
+  try {
+    return !!LinuxRunnerModule.showSystemNotification(title, body);
+  } catch (_) {
+    return false;
+  }
+}
+
+export function areNotificationsEnabled(): boolean {
+  if (!LinuxRunnerModule?.areNotificationsEnabled) return true;
+  try {
+    return !!LinuxRunnerModule.areNotificationsEnabled();
+  } catch (_) {
+    return true;
+  }
+}
+
+export function requestNotificationPermission(): boolean {
+  if (!LinuxRunnerModule?.requestNotificationPermission) return false;
+  try {
+    return !!LinuxRunnerModule.requestNotificationPermission();
+  } catch (_) {
+    return false;
+  }
+}
+
 export function copyToClipboard(text: string): boolean {
   if (LinuxRunnerModule?.copyToClipboard) {
     try {

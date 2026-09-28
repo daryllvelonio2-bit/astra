@@ -70,8 +70,39 @@ export const DEFAULT_EDITOR_SETTINGS: EditorSettings = {
 };
 
 
+export type NotificationChannel = "banner" | "system" | "off";
+
+export interface NotificationRouting {
+  github: NotificationChannel;
+  terminal: NotificationChannel;
+  agent: NotificationChannel;
+  app: NotificationChannel;
+}
+
+export const DEFAULT_NOTIFICATION_ROUTING: NotificationRouting = {
+  github: "banner",
+  terminal: "banner",
+  agent: "banner",
+  app: "banner",
+};
+
+export function normalizeNotificationRouting(
+  value?: Partial<NotificationRouting> | null
+): NotificationRouting {
+  const pick = (v: unknown, fallback: NotificationChannel): NotificationChannel =>
+    v === "banner" || v === "system" || v === "off" ? v : fallback;
+  return {
+    github: pick(value?.github, DEFAULT_NOTIFICATION_ROUTING.github),
+    terminal: pick(value?.terminal, DEFAULT_NOTIFICATION_ROUTING.terminal),
+    agent: pick(value?.agent, DEFAULT_NOTIFICATION_ROUTING.agent),
+    app: pick(value?.app, DEFAULT_NOTIFICATION_ROUTING.app),
+  };
+}
+
 export interface AppConfig {
   apiKey: string;
+  /** Per-source global notification routing (Settings → Alerts). */
+  notifications?: Partial<NotificationRouting>;
   apiKeys?: string[];
   activeKeyIndex?: number;
   selectedModel: string;

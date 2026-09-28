@@ -148,4 +148,79 @@ export function stripReplayQueries(text: string): string {
     .replace(/\x1b\[\?[0-9;]*u/g, "");
 }
 
+/**
+ * Run-completion markers. buildRunnerScript echoes a line of the form
+ * `__ASTRA_NOTIFY__<label>|<exit code>|<duration>` as the very last output
+ * of a Run; the terminal strips it before painting and raises a global
+ * notification instead. Line-based so a label can never smuggle a false
+ * terminator.
+ */
+export interface RunMarker {
+  label: string;
+  code: number;
+  duration: string;
+}
+
+const RUN_MARKER_PREFIX = "__ASTRA_NOTIFY__";
+
+/** Remove marker lines without firing callbacks (history replay). */
+export function stripRunMarkersSilently(text: string): string {
+  if (!text || !text.includes(RUN_MARKER_PREFIX)) return text;
+  return text
+    .split("\n")
+    .filter((line) => !line.startsWith(RUN_MARKER_PREFIX))
+    .join("\n");
+}
+
+export function createRunMarkerScanner(onMarker: (marker: RunMarker) => void): {
+  feed: (chunk: string) => string;
+  flush: () => string;
+} {
+  let held = "";
+  const parse = (line: string): RunMarker | null => {
+    const payload = line.slice(RUN_MARKER_PREFIX.length);
+    const last = payload.lastIndexOf("|");
+    const mid = payload.lastIndexOf("|", last - 1);
+    if (last <= 0 || mid < 0) return null;
+    const code = parseInt(payload.slice(mid + 1, last), 10);
+    if (Number.isNaN(code)) return null;
+    return { label: payload.slice(0, mid), code, duration: payload.slice(last + 1) };
+  };
+  return {
+    feed(chunk) {
+      const text = held + chunk;
+      const lines = text.split("\n");
+      const tail = lines.pop() ?? "";
+      let out = "";
+      for (const line of lines) {
+        if (line.startsWith(RUN_MARKER_PREFIX)) {
+          const marker = parse(line);
+          if (marker) onMarker(marker);
+          continue;
+        }
+        out += line + "\n";
+      }
+      // Hold the tail while it could still grow into a marker line: either it
+      // already starts with the full prefix (trailing \n in the next chunk) or
+      // it is a strict prefix of it (the marker was split MID-PREFIX — without
+      // this branch the second chunk's fragment no longer starts with the
+      // prefix, so it paints as garbage and the run never notifies). The cost
+      // is a bounded stall: divergence flushes on the next byte (typing
+      // `__init__.py` holds `__i` then paints `__init…` immediately).
+      if (tail.startsWith(RUN_MARKER_PREFIX) || RUN_MARKER_PREFIX.startsWith(tail)) {
+        held = tail;
+      } else {
+        held = "";
+        out += tail;
+      }
+      return out;
+    },
+    flush() {
+      const rest = held;
+      held = "";
+      return rest.startsWith(RUN_MARKER_PREFIX) ? "" : rest;
+    },
+  };
+}
+
 

@@ -22,7 +22,10 @@ import {
   appendCapped,
   mergeNativeHistory,
   stripLeakedTerminalText,
+  createRunMarkerScanner,
 } from "./terminalBuffer";
+import { notify } from "../../services/notificationService";
+import { RUN_SESSION_ID } from "../../services/runService";
 import { loadTerminalFontSize, saveTerminalFontSize } from "../../services/configService";
 
 export interface TerminalTab {
@@ -92,6 +95,17 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
   const shellIdsRef = useRef<string[]>(["session-1"]);
   // Last COLORFGBG pushed per shell session; avoids re-export spam.
   const exportedFgBgRef = useRef<Record<string, string>>({});
+  // Legacy pipe mode: strip run markers and raise notifications there too.
+  const markerScanner = useRef(
+    createRunMarkerScanner((m) => {
+      notify({
+        source: "terminal",
+        tone: m.code === 0 ? "success" : "error",
+        title: m.code === 0 ? `Run finished: ${m.label}` : `Run exited (${m.code}): ${m.label}`,
+        message: `exit ${m.code} · ${m.duration}`,
+      });
+    })
+  ).current;
 
   const syncThemeEnv = useCallback((isDark: boolean) => {
     const want = colorFgBgForTheme(isDark);
@@ -103,7 +117,9 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
   }, []);
 
   const foldNativeHistory = useCallback((sessionId: string, hist: string) => {
-    const cleanHist = stripLeakedTerminalText(hist);
+    const cleanHist = sessionId === RUN_SESSION_ID
+      ? markerScanner.feed(stripLeakedTerminalText(hist))
+      : stripLeakedTerminalText(hist);
     if (!cleanHist) return;
     setSessionOutputs((prev) => {
       const current = prev[sessionId] || "";
@@ -179,7 +195,7 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
 
       const subscription = addTerminalDataListener(activeSessionId, (chunk: string) => {
         if (!isSubscribed) return;
-        const cleanChunk = stripLeakedTerminalText(chunk);
+        const cleanChunk = markerScanner.feed(stripLeakedTerminalText(chunk));
         if (!cleanChunk) return;
         // Live stream bytes are new by definition: count them as seen so a
         // later history snapshot doesn't re-append them.
@@ -199,6 +215,7 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
 
       return () => {
         isSubscribed = false;
+        markerScanner.flush();
         subscription.remove();
       };
     }

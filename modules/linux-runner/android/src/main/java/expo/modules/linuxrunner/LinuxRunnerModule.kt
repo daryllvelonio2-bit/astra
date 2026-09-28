@@ -5,6 +5,11 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import android.app.NotificationManager
+import android.app.Notification
+import android.app.NotificationChannel
+import android.content.Context
+import android.os.Build
 import java.util.concurrent.Executors
 
 class LinuxRunnerModule : Module() {
@@ -14,6 +19,8 @@ class LinuxRunnerModule : Module() {
         Executors.newSingleThreadExecutor { r -> Thread(r, "LinuxRunnerKill") }.asCoroutineDispatcher() +
             SupervisorJob()
     )
+    private var notifSeq = 1000
+
     override fun definition() = ModuleDefinition {
         Name("LinuxRunner")
 
@@ -281,6 +288,73 @@ class LinuxRunnerModule : Module() {
                 }
             }
             return@Function false
+        }
+
+        Function("showSystemNotification") { title: String, body: String ->
+            val context = appContext.reactContext ?: return@Function false
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= 33 &&
+                context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") !=
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                return@Function false
+            }
+            val channelId = "astra_global"
+            if (Build.VERSION.SDK_INT >= 26) {
+                if (nm.getNotificationChannel(channelId) == null) {
+                    nm.createNotificationChannel(
+                        NotificationChannel(
+                            channelId, "Astra", NotificationManager.IMPORTANCE_DEFAULT
+                        ).apply { description = "Global app notifications" }
+                    )
+                }
+            }
+            val notif = if (Build.VERSION.SDK_INT >= 26) {
+                Notification.Builder(context, channelId)
+            } else {
+                @Suppress("DEPRECATION")
+                Notification.Builder(context)
+            }
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(Notification.BigTextStyle().bigText(body))
+                .setAutoCancel(true)
+                .build()
+            try {
+                nm.notify(notifSeq++, notif)
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        Function("areNotificationsEnabled") {
+            val context = appContext.reactContext ?: return@Function false
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= 33 &&
+                context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") !=
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                return@Function false
+            }
+            try {
+                nm.areNotificationsEnabled()
+            } catch (_: Exception) {
+                true
+            }
+        }
+
+        Function("requestNotificationPermission") {
+            val context = appContext.reactContext ?: return@Function false
+            if (Build.VERSION.SDK_INT < 33) return@Function true
+            val activity = appContext.currentActivity ?: return@Function false
+            try {
+                activity.requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 0x4A11)
+                true
+            } catch (_: Exception) {
+                false
+            }
         }
 
         Function("openAppDetailsSettings") {
