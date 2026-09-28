@@ -67,6 +67,16 @@ export function getDefaultPickerBase(): string {
   return FileSystem.documentDirectory || "";
 }
 
+/**
+ * Where the IMPORT browser opens. Importing means pulling files OFF the
+ * phone, so Android starts at shared storage instead of the app sandbox;
+ * elsewhere there is nothing but the app documents dir.
+ */
+export function getImportBrowserBase(): string {
+  if (Platform.OS === "android") return "/sdcard/";
+  return FileSystem.documentDirectory || "";
+}
+
 /** Platform-aware quick jumps — no more phone-only /sdcard on desktop/web. */
 export function getQuickPaths(): QuickPath[] {
   const workspaces = getWorkspacesDir();

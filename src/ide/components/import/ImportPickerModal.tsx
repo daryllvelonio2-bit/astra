@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  View, Text, TouchableOpacity, Modal, FlatList, ScrollView,
+  View, Text, TouchableOpacity, Modal, FlatList,
   StyleSheet, TextInput, ActivityIndicator, Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,7 +8,7 @@ import { useTheme } from "../../../theme/themeContext";
 import { useAccurateKeyboard } from "../../../theme/useAccurateKeyboard";
 import { useKeyboardMouseMode } from "../../context/KeyboardMouseContext";
 import { getFileIcon } from "../fileExplorerUtils";
-import { getDefaultPickerBase, getQuickPaths } from "../../services/storagePaths";
+import { getImportBrowserBase } from "../../services/storagePaths";
 import {
   readDirEntries, hasAllFilesPermission, requestAllFilesPermission, NativeDirEntry,
 } from "../../services/nativeFs";
@@ -25,6 +25,9 @@ interface ImportPickerModalProps {
   progress?: ImportProgress | null;
 }
 
+/** Remembered across opens so a second import resumes where you left off. */
+let lastVisitedDir: string | null = null;
+
 function formatSize(bytes: number): string {
   if (!bytes) return "";
   if (bytes < 1024) return `${bytes} B`;
@@ -35,6 +38,10 @@ function formatSize(bytes: number): string {
 /**
  * ImportPickerModal — browse the phone and import a file (tap it) or the
  * whole open folder (footer button) into the current project.
+ *
+ * Chrome budget: ONE 38px address row above the list. The separate path bar
+ * and the quick-location chip strip were folded into that row, so the file
+ * list owns nearly the whole sheet.
  */
 export function ImportPickerModal({
   visible, onClose, onImportFile, onImportFolder, isBusy = false, progress,
@@ -42,20 +49,18 @@ export function ImportPickerModal({
   const { theme } = useTheme();
   const { keyboardMouseMode } = useKeyboardMouseMode();
   const { isKeyboardVisible, keyboardOffset } = useAccurateKeyboard(8);
-  const defaultBase = getDefaultPickerBase();
+  const defaultBase = getImportBrowserBase();
 
-  const [currentPath, setCurrentPath] = useState(defaultBase);
-  const [typedPath, setTypedPath] = useState(defaultBase);
+  const [currentPath, setCurrentPath] = useState(lastVisitedDir || defaultBase);
+  const [typedPath, setTypedPath] = useState(lastVisitedDir || defaultBase);
   const [entries, setEntries] = useState<NativeDirEntry[]>([]);
   const [isEditingPath, setIsEditingPath] = useState(false);
   const [hasPermission, setHasPermission] = useState(true);
-  // Static per platform — build once, not on every progress re-render.
-  const quickPaths = useMemo(() => getQuickPaths(), []);
 
   useEffect(() => {
     if (!visible) return;
     setHasPermission(hasAllFilesPermission());
-    loadDirectory(currentPath || defaultBase);
+    void loadDirectory(lastVisitedDir || defaultBase);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
@@ -63,6 +68,7 @@ export function ImportPickerModal({
     let clean = (dirPath || "").trim();
     if (!clean) clean = defaultBase;
     if (!clean.endsWith("/")) clean += "/";
+    lastVisitedDir = clean;
     setCurrentPath(clean);
     setTypedPath(clean);
     setIsEditingPath(false);
@@ -82,8 +88,8 @@ export function ImportPickerModal({
   const handleGoUp = () => {
     const trimmed = currentPath.replace(/\/+$/, "");
     const lastSlash = trimmed.lastIndexOf("/");
-    if (lastSlash > 0) loadDirectory(trimmed.substring(0, lastSlash + 1));
-    else if (defaultBase && currentPath !== defaultBase) loadDirectory(defaultBase);
+    if (lastSlash > 0) void loadDirectory(trimmed.substring(0, lastSlash + 1));
+    else if (defaultBase && currentPath !== defaultBase) void loadDirectory(defaultBase);
   };
 
   const handlePermission = () => {
@@ -96,6 +102,7 @@ export function ImportPickerModal({
       ? `Importing ${progress.done}/${progress.total}`
       : "Importing…"
     : "Importing…";
+  const canGoUp = currentPath.replace(/\/+$/, "").length > 0;
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -105,50 +112,18 @@ export function ImportPickerModal({
           activeOpacity={1}
           onPress={onClose}
         />
-        <View style={[styles.container, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
-          {/* Header */}
-          <View style={[styles.header, { borderBottomColor: theme.border }]}>
-            <View style={styles.headerLeft}>
-              <Ionicons name="download-outline" size={20} color={theme.accent} />
-              <View>
-                <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Import</Text>
-                <Text style={[styles.headerSub, { color: theme.textMuted }]}>
-                  Tap a file, or pull in the whole folder
-                </Text>
-              </View>
-            </View>
-            <View style={styles.headerRight}>
-              <TouchableOpacity onPress={handlePermission} style={styles.iconBtn}>
-                <Ionicons
-                  name={hasPermission ? "shield-checkmark-outline" : "shield-outline"}
-                  size={17}
-                  color={hasPermission ? theme.accent : theme.accentGold}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={onClose} style={styles.iconBtn}>
-                <Ionicons name="close" size={20} color={theme.textMuted} />
-              </TouchableOpacity>
-            </View>
-          </View>
+        <View
+          style={[
+            styles.container,
+            { backgroundColor: theme.bgSecondary, borderColor: theme.border },
+            isKeyboardVisible && styles.containerKeyboard,
+          ]}
+        >
+          {/* Address row: [folder] Import  <path>  [up] [shield] [close] */}
+          <View style={[styles.addressRow, { borderBottomColor: theme.border }]}>
+            <Ionicons name="download-outline" size={16} color={theme.accent} />
+            <Text style={[styles.addressTitle, { color: theme.textPrimary }]}>Import</Text>
 
-          {/* Quick jumps */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickBar}>
-            {quickPaths.map((qp) => (
-              <TouchableOpacity
-                key={qp.label}
-                style={[styles.quickChip, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}
-                onPress={() => loadDirectory(qp.path)}
-              >
-                <Text style={[styles.quickChipText, { color: theme.textSecondary }]}>{qp.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Path bar */}
-          <View style={[styles.pathBar, { backgroundColor: theme.bgInput, borderColor: theme.border }]}>
-            <TouchableOpacity onPress={handleGoUp} style={styles.iconBtn}>
-              <Ionicons name="arrow-up" size={18} color={theme.accent} />
-            </TouchableOpacity>
             {isEditingPath ? (
               <TextInput
                 style={[styles.pathInput, { color: theme.textPrimary }]}
@@ -156,25 +131,61 @@ export function ImportPickerModal({
                 onChangeText={setTypedPath}
                 autoFocus
                 showSoftInputOnFocus={!keyboardMouseMode}
-                onSubmitEditing={() => loadDirectory(typedPath)}
+                onSubmitEditing={() => void loadDirectory(typedPath)}
                 autoCapitalize="none"
+                selectTextOnFocus
               />
             ) : (
-              <TouchableOpacity style={styles.pathTextWrap} onPress={() => setIsEditingPath(true)}>
-                <Text style={[styles.pathText, { color: theme.textPrimary }]} numberOfLines={1} ellipsizeMode="head">
+              <TouchableOpacity
+                style={styles.pathTap}
+                onPress={() => setIsEditingPath(true)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[styles.pathText, { color: theme.textSecondary }]}
+                  numberOfLines={1}
+                  ellipsizeMode="head"
+                >
                   {currentPath}
                 </Text>
               </TouchableOpacity>
             )}
-            {isEditingPath ? (
-              <TouchableOpacity onPress={() => loadDirectory(typedPath)} style={styles.iconBtn}>
-                <Text style={[styles.goText, { color: theme.accent }]}>Go</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={() => setIsEditingPath(true)} style={styles.iconBtn}>
-                <Ionicons name="pencil-outline" size={15} color={theme.textMuted} />
-              </TouchableOpacity>
-            )}
+
+            <TouchableOpacity
+              onPress={isEditingPath ? () => void loadDirectory(typedPath) : handleGoUp}
+              disabled={!isEditingPath && !canGoUp}
+              style={styles.headerBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              accessibilityLabel={isEditingPath ? "Go to path" : "Parent folder"}
+            >
+              <Ionicons
+                name={isEditingPath ? "arrow-forward" : "arrow-up"}
+                size={17}
+                color={theme.accent}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handlePermission}
+              style={styles.headerBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              accessibilityLabel="Storage access"
+            >
+              <Ionicons
+                name={hasPermission ? "shield-checkmark-outline" : "shield-outline"}
+                size={16}
+                color={hasPermission ? theme.textMuted : theme.accentGold}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.headerBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              accessibilityLabel="Close"
+            >
+              <Ionicons name="close" size={19} color={theme.textMuted} />
+            </TouchableOpacity>
           </View>
 
           {/* Listing */}
@@ -182,26 +193,28 @@ export function ImportPickerModal({
             <FlatList
               data={entries}
               keyExtractor={(item) => item.path}
-              initialNumToRender={14}
-              maxToRenderPerBatch={10}
+              initialNumToRender={16}
+              maxToRenderPerBatch={12}
               windowSize={5}
               removeClippedSubviews={Platform.OS === "android"}
               style={styles.list}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[styles.entryItem, { borderBottomColor: theme.border }]}
-                  onPress={() => (item.isDirectory ? loadDirectory(item.path) : onImportFile(item.path))}
+                  onPress={() =>
+                    item.isDirectory ? void loadDirectory(item.path) : onImportFile(item.path)
+                  }
                   activeOpacity={0.7}
                   disabled={isBusy}
                 >
                   {item.isDirectory
-                    ? <Ionicons name="folder" size={19} color={theme.accent} style={styles.entryIcon} />
+                    ? <Ionicons name="folder" size={18} color={theme.accent} style={styles.entryIcon} />
                     : <View style={styles.entryIcon}>{getFileIcon(item.name)}</View>}
                   <Text style={[styles.entryText, { color: theme.textPrimary }]} numberOfLines={1}>
                     {item.name}
                   </Text>
                   {item.isDirectory ? (
-                    <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
+                    <Ionicons name="chevron-forward" size={15} color={theme.textMuted} />
                   ) : (
                     <Text style={[styles.entrySize, { color: theme.textMuted }]}>
                       {formatSize(item.size)}
@@ -254,7 +267,7 @@ export function ImportPickerModal({
               onPress={() => onImportFolder(currentPath)}
               disabled={isBusy}
             >
-              <Ionicons name="folder-open-outline" size={17} color={theme.sendButtonIcon} />
+              <Ionicons name="folder-open-outline" size={16} color={theme.sendButtonIcon} />
               <Text style={[styles.footerBtnTextPrimary, { color: theme.sendButtonIcon }]}>
                 Import This Folder
               </Text>
@@ -270,60 +283,43 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end" },
   backdrop: { ...StyleSheet.absoluteFillObject },
   container: {
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     borderWidth: 1,
-    maxHeight: "85%",
-    minHeight: 420,
+    height: "92%",
   },
-  header: {
+  containerKeyboard: { height: "80%" },
+  // One 38px row carrying the title, the path and every control.
+  addressRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    gap: 7,
+    height: 38,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 4 },
-  headerTitle: { fontSize: 15, fontWeight: "700" },
-  headerSub: { fontSize: 11, marginTop: 1 },
-  iconBtn: { padding: 5 },
-  quickBar: { maxHeight: 38, paddingHorizontal: 14, marginTop: 8 },
-  quickChip: {
-    paddingHorizontal: 10,
-    height: 28,
-    justifyContent: "center",
-    borderRadius: 12,
-    borderWidth: 1,
-    marginRight: 6,
+  addressTitle: { fontSize: 13.5, fontWeight: "700" },
+  pathTap: { flex: 1, paddingVertical: 4 },
+  pathText: { fontSize: 11, fontFamily: "monospace" },
+  pathInput: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: "monospace",
+    paddingVertical: 2,
+    paddingHorizontal: 4,
   },
-  quickChipText: { fontSize: 11, fontWeight: "600" },
-  pathBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 14,
-    marginVertical: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  pathTextWrap: { flex: 1 },
-  pathText: { fontSize: 12, fontFamily: "monospace" },
-  pathInput: { flex: 1, fontSize: 12, fontFamily: "monospace", paddingVertical: 2, paddingHorizontal: 4 },
-  goText: { fontSize: 12, fontWeight: "700" },
+  headerBtn: { padding: 3 },
   listWrap: { flex: 1, position: "relative" },
-  list: { flex: 1, paddingHorizontal: 14 },
+  list: { flex: 1, paddingHorizontal: 12 },
   entryItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 11,
+    paddingVertical: 9,
     borderBottomWidth: 1,
   },
-  entryIcon: { marginRight: 10, alignItems: "center", justifyContent: "center" },
-  entryText: { flex: 1, fontSize: 13.5, fontWeight: "500" },
-  entrySize: { fontSize: 11, fontFamily: "monospace" },
+  entryIcon: { marginRight: 9, alignItems: "center", justifyContent: "center" },
+  entryText: { flex: 1, fontSize: 13, fontWeight: "500" },
+  entrySize: { fontSize: 10.5, fontFamily: "monospace" },
   emptyBox: { alignItems: "center", justifyContent: "center", paddingVertical: 40 },
   emptyInner: { alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 24 },
   emptyText: { fontSize: 13, textAlign: "center" },
@@ -336,24 +332,24 @@ const styles = StyleSheet.create({
   },
   busyTitle: { fontSize: 14, fontWeight: "700" },
   busyFile: { fontSize: 11.5, fontFamily: "monospace" },
-  footer: { flexDirection: "row", padding: 14, gap: 10, borderTopWidth: 1 },
+  footer: { flexDirection: "row", padding: 10, gap: 8, borderTopWidth: 1 },
   footerBtnCancel: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
-  footerBtnTextCancel: { fontSize: 14, fontWeight: "600" },
+  footerBtnTextCancel: { fontSize: 13, fontWeight: "600" },
   footerBtnPrimary: {
     flex: 2,
     flexDirection: "row",
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
   },
-  footerBtnTextPrimary: { fontSize: 14, fontWeight: "700" },
+  footerBtnTextPrimary: { fontSize: 13, fontWeight: "700" },
   disabled: { opacity: 0.5 },
 });

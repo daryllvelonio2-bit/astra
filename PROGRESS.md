@@ -1,5 +1,14 @@
 # Project Progress Tracker
 
+### [2026-09-29] - Import browser: chrome cut ~106px, file list +33%
+- **Ask (verbatim):** "i want to improve the ui theres so much small space for the files and navigation too many things taking up most of the space, unecessary quick locations, larghe file location and large header".
+- **Surface:** the import browser (`ImportPickerModal`) — the only place with quick locations and a file-location bar.
+- **Header + path bar folded into ONE 38px address row** (`[folder] Import  <path>  [up] [shield] [close]`): the two-line header (icon + "Import" + the "Tap a file, or pull in the whole folder" subtitle, ~51px), the quick-location chip strip (📦 Workspaces / 🎮 Godot / 📁 Documents / ⬇️ Download / 📱 SDCard, ~46px) and the separate bordered path bar with its own pencil button (~47px) are gone. Tapping the path still edits it inline; while editing, `up` becomes `go`.
+- **Quick locations removed, not relocated:** the browser now *opens* at phone storage (`storagePaths.getImportBrowserBase()` -> `/sdcard/` on Android, app documents elsewhere) and **remembers the last visited folder across opens**, so the chips' only real job (get out of the app sandbox) no longer needs a row. Typing a path still works for anything else.
+- **Sheet taller, rows tighter:** container `maxHeight: 85%`/`minHeight: 420` -> fixed `height: 92%` (80% while the keyboard is up); list row `paddingVertical` 11 -> 9 (row 41 -> 36px), entry font 13.5 -> 13, list side padding 14 -> 12; footer padding 14 -> 10.
+- **Measured:** chrome above the list 144px -> 38px (**-106px**); sheet 1963px -> 2125px (**+162px** on this 2310px display); list viewport 1749px -> 2029px, i.e. **~42 -> ~56 visible rows (+33%)**. Tradeoff accepted: the address-row icon buttons are ~22-25px tap targets (under Android's 48dp guidance) on a 38px bar — `hitSlop` 8px widens the touchable area, and the row is the only way to keep this much list on screen.
+- **Verification:** `tsc --noEmit` exit 0; `ImportPickerModal` 355 lines, `storagePaths` 109 (both ≤ 500); no stale `getQuickPaths` refs left in `import/`; app alive on device with zero ReactNativeJS/error lines after the hot reload. Visual/touch check is the user's to make.
+
 ### [2026-09-28] - Import from phone + Export project / file (editor 3-dot menu)
 - **Ask:** browse the phone's directories and import anything (file *or* folder, images included) into the project; plus export — the whole project, or a popup to export the open file. Both live in the editor 3-dot menu.
 - **`src/ide/services/fileTreeWalker.ts` (80):** one shared listing pass (`listTree`) returns every file with its size plus every directory, giving both services an exact progress total. Reuses the explorer's ignore rules (`IGNORED_FOLDERS`, dotfiles except `.env`/`.gitignore`/`.env.example`), depth-capped at 12.
