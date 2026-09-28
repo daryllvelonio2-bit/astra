@@ -1,9 +1,7 @@
-import React, { useCallback, useState } from "react";
-import { View, Text, TouchableOpacity, Modal, StyleSheet, StatusBar } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import React, { useCallback, useState, useEffect, useRef } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, BackHandler } from "react-native";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
-import { useOrientation } from "../../../theme/useOrientation";
 import { useGitHubNavigation, routeTitle, GitHubRoute } from "./useGitHubNavigation";
 import { GitHubHomeView } from "./GitHubHomeView";
 import { GitHubSearchView } from "./GitHubSearchView";
@@ -59,15 +57,13 @@ type EditorState = { owner: string; repo: string; path: string; ref: string; tex
 
 export function GitHubSuiteView({ visible, session, workspaceId, initialRoute, onClose, onSignedOut }: GitHubSuiteViewProps) {
   const { theme } = useTheme();
-  const { isLandscape } = useOrientation();
-  const insets = useSafeAreaInsets();
   const nav = useGitHubNavigation();
   // Fresh entry stack on every open: popToRoot + replace collapses to
   // [initialRoute], so the avatar lands on the profile, not a stale drill-in.
-  const initialRef = React.useRef(initialRoute);
+  const initialRef = useRef(initialRoute);
   initialRef.current = initialRoute;
-  const wasVisibleRef = React.useRef(visible);
-  React.useEffect(() => {
+  const wasVisibleRef = useRef(visible);
+  useEffect(() => {
     if (visible && !wasVisibleRef.current && initialRef.current) {
       nav.popToRoot();
       nav.replace(initialRef.current);
@@ -91,6 +87,23 @@ export function GitHubSuiteView({ visible, session, workspaceId, initialRoute, o
 
   const closeEditor = () => setEditor(null);
 
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (editor) {
+        closeEditor();
+        return true;
+      }
+      if (nav.canGoBack) {
+        nav.pop();
+        return true;
+      }
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, editor, nav.canGoBack, nav.pop, onClose]);
+
   const signOut = useCallback(() => {
     showAppDialog({
       title: "Sign out of GitHub?",
@@ -112,59 +125,58 @@ export function GitHubSuiteView({ visible, session, workspaceId, initialRoute, o
     });
   }, [onClose, onSignedOut]);
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={() => (nav.canGoBack ? nav.pop() : onClose())} statusBarTranslucent>
-      <StatusBar hidden={isLandscape} />
-      <View style={[styles.screen, { backgroundColor: theme.bgPrimary, paddingTop: isLandscape ? 0 : insets.top }]}>
-        {/* Top bar: back / title — same height as the Git tab's header bar */}
-        <View style={[styles.topBar, { borderBottomColor: theme.border, backgroundColor: theme.bgSecondary }]}>
-          {nav.canGoBack ? (
-            <TouchableOpacity style={styles.topBtn} onPress={nav.pop} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Octicons name="chevron-left" size={14} color={theme.textPrimary} />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.topBtn} onPress={onClose} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Octicons name="x" size={14} color={theme.textSecondary} />
-            </TouchableOpacity>
-          )}
-          <Text style={[styles.topTitle, { color: theme.textPrimary }]} numberOfLines={1}>
-            {routeTitle(route)}
-          </Text>
-        </View>
-
-        {/* Active route */}
-        <View style={styles.content}>
-          {renderRoute(route, nav, { login, onCloneRepo, session, workspaceId, onSignedOut, closeAll: onClose, openEditor: setEditor, signOut })}
-        </View>
-
-        {/* File editor sheet covers the whole content area */}
-        {editor && (
-          <View style={[styles.editorSheet, { top: TOP_BAR_HEIGHT + insets.top }]}>
-            <GitHubFileEditorSheet
-              path={editor.path}
-              initialText={editor.text}
-              sha={editor.sha}
-              branch={editor.ref}
-              busy={editorBusy}
-              error={editorError}
-              onCancel={closeEditor}
-              onCommit={async (payload) => {
-                setEditorBusy(true);
-                setEditorError(null);
-                const res = await commitFileEdit(editor.owner, editor.repo, editor.path, {
-                  ...payload,
-                  sha: editor.sha,
-                  branch: editor.ref,
-                });
-                setEditorBusy(false);
-                if (res.ok) closeEditor();
-                else setEditorError(res.error.message);
-              }}
-            />
-          </View>
+    <View style={[styles.screen, { backgroundColor: theme.bgPrimary }]}>
+      {/* Top bar: back / title — same height as the Git tab's header bar */}
+      <View style={[styles.topBar, { borderBottomColor: theme.border, backgroundColor: theme.bgSecondary }]}>
+        {nav.canGoBack ? (
+          <TouchableOpacity style={styles.topBtn} onPress={nav.pop} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Octicons name="chevron-left" size={14} color={theme.textPrimary} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.topBtn} onPress={onClose} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Octicons name="x" size={14} color={theme.textSecondary} />
+          </TouchableOpacity>
         )}
+        <Text style={[styles.topTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+          {routeTitle(route)}
+        </Text>
       </View>
-    </Modal>
+
+      {/* Active route */}
+      <View style={styles.content}>
+        {renderRoute(route, nav, { login, onCloneRepo, session, workspaceId, onSignedOut, closeAll: onClose, openEditor: setEditor, signOut })}
+      </View>
+
+      {/* File editor sheet covers the whole content area */}
+      {editor && (
+        <View style={styles.editorSheet}>
+          <GitHubFileEditorSheet
+            path={editor.path}
+            initialText={editor.text}
+            sha={editor.sha}
+            branch={editor.ref}
+            busy={editorBusy}
+            error={editorError}
+            onCancel={closeEditor}
+            onCommit={async (payload) => {
+              setEditorBusy(true);
+              setEditorError(null);
+              const res = await commitFileEdit(editor.owner, editor.repo, editor.path, {
+                ...payload,
+                sha: editor.sha,
+                branch: editor.ref,
+              });
+              setEditorBusy(false);
+              if (res.ok) closeEditor();
+              else setEditorError(res.error.message);
+            }}
+          />
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -355,7 +367,7 @@ function FileRoute({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
+  screen: { ...StyleSheet.absoluteFillObject, zIndex: 999 },
   topBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, height: TOP_BAR_HEIGHT, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth },
   topBtn: { padding: 6 },
   topTitle: { flex: 1, fontSize: 12.5, fontWeight: "700" },
