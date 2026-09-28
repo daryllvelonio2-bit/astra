@@ -73,7 +73,16 @@ export function GitHubRepoView({
 
   return (
     <View style={styles.wrap}>
-      <Animated.View style={[styles.header, { borderBottomColor: theme.border }, collapse.liftStyle]}>
+      {/* One floating block over a full-height body. Lifting the body by the
+          same amount (the previous design) kept its box size stable but
+          vacated a band at the bottom of the screen that painted over the
+          README. Floating instead: the body never moves, so it simply gains
+          the pixels the header releases. */}
+      <Animated.View
+        style={[styles.topBlock, { backgroundColor: theme.bgPrimary }, collapse.liftStyle]}
+        onLayout={collapse.onTopLayout}
+      >
+        <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <View style={styles.headerTop}>
           {r.ownerAvatar ? (
             <Image source={{ uri: r.ownerAvatar }} style={styles.avatar} />
@@ -181,10 +190,10 @@ export function GitHubRepoView({
         )}
 
         {!!action.error && <Text style={[styles.error, { color: theme.accentRed }]}>{action.error}</Text>}
-      </Animated.View>
+        </View>
 
-      {languageTotal > 0 && (
-        <Animated.View style={[styles.languageWrap, collapse.liftStyle]}>
+        {languageTotal > 0 && (
+          <View style={styles.languageWrap}>
           <View style={styles.languageBar}>
             {(languages.data || []).slice(0, 5).map((lang, index) => (
               <View
@@ -212,18 +221,19 @@ export function GitHubRepoView({
               </View>
             ))}
           </View>
-        </Animated.View>
-      )}
+          </View>
+        )}
 
-      <Animated.View style={[styles.tabs, { borderBottomColor: theme.border }, collapse.liftStyle]}>
-        <TabBtn label="Code" active={tab === "code"} onPress={() => setTab("code")} />
-        <TabBtn label="Issues" active={tab === "issues"} onPress={() => setTab("issues")} />
-        <TabBtn label="Pull requests" active={tab === "pulls"} onPress={() => setTab("pulls")} />
-        <TabBtn label="Actions" active={tab === "actions"} onPress={() => setTab("actions")} />
+        <View style={[styles.tabs, { borderBottomColor: theme.border }]}>
+          <TabBtn label="Code" active={tab === "code"} onPress={() => setTab("code")} />
+          <TabBtn label="Issues" active={tab === "issues"} onPress={() => setTab("issues")} />
+          <TabBtn label="Pull requests" active={tab === "pulls"} onPress={() => setTab("pulls")} />
+          <TabBtn label="Actions" active={tab === "actions"} onPress={() => setTab("actions")} />
+        </View>
       </Animated.View>
 
-      <Animated.View style={[styles.body, collapse.liftStyle]} onLayout={collapse.onBodyLayout}>
-        {tab === "code" && (
+      <View style={styles.body} onLayout={collapse.onBodyLayout}>
+        {tab === "code" ? (
           <GitHubRepoCodeView
             repo={r}
             refName={refName}
@@ -236,17 +246,24 @@ export function GitHubRepoView({
             onScroll={collapse.onScroll}
             onReadmeLayout={collapse.onReadmeLayout}
             onContentHeight={collapse.onContentHeight}
+            topInset={collapse.topHeight}
             nav={nav}
           />
+        ) : (
+          /* Non-code tabs own their scroll views and do not feed the collapse,
+             so a plain inset keeps their first row clear of the floating
+             header. Shrinking their viewport costs nothing here. */
+          <View style={[styles.inset, { paddingTop: collapse.topHeight }]}>
+            {tab === "issues" && (
+              <GitHubIssueListView owner={owner} repo={repo} nav={nav} login={login} isPull={false} />
+            )}
+            {tab === "pulls" && (
+              <GitHubIssueListView owner={owner} repo={repo} nav={nav} login={login} isPull />
+            )}
+            {tab === "actions" && <GitHubActionsView owner={owner} repo={repo} />}
+          </View>
         )}
-        {tab === "issues" && (
-          <GitHubIssueListView owner={owner} repo={repo} nav={nav} login={login} isPull={false} />
-        )}
-        {tab === "pulls" && (
-          <GitHubIssueListView owner={owner} repo={repo} nav={nav} login={login} isPull />
-        )}
-        {tab === "actions" && <GitHubActionsView owner={owner} repo={repo} />}
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -375,6 +392,9 @@ function TabBtn({ label, active, onPress }: { label: string; active: boolean; on
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, overflow: "hidden" },
+  /** Floats over the body: lifting it never vacates screen space, so nothing
+   *  can paint a bare band of the page background over the README. */
+  topBlock: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 2 },
   header: {
     paddingHorizontal: 10,
     paddingTop: 7,
@@ -434,4 +454,5 @@ const styles = StyleSheet.create({
   tabBtn: { paddingVertical: 6, paddingHorizontal: 9, borderBottomWidth: 2 },
   tabText: { fontSize: 11, fontWeight: "700" },
   body: { flex: 1 },
+  inset: { flex: 1 },
 });

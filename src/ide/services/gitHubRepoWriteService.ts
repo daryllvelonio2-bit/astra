@@ -54,8 +54,25 @@ export async function updateRepo(
   return ghPatch(`/repos/${owner}/${repo}`, patch);
 }
 
-export function deleteRepo(owner: string, repo: string): Promise<GitHubResult<unknown>> {
-  return ghDelete(`/repos/${owner}/${repo}`);
+/**
+ * GitHub returns 403 "Must have admin rights to Repository." when the token
+ * lacks the `delete_repo` scope — even for a true owner/admin, so the raw
+ * message is misleading. Translate it into the actionable fix: re-signing in
+ * grants the new scope (existing tokens predate it).
+ */
+export async function deleteRepo(owner: string, repo: string): Promise<GitHubResult<unknown>> {
+  const res = await ghDelete(`/repos/${owner}/${repo}`);
+  if (!res.ok && res.error.status === 403 && /must have admin rights/i.test(res.error.message)) {
+    return {
+      ok: false,
+      error: {
+        ...res.error,
+        scopeMissing: true,
+        message: "GitHub needs the delete-repository permission on your token. Sign out and sign in again to grant it, then retry.",
+      },
+    };
+  }
+  return res;
 }
 
 export function transferRepo(owner: string, repo: string, newOwner: string): Promise<GitHubResult<unknown>> {

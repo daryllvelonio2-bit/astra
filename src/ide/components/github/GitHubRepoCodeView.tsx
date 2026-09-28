@@ -45,6 +45,7 @@ export function GitHubRepoCodeView({
   onScroll,
   onReadmeLayout,
   onContentHeight,
+  topInset = 0,
   nav,
 }: {
   repo: GitHubRepo;
@@ -59,6 +60,9 @@ export function GitHubRepoCodeView({
   onReadmeLayout?: (event: LayoutChangeEvent) => void;
   /** Reports the scrollable content's height, i.e. how far the list can reach. */
   onContentHeight?: (width: number, height: number) => void;
+  /** Height of the repo screen's floating header, reserved as a leading spacer
+   *  so no row starts hidden underneath it. Scrolls away with the content. */
+  topInset?: number;
   nav: GitHubNavigation;
 }) {
   const { theme } = useTheme();
@@ -116,6 +120,11 @@ export function GitHubRepoCodeView({
       onScroll={onScroll}
       onContentSizeChange={onContentHeight}
       scrollEventThrottle={16}
+      /* The floating header clears the top of the viewport; padding the CONTENT
+         container (not the scroll view) reserves that space while leaving the
+         measured viewport height untouched, so the collapse's max-scroll math
+         stays exact. */
+      contentContainerStyle={topInset > 0 ? { paddingTop: topInset } : undefined}
     >
       <RepoCodeHeader
         owner={repo.owner}

@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { useTheme } from "../../../theme/themeContext";
-import { fetchNotifications } from "../../services/gitHubAccountService";
 import { fetchStarredRepos } from "../../services/gitHubRepoService";
 import { useGitHubResource } from "./useGitHubResource";
 import { GitHubSearchBar } from "./GitHubControls";
@@ -36,8 +35,6 @@ export function GitHubHomeView({
   const [query, setQuery] = useState("");
 
   const starred = useGitHubResource(() => fetchStarredRepos(100), [], { skip: !signedIn });
-  const notifications = useGitHubResource(() => fetchNotifications({ limit: 50 }), [], { skip: !signedIn });
-  const unread = (notifications.data || []).filter((n) => n.unread).length;
 
   const openSearch = useCallback(
     (text: string) => {
@@ -68,12 +65,6 @@ export function GitHubHomeView({
       label: "Starred",
       value: (starred.data || []).length,
       onPress: () => nav.push({ name: "starred" }),
-    },
-    {
-      label: "Unread",
-      value: unread,
-      highlight: unread > 0,
-      onPress: () => nav.push({ name: "notifications" }),
     },
   ];
 

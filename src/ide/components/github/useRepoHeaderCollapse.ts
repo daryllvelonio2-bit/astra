@@ -11,12 +11,17 @@ export type RepoLayoutHandler = (event: LayoutChangeEvent) => void;
  * animation self-calibrates per repo — topics row, language bar, tabs and
  * README length all change the geometry — instead of hardcoding pixel budgets.
  *
- * Geometry: the header blocks and the tab body are lifted by the same
- * `liftStyle`, so the header slides up out of the clipped screen container
- * while the body's content rises with it. The body's box never changes size,
- * which keeps the list's scrollable range (and therefore the scroll position
- * feeding this animation) constant — a resizing viewport would clamp the
- * offset and fight the collapse.
+ * Geometry: the body fills the whole screen and NEVER moves; the top blocks
+ * float over it and are the only thing lifted. An earlier design translated
+ * the body by the same amount, which kept its box size constant (good for the
+ * scroll range) but vacated a band at the bottom of the screen that painted
+ * over the README. Floating the header instead keeps the box size constant
+ * AND leaves nothing uncovered — the body simply gains the pixels the header
+ * released.
+ *
+ * The scroll content carries a `topInset` spacer the height of the floating
+ * block, so at rest no row starts hidden underneath it, and it scrolls away
+ * with the rest of the content.
  */
 export function useRepoHeaderCollapse() {
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -57,12 +62,17 @@ export function useRepoHeaderCollapse() {
   );
 
   /**
-   * The body's offset inside the screen container IS the height of every block
-   * above it, and it re-reports whenever one of them appears, wraps or resizes.
-   * Its height is the list viewport, which the collapse never changes.
+   * The floating block's height: the distance it travels, and the inset the
+   * scroll content reserves so nothing hides underneath it at rest. It
+   * re-reports whenever a child appears, wraps or resizes.
    */
+  const onTopLayout = useCallback((e: LayoutChangeEvent) => {
+    setTopHeight(e.nativeEvent.layout.height);
+  }, []);
+
+  /** The body is absolute-fill, so its height is the whole viewport and never
+   *  changes — which is what keeps the scroll range stable. */
   const onBodyLayout = useCallback((e: LayoutChangeEvent) => {
-    setTopHeight(e.nativeEvent.layout.y);
     setViewportHeight(e.nativeEvent.layout.height);
   }, []);
 
@@ -82,5 +92,5 @@ export function useRepoHeaderCollapse() {
     setReadmeY(0);
   }, [scrollY]);
 
-  return { onScroll, onBodyLayout, onReadmeLayout, onContentHeight, liftStyle, reset };
+  return { onScroll, onTopLayout, onBodyLayout, onReadmeLayout, onContentHeight, liftStyle, reset, topHeight };
 }

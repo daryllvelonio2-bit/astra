@@ -375,7 +375,7 @@ export function GitHubDesktopView({
         visible={showProfile}
         session={ghSession}
         workspaceId={workspaceId}
-        initialRoute={ghSession?.username ? { name: "profile", login: ghSession.username } : undefined}
+        initialRoute={ghSession ? { name: "home" } : undefined}
         onClose={() => setShowProfile(false)}
         onSignedOut={() => setGhSession(null)}
       />

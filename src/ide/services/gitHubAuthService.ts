@@ -21,7 +21,7 @@ const DEVICE_CODE_URL = "https://github.com/login/device/code";
 const TOKEN_URL = "https://github.com/login/oauth/access_token";
 const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
 const API_BASE = "https://api.github.com";
-const SCOPES = "repo read:user user:email notifications gist workflow";
+const SCOPES = "repo read:user user:email notifications gist workflow delete_repo";
 
 /** Astra's public OAuth App client ID (device flow — no secret exists). */
 const DEFAULT_CLIENT_ID = "Ov23liKNnfWWBaAsfR4o";

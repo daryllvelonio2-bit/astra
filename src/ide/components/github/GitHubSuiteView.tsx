@@ -86,22 +86,6 @@ export function GitHubSuiteView({ visible, session, workspaceId, initialRoute, o
   );
 
   const route = nav.route;
-  const showTabs = route.name === "home" || route.name === "search" || route.name === "notifications" || route.name === "profile";
-
-  const goTab = useCallback(
-    (tab: GitHubRoute) => {
-      // Home must reset the stack explicitly: the entry route may be the
-      // profile (avatar entry), where popToRoot alone would strand us.
-      if (tab.name === "home") {
-        nav.popToRoot();
-        nav.replace({ name: "home" });
-        return;
-      }
-      nav.popToRoot();
-      nav.push(tab);
-    },
-    [nav]
-  );
 
   const closeEditor = () => setEditor(null);
 
@@ -149,20 +133,6 @@ export function GitHubSuiteView({ visible, session, workspaceId, initialRoute, o
         <View style={styles.content}>
           {renderRoute(route, nav, { login, onCloneRepo, session, workspaceId, onSignedOut, closeAll: onClose, openEditor: setEditor, signOut })}
         </View>
-
-        {/* Bottom tabs */}
-        {showTabs && !editor && (
-          <View style={[styles.tabBar, { borderTopColor: theme.border, backgroundColor: theme.bgSecondary, paddingBottom: Math.max(7, insets.bottom) }]}>
-            <BottomTab icon="home" label="Home" active={route.name === "home"} onPress={() => goTab({ name: "home" })} />
-            <BottomTab icon="bell" label="Inbox" active={route.name === "notifications"} onPress={() => goTab({ name: "notifications" })} />
-            <BottomTab
-              icon="person"
-              label="You"
-              active={route.name === "profile" && login === session?.username}
-              onPress={() => login && goTab({ name: "profile", login })}
-            />
-          </View>
-        )}
 
         {/* File editor sheet covers the whole content area */}
         {editor && (
@@ -228,7 +198,8 @@ function renderRoute(route: GitHubRoute, nav: ReturnType<typeof useGitHubNavigat
         />
       );
     case "myRepos":
-      return <GitHubRepoListView nav={nav} mode="mine" onCloneRepo={ctx.onCloneRepo} />;
+      // No clone shortcut on your own repo list: the repo screen's ⋯ menu owns it.
+      return <GitHubRepoListView nav={nav} mode="mine" />;
     case "starred":
       return <GitHubRepoListView nav={nav} mode="starred" onCloneRepo={ctx.onCloneRepo} />;
     case "notifications":
@@ -380,34 +351,11 @@ function FileRoute({
   );
 }
 
-function BottomTab({
-  icon,
-  label,
-  active,
-  onPress,
-}: {
-  icon: string;
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const { theme } = useTheme();
-  return (
-    <TouchableOpacity style={styles.tabBtn} onPress={onPress} activeOpacity={0.7} accessibilityRole="tab" accessibilityState={{ selected: active }}>
-      <Octicons name={icon as any} size={15} color={active ? theme.accent : theme.textMuted} />
-      <Text style={[styles.tabLabel, { color: active ? theme.accent : theme.textMuted }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   topBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, height: TOP_BAR_HEIGHT, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth },
   topBtn: { padding: 6 },
   topTitle: { flex: 1, fontSize: 12.5, fontWeight: "700" },
   content: { flex: 1 },
-  tabBar: { flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 7 },
-  tabBtn: { flex: 1, alignItems: "center", gap: 2 },
-  tabLabel: { fontSize: 9.5, fontWeight: "700" },
   editorSheet: { position: "absolute", top: TOP_BAR_HEIGHT, left: 0, right: 0, bottom: 0 },
 });

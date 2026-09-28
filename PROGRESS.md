@@ -1,5 +1,18 @@
 # Project Progress Tracker
 
+### [2026-09-28] - GitHub suite: home landing, tab bar removal, repo delete scope, floating header collapse
+- **Ask:** Default GitHub landing to Home (not profile); remove Inbox/You bottom tabs; remove clone button from My Repositories list; fix "Must have admin rights" on repo delete; fix white band at bottom of README when header collapses on scroll.
+- **`GitHubDesktopView.tsx`:** `initialRoute` changed from `{name:"profile", login}` to `{name:"home"}` (no login field — the home route doesn't declare one).
+- **`GitHubHomeView.tsx`:** Removed Unread notification stat + `fetchNotifications` import + `notifications`/`unread` hooks. Starred counter kept.
+- **`GitHubSuiteView.tsx` (406→360 lines):** Deleted bottom tab bar JSX, `showTabs`, `goTab`, `BottomTab` component, `tabBar`/`tabBtn`/`tabLabel` styles. `myRepos` route no longer passes `onCloneRepo` (clone lives in repo overflow menu only). All destinations still reachable from Home's action rows/counters.
+- **`gitHubAuthService.ts`:** Added `delete_repo` to device-flow SCOPES string. Existing tokens predate it — sign-out/in required.
+- **`gitHubRepoWriteService.ts`:** `deleteRepo` now translates 403 "Must have admin rights to Repository" into an actionable message ("Sign out and sign in again to grant it") and sets `scopeMissing: true`. GitHub's raw message is misleading — it means the token lacks the scope, not that the user isn't admin.
+- **`GitHubRepoView.tsx` (437→457 lines):** Header collapse refactored from "lift everything including body" to "float header over full-height body." New `topBlock` style: `position:"absolute", top:0, left:0, right:0, zIndex:2`. Body is a plain `View` with `flex:1` that never moves. Non-code tabs (issues/pulls/actions) get `paddingTop: collapse.topHeight` so their first row clears the floating header. `onTopLayout` reports the floating block's height; `onBodyLayout` reports only viewport height.
+- **`GitHubRepoCodeView.tsx` (258→266 lines):** New `topInset` prop; applied as `contentContainerStyle: { paddingTop: topInset }` on the ScrollView (padding the content container, not the scroll view, so measured viewport height stays exact for collapse math).
+- **`useRepoHeaderCollapse.ts` (86→95 lines):** `onTopLayout` replaces the old `onBodyLayout.y` measurement; `topHeight` exported for the `topInset` prop. Doc comment rewritten to explain the floating design and why translating the body was wrong (vacated a band at the bottom that painted over the README).
+- **Root cause of white band:** The old design applied the same `translateY` lift to header AND body. The body moved up by `topHeight`, leaving `topHeight` px of empty `wrap` container at the bottom — which had no background, exposing `theme.bgPrimary` (white on light theme) over the README text. Floating the header as an absolute overlay eliminates the vacated space entirely.
+- **Verification:** `npx tsc --noEmit` passed with 0 errors. All touched files under 500 lines (largest: GitHubRepoView.tsx at 457).
+
 ### [2026-09-28] - GitHub Auth: env-readiness gate + Git tab gating + browser-only login
 - **Ask:** Fix "Signed in, but git credential wiring failed" on fresh install (no Linux resources downloaded), require GitHub login at setup to show Git tab, remove SSH/token methods in favour of browser device-flow only.
 - **`src/ide/services/gitHubAuthService.ts` (242 lines):** `completeGitHubLogin` now awaits `PRootService.ensureReady()` before wiring git credentials; throws a clear message directing the user to download Linux resources first. On successful login, sets `bottomTabs.git = true`. On logout, sets `bottomTabs.git = false`.
