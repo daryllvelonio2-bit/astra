@@ -258,32 +258,24 @@ export function GitHubContribGraph({ login }: { login: string }) {
 
           <ContribAnimOverlay anim={anim} />
 
-          {/* Floating tooltip directly above the tapped box */}
+          {/* Floating text directly above the tapped/targeted box */}
           {selectedDay && (
             <View
               style={[
                 styles.tooltip,
                 {
-                  top: Math.max(0, SKY + selectedDay.row * (CELL + GAP) - 27),
+                  top: Math.max(0, SKY + selectedDay.row * (CELL + GAP) - 18),
                   left: Math.max(
-                    2,
+                    0,
                     Math.min(
-                      totalGridW - 170,
-                      selectedDay.col * (CELL + GAP) + CELL / 2 - 85
+                      totalGridW - 160,
+                      selectedDay.col * (CELL + GAP) + CELL / 2 - 80
                     )
                   ),
-                  backgroundColor: theme.bgSecondary,
-                  borderColor: theme.border,
                 },
               ]}
               pointerEvents="none"
             >
-              <View
-                style={[
-                  styles.tooltipSwatch,
-                  { backgroundColor: selectedDay.count > 0 ? selectedDay.color : emptyTrack },
-                ]}
-              />
               <Text style={[styles.tooltipText, { color: theme.textPrimary }]} numberOfLines={1}>
                 <Text style={styles.tooltipBold}>{formatContribCount(selectedDay.count)}</Text>
                 {" · "}
@@ -316,27 +308,14 @@ const styles = StyleSheet.create({
   placeholder: { height: 118, marginHorizontal: 12, marginVertical: 10, borderRadius: 6, opacity: 0.5 },
   tooltip: {
     position: "absolute",
-    flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: StyleSheet.hairlineWidth,
+    justifyContent: "center",
+    width: 160,
     zIndex: 50,
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-  },
-  tooltipSwatch: {
-    width: 8,
-    height: 8,
-    borderRadius: 2,
   },
   tooltipText: {
-    fontSize: 10.5,
+    fontSize: 10,
+    textAlign: "center",
   },
   tooltipBold: {
     fontWeight: "700",

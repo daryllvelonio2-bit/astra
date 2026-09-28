@@ -1,5 +1,12 @@
 # Project Progress Tracker
 
+### [2026-09-28] - Contribution Tooltip: Plain text floating overlay without background card
+- **Ask:** remove the background of the pop up contributions, just the text.
+- **`GitHubContribGraph.tsx` (323 lines):**
+  - Removed container background, border, shadow, elevation, and color swatch from the floating contribution display.
+  - Rendered clean centered text (`formatContribCount · formatShortDate`) floating directly above the selected/targeted contribution cell.
+- **Verification:** `npx tsc --noEmit` passed with 0 errors. File size is 323 lines. Live reloaded via Metro.
+
 ### [2026-09-28] - Snake Target Hit Restriction (1 color per 2-4s) & Tooltip Popup on Eat
 - **Ask:** for the snake, it should only eat 1 color within 2-4 seconds. not 2 or more colors, also trigger the contribution pop up if it eats one.
 - **`contribPlan.ts` (444 lines):**
