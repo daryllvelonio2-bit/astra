@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -6,8 +6,8 @@ import {
   Modal,
   StyleSheet,
   Pressable,
+  useWindowDimensions,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
 
@@ -28,11 +28,11 @@ interface EditorActionMenuProps {
   accessibilityLabel?: string;
 }
 
+const MENU_WIDTH = 190;
+
 /**
- * EditorActionMenu — overflow (⋯) sheet for secondary editor actions.
- * Inline header keeps max 3 actions (Edit, Run, ⋯); everything else
- * (format, split, zoom, settings, exit) lives in this bottom sheet
- * with a solid elevated background and border.
+ * EditorActionMenu — overflow (⋯) dropdown strip for secondary editor actions.
+ * Anchored directly below the 3-dot button.
  */
 export function EditorActionMenu({
   theme,
@@ -42,15 +42,28 @@ export function EditorActionMenu({
   actions,
   accessibilityLabel = "More editor actions",
 }: EditorActionMenuProps) {
-  // The sheet floats above the nav bar — a fixed bottom lets 3-button
-  // navigation paint over the last action row.
-  const insets = useSafeAreaInsets();
+  const { width: winW } = useWindowDimensions();
+  const btnRef = useRef<View>(null);
+  const [coords, setCoords] = useState<{ top: number; right: number }>({ top: 44, right: 8 });
+
   if (actions.length === 0) return null;
+
+  const handlePress = () => {
+    btnRef.current?.measureInWindow((x, y, width, height) => {
+      if (y !== undefined && height !== undefined) {
+        const top = y + height + 4;
+        const right = Math.max(8, winW - (x + width));
+        setCoords({ top, right });
+      }
+    });
+    onOpen();
+  };
 
   return (
     <>
       <TouchableOpacity
-        onPress={onOpen}
+        ref={btnRef}
+        onPress={handlePress}
         style={styles.moreBtn}
         accessibilityLabel={accessibilityLabel}
       >
@@ -60,16 +73,22 @@ export function EditorActionMenu({
         <Pressable style={styles.backdrop} onPress={onClose} />
         <View
           style={[
-            styles.sheet,
-            { backgroundColor: theme.bgElevated, borderColor: theme.border },
-            { bottom: Math.max(24, insets.bottom + 12) },
+            styles.dropdown,
+            {
+              backgroundColor: theme.bgElevated,
+              borderColor: theme.border,
+              top: coords.top,
+              right: coords.right,
+            },
           ]}
         >
-          <View style={[styles.handle, { backgroundColor: theme.border }]} />
-          {actions.map((action) => (
+          {actions.map((action, index) => (
             <TouchableOpacity
               key={action.key}
-              style={styles.item}
+              style={[
+                styles.item,
+                index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border },
+              ]}
               onPress={() => {
                 onClose();
                 action.run();
@@ -87,6 +106,7 @@ export function EditorActionMenu({
                   styles.itemText,
                   { color: action.destructive ? theme.accentRed : theme.textPrimary },
                 ]}
+                numberOfLines={1}
               >
                 {action.label}
               </Text>
@@ -104,35 +124,24 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "transparent",
   },
-  sheet: {
+  dropdown: {
     position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 24,
-    borderRadius: 12,
+    width: MENU_WIDTH,
+    borderRadius: 8,
     borderWidth: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
+    paddingVertical: 4,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    overflow: "hidden",
-  },
-  handle: {
-    alignSelf: "center",
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    marginVertical: 6,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 12,
   },
   item: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 11,
+    paddingVertical: 10,
     paddingHorizontal: 12,
   },
   itemIcon: {
