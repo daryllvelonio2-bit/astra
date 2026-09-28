@@ -30,6 +30,7 @@ import {
   closeSearchPanel,
 } from "@codemirror/search";
 import { buildEditorTheme, createFontTheme } from "./codemirror-theme.js";
+import { engineExtensions } from "./codemirror-extensions.js";
 import { python } from "@codemirror/lang-python";
 import { javascript } from "@codemirror/lang-javascript";
 import { html as htmlLang } from "@codemirror/lang-html";
@@ -117,6 +118,8 @@ import { json as jsonLang } from "@codemirror/lang-json";
       indentWithTab,
     ]),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+    // ENGINE add-ons from codemirror-extensions.js (see __cmFeatureNames)
+    ...engineExtensions,
   ];
 
   const startState = EditorState.create({
@@ -357,6 +360,8 @@ import { json as jsonLang } from "@codemirror/lang-json";
   window.__cmIsFindOpen = function () {
     return window.__cmFindOpen === true;
   };
+  window.__cmToggleComment = function () { runToggleComment(view); };
+  window.__cmFeatureNames = ["toggleComment", "lineWrapping", "bracketMatching", "closeBrackets", "autocompletion"];
   view.dom.addEventListener("keydown", function (e) {
     if (e.key === "Escape") window.__cmFindOpen = false;
   });
