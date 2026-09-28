@@ -1,5 +1,15 @@
 # Project Progress Tracker
 
+### [2026-09-28] - GitHub Auth: env-readiness gate + Git tab gating + browser-only login
+- **Ask:** Fix "Signed in, but git credential wiring failed" on fresh install (no Linux resources downloaded), require GitHub login at setup to show Git tab, remove SSH/token methods in favour of browser device-flow only.
+- **`src/ide/services/gitHubAuthService.ts` (242 lines):** `completeGitHubLogin` now awaits `PRootService.ensureReady()` before wiring git credentials; throws a clear message directing the user to download Linux resources first. On successful login, sets `bottomTabs.git = true`. On logout, sets `bottomTabs.git = false`.
+- **`src/onboarding/StartupWizard.tsx` (465 lines):** `handleFinish` sets `bottomTabs.git = false` when GitHub was not configured during setup.
+- **`src/onboarding/steps/GitHubSetupStep.tsx` (116 lines):** Rewritten to embed `GitBrowserLoginTab` directly (device-flow login). Removed token/SSH tabs, `GitTokenTab`/`GitSshKeyTab` imports, and all SSH/token state. Badge changed from "Optional" to "Recommended"; skip text updated to mention Git tab will be hidden.
+- **`src/ide/components/git/GitCredentialsModal.tsx` (80 lines):** Stripped to a thin modal wrapper around `GitBrowserLoginTab` only. Removed all token/SSH tab UI, state, and imports.
+- **`src/ide/components/CloneRepoModal.tsx` (300 lines):** Removed inline token/SSH auth sections (`GitTokenTab`, `GitSshKeyTab`, `handleSaveToken`, SSH key handlers). Auth failures now show a message directing the user to sign in via the Git tab. Removed unused imports (`completeGitHubLogin`, `configureGitCredentials`, `getSshPublicKey`, `generateSshKey`, `Clipboard`).
+- **Deleted:** `src/ide/components/git/GitTokenTab.tsx`, `src/ide/components/git/GitSshKeyTab.tsx` — no remaining references.
+- **Verification:** `npx tsc --noEmit` passed with 0 errors. All touched files under 500 lines.
+
 ### [2026-09-28] - Keystroke Path Equality Bailout (typing render-skip)
 - **Change:** `src/ide/components/IDELayout.tsx` (490 lines): `handleContentChange` returns early when emitted text equals current content, moves the disk-guard timestamp below the equality check, and keeps `activeFile` ref identity on echo/no-op emits so memo'd siblings skip entirely. Real keystrokes still update per the CodeMirror anti-echo contract; debounced save (700ms) and recent-files-on-flush unchanged.
 - **Verification:** `npx tsc --noEmit` passed with 0 errors. File under 500 lines (490).

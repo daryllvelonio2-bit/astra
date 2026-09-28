@@ -16,21 +16,12 @@ import { useAccurateKeyboard } from '../../theme/useAccurateKeyboard';
 import { useKeyboardMouseMode } from '../context/KeyboardMouseContext';
 import { cloneRepoModalStyles as styles } from './CloneRepoModal.styles';
 import { DirectoryPickerModal } from './DirectoryPickerModal';
-import { GitTokenTab } from './git/GitTokenTab';
-import { GitSshKeyTab } from './git/GitSshKeyTab';
 import {
   normalizeCloneUrl,
   folderNameFromCloneUrl,
   cloneGitRepo,
   cancelClone,
 } from '../services/gitCloneService';
-import {
-  completeGitHubLogin,
-  configureGitCredentials,
-  getSshPublicKey,
-  generateSshKey,
-} from '../services/gitService';
-import { Clipboard } from '../services/clipboardService';
 import { getWorkspacesDir, formatDisplayPath } from '../services/storagePaths';
 
 interface CloneRepoModalProps {
@@ -56,16 +47,6 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
   const [cloneLog, setCloneLog] = useState<string[]>([]);
   const [error, setError] = useState('');
 
-  // Inline auth (private repos): token form or SSH key manager.
-  const [authSection, setAuthSection] = useState<null | 'token' | 'ssh'>(null);
-  const [credUsername, setCredUsername] = useState('');
-  const [credEmail, setCredEmail] = useState('');
-  const [credToken, setCredToken] = useState('');
-  const [savingToken, setSavingToken] = useState(false);
-  const [sshKey, setSshKey] = useState<string | null>(null);
-  const [sshLoading, setSshLoading] = useState(false);
-  const [copiedKey, setCopiedKey] = useState(false);
-
   const { keyboardOffset, isKeyboardVisible } = useAccurateKeyboard(8);
   const scrollRef = useRef<ScrollView>(null);
   const cloneCancelled = useRef(false);
@@ -82,12 +63,6 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
     setCloneLog([]);
     cloneCancelled.current = false;
     setError('');
-    setAuthSection(null);
-    setCredUsername('');
-    setCredEmail('');
-    setCredToken('');
-    setSshKey(null);
-    setCopiedKey(false);
   };
 
   const handleClose = () => {
@@ -154,12 +129,12 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
         onCloned(done);
         return true;
       }
-      setError(res.error || 'Clone failed.');
-      if (res.needsAuth === 'token') {
-        setAuthSection('token');
-      } else if (res.needsAuth === 'ssh') {
-        setAuthSection('ssh');
-        void loadSshKey();
+      if (res.needsAuth) {
+        setError(
+          'This repo needs authentication. Sign in to GitHub in the Git tab first, then clone again.'
+        );
+      } else {
+        setError(res.error || 'Clone failed.');
       }
       return false;
     } catch (e: any) {
@@ -183,55 +158,6 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
       return;
     }
     void runClone(url, parentDir, folder);
-  };
-
-  const handleSaveToken = async () => {
-    if (!credToken.trim()) {
-      setError('Token is required.');
-      return;
-    }
-    setSavingToken(true);
-    try {
-      // Full login so the API session is saved too (not just git wiring),
-      // then continue straight into the clone.
-      await completeGitHubLogin(credToken.trim());
-      setAuthSection(null);
-      handleClone();
-    } catch (e: any) {
-      setError(e?.message || 'Could not sign in with that token.');
-    } finally {
-      setSavingToken(false);
-    }
-  };
-
-  const loadSshKey = async () => {
-    setSshLoading(true);
-    try {
-      setSshKey(await getSshPublicKey());
-    } finally {
-      setSshLoading(false);
-    }
-  };
-
-  const handleGenerateSshKey = async () => {
-    setSshLoading(true);
-    try {
-      const res = await generateSshKey(credEmail || credUsername || undefined);
-      if (res.success) {
-        setSshKey(res.publicKey || null);
-      } else {
-        setError(res.error || 'Failed to generate SSH key.');
-      }
-    } finally {
-      setSshLoading(false);
-    }
-  };
-
-  const handleCopySshKey = async () => {
-    if (!sshKey) return;
-    await Clipboard.setStringAsync(sshKey);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2000);
   };
 
   const parentDir = resolveParentDir();
@@ -338,44 +264,6 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
                 <Text style={[styles.errorText, { color: theme.accentRed }]}>{error}</Text>
               </View>
             ) : null}
-
-            {authSection === 'token' && (
-              <View style={styles.authBox}>
-                <Text style={[styles.authTitle, { color: theme.textPrimary }]}>Private repo — add a token, then retry</Text>
-                <GitTokenTab
-                  username={credUsername}
-                  email={credEmail}
-                  token={credToken}
-                  saving={savingToken}
-                  onChangeUsername={setCredUsername}
-                  onChangeEmail={setCredEmail}
-                  onChangeToken={setCredToken}
-                  onSave={handleSaveToken}
-                />
-              </View>
-            )}
-
-            {authSection === 'ssh' && (
-              <View style={styles.authBox}>
-                <Text style={[styles.authTitle, { color: theme.textPrimary }]}>Private repo — add this key to GitHub, then retry</Text>
-                <GitSshKeyTab
-                  sshKey={sshKey}
-                  loading={sshLoading}
-                  copiedKey={copiedKey}
-                  onCopyKey={handleCopySshKey}
-                  onGenerateKey={handleGenerateSshKey}
-                />
-                <TouchableOpacity
-                  style={[styles.retryBtn, { backgroundColor: `${theme.accent}20`, borderColor: theme.accent }]}
-                  onPress={handleClone}
-                  disabled={cloning}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="refresh" size={14} color={theme.accent} />
-                  <Text style={[styles.retryBtnText, { color: theme.accent }]}>Retry Clone</Text>
-                </TouchableOpacity>
-              </View>
-            )}
 
             <View style={styles.modalActions}>
               <TouchableOpacity style={[styles.modalButton, { backgroundColor: theme.bgTertiary }]} onPress={handleCancelPress}>

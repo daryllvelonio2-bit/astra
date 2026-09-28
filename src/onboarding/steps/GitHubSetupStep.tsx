@@ -1,17 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
-import { showAppDialog } from "../../ide/services/appDialog";
-import { Ionicons, Octicons } from "@expo/vector-icons";
+import React, { useState, useCallback } from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../theme/themeContext";
-import {
-  completeGitHubLogin,
-  configureGitCredentials,
-  getSshPublicKey,
-  generateSshKey,
-} from "../../ide/services/gitService";
-import { Clipboard } from "../../ide/services/clipboardService";
-import { GitTokenTab } from "../../ide/components/git/GitTokenTab";
-import { GitSshKeyTab } from "../../ide/components/git/GitSshKeyTab";
+import { GitBrowserLoginTab } from "../../ide/components/git/GitBrowserLoginTab";
+import { GitHubSession } from "../../ide/services/gitService";
 
 interface GitHubSetupStepProps {
   theme: ThemeColors;
@@ -26,162 +18,33 @@ export function GitHubSetupStep({
   onConfigured,
   onSkip,
 }: GitHubSetupStepProps) {
-  const [authMethod, setAuthMethod] = useState<"token" | "ssh">("token");
-
-  // Token state
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [token, setToken] = useState("");
-  const [savingToken, setSavingToken] = useState(false);
-  const [tokenSaved, setTokenSaved] = useState(false);
-
-  // SSH state
-  const [sshKey, setSshKey] = useState<string | null>(null);
-  const [loadingSsh, setLoadingSsh] = useState(false);
-  const [copiedKey, setCopiedKey] = useState(false);
-
-  useEffect(() => {
-    loadSshKey();
-  }, []);
-
-  const loadSshKey = async () => {
-    setLoadingSsh(true);
-    const key = await getSshPublicKey();
-    setSshKey(key);
-    setLoadingSsh(false);
-  };
-
-  const handleSaveToken = async () => {
-    if (!token.trim()) {
-      showAppDialog({ title: "Token Required", message: "Please enter your GitHub Personal Access Token." });
-      return;
-    }
-    setSavingToken(true);
-    try {
-      // Full login so the API session is saved too (not just git wiring).
-      const session = await completeGitHubLogin(token.trim());
-      setTokenSaved(true);
-      onConfigured();
-      showAppDialog({ title: "Success", message: `Signed in as @${session.username}. GitHub is fully configured!` });
-    } catch (e: any) {
-      showAppDialog({ title: "Error", message: e?.message || "Failed to sign in with that token." });
-    } finally {
-      setSavingToken(false);
-    }
-  };
-
-  const handleGenerateSsh = async () => {
-    setLoadingSsh(true);
-    const res = await generateSshKey(email || username || "astra-app");
-    setLoadingSsh(false);
-    if (res.success && res.publicKey) {
-      setSshKey(res.publicKey);
-      onConfigured();
-      showAppDialog({ title: "SSH Key Created", message: "Your ed25519 key was generated. Tap 'Copy Public Key' and add it to your GitHub account under Settings → SSH keys." });
-    } else {
-      showAppDialog({ title: "Error", message: res.error || "Failed to generate SSH key." });
-    }
-  };
-
-  const handleCopyKey = () => {
-    if (!sshKey) return;
-    Clipboard.setStringAsync(sshKey);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2500);
-  };
+  const handleSessionChange = useCallback(
+    (s: GitHubSession | null) => {
+      if (s) onConfigured();
+    },
+    [onConfigured]
+  );
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
+    <View style={styles.container}>
       <View style={styles.headerWrap}>
         <View style={styles.headerTitleRow}>
           <Text style={[styles.stepTitle, { color: theme.textPrimary }]}>
             Connect GitHub
           </Text>
-          <View style={[styles.optionalBadge, { backgroundColor: `${theme.accent}14` }]}>
-            <Text style={[styles.optionalText, { color: theme.accent }]}>Optional</Text>
+          <View style={[styles.recommendedBadge, { backgroundColor: `${theme.accent}14` }]}>
+            <Text style={[styles.recommendedText, { color: theme.accent }]}>Recommended</Text>
           </View>
         </View>
         <Text style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
-          Enable 1-tap git push, pull, and repository management. You can also skip and set this up anytime.
+          Enable 1-tap git push, pull, and repository management. If you skip, the Git tab will be hidden until you sign in.
         </Text>
       </View>
 
-      {/* Auth Method Switcher */}
-      <View style={[styles.tabBar, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
-        <TouchableOpacity
-          style={[
-            styles.tabBtn,
-            authMethod === "token" && [styles.activeTabBtn, { backgroundColor: theme.bgTertiary }],
-          ]}
-          onPress={() => setAuthMethod("token")}
-          activeOpacity={0.7}
-        >
-          <Octicons
-            name="key"
-            size={14}
-            color={authMethod === "token" ? theme.accent : theme.textMuted}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              { color: authMethod === "token" ? theme.textPrimary : theme.textMuted },
-              authMethod === "token" && styles.activeTabText,
-            ]}
-          >
-            Token
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.tabBtn,
-            authMethod === "ssh" && [styles.activeTabBtn, { backgroundColor: theme.bgTertiary }],
-          ]}
-          onPress={() => setAuthMethod("ssh")}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="shield-checkmark-outline"
-            size={14}
-            color={authMethod === "ssh" ? theme.accent : theme.textMuted}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              { color: authMethod === "ssh" ? theme.textPrimary : theme.textMuted },
-              authMethod === "ssh" && styles.activeTabText,
-            ]}
-          >
-            SSH Key
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Active Method Form */}
       <View style={[styles.formCard, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
-        {authMethod === "token" ? (
-          <GitTokenTab
-            username={username}
-            email={email}
-            token={token}
-            saving={savingToken}
-            onChangeUsername={setUsername}
-            onChangeEmail={setEmail}
-            onChangeToken={setToken}
-            onSave={handleSaveToken}
-          />
-        ) : (
-          <GitSshKeyTab
-            sshKey={sshKey}
-            loading={loadingSsh}
-            copiedKey={copiedKey}
-            onCopyKey={handleCopyKey}
-            onGenerateKey={handleGenerateSsh}
-          />
-        )}
+        <GitBrowserLoginTab onSessionChange={handleSessionChange} />
       </View>
 
-      {/* Skip / Later Option */}
       <TouchableOpacity
         style={[styles.skipOptionRow, { borderColor: theme.border }]}
         onPress={onSkip}
@@ -189,20 +52,17 @@ export function GitHubSetupStep({
       >
         <Ionicons name="information-circle-outline" size={16} color={theme.textMuted} />
         <Text style={[styles.skipOptionText, { color: theme.textMuted }]}>
-          Don't have a GitHub token ready? You can skip and set this up later in the Git tab.
+          Don't have a GitHub account ready? Skip for now — the Git tab will be hidden until you sign in later.
         </Text>
       </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  contentContainer: {
     gap: 14,
-    paddingBottom: 24,
   },
   headerWrap: {
     gap: 4,
@@ -217,12 +77,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: -0.3,
   },
-  optionalBadge: {
+  recommendedBadge: {
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
   },
-  optionalText: {
+  recommendedText: {
     fontSize: 10.5,
     fontWeight: "700",
     textTransform: "uppercase",
@@ -231,35 +91,6 @@ const styles = StyleSheet.create({
   stepSubtitle: {
     fontSize: 13,
     lineHeight: 18,
-  },
-  tabBar: {
-    flexDirection: "row",
-    padding: 3,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  tabBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  activeTabBtn: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  tabText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  activeTabText: {
-    fontWeight: "700",
   },
   formCard: {
     borderRadius: 12,

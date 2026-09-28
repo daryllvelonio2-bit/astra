@@ -17,6 +17,7 @@ import { useOrientation } from "../theme/useOrientation";
 import {
   AppTheme,
   loadConfig,
+  saveBottomTabs,
   saveHasCompletedStartup,
   saveTheme,
 } from "../ide/services/configService";
@@ -116,8 +117,12 @@ export function StartupWizard({ onComplete }: StartupWizardProps) {
   const handleFinish = useCallback(async () => {
     await saveTheme(selectedTheme);
     await saveHasCompletedStartup(true);
+    if (!githubConfigured) {
+      const cfg = await loadConfig();
+      await saveBottomTabs({ ...cfg.bottomTabs, git: false });
+    }
     onComplete();
-  }, [selectedTheme, onComplete]);
+  }, [selectedTheme, githubConfigured, onComplete]);
 
   const handleNext = useCallback(() => {
     if (currentStepIndex < STEPS.length - 1) {

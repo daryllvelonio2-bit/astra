@@ -2,6 +2,7 @@ import { executeCommand } from "../../../modules/linux-runner/src";
 import { loadConfig, saveConfig } from "./configService";
 import { configureGitCredentials } from "./gitRemoteService";
 import { invalidateGitHubTokenCache } from "./gitHubApi";
+import { PRootService } from "./prootService";
 
 /**
  * GitHub sign-in via the OAuth **device flow** — the same method `gh` and
@@ -162,13 +163,21 @@ export async function completeGitHubLogin(token: string): Promise<GitHubSession>
     email = (emails?.find((item) => item.primary)?.email || emails?.[0]?.email || "").trim();
   }
   const finalEmail = email || `${username}@users.noreply.github.com`;
+  const envReady = await PRootService.ensureReady();
+  if (!envReady) {
+    throw new Error(
+      "Signed in, but the Linux environment is not ready yet. Download the Linux resources in Settings → Environment first, then sign in again."
+    );
+  }
   const configured = await configureGitCredentials(token, username, finalEmail);
   if (!configured) throw new Error("Signed in, but git credential wiring failed.");
+  const cfg = await loadConfig();
   await saveConfig({
     githubToken: token,
     githubUsername: username,
     githubEmail: finalEmail,
     githubAvatarUrl: user?.avatar_url || "",
+    bottomTabs: { ...cfg.bottomTabs, git: true },
   });
   invalidateGitHubTokenCache();
   return { username, email: finalEmail, avatarUrl: user?.avatar_url || "", hasToken: true };
@@ -216,7 +225,11 @@ export async function ensureGitHubCredentials(): Promise<boolean> {
 
 /** Logout: forgets the token locally and removes guest git credentials. */
 export async function logoutGitHub(): Promise<void> {
-  await saveConfig({ githubToken: "", githubUsername: "", githubEmail: "", githubAvatarUrl: "" });
+  const cfg = await loadConfig();
+  await saveConfig({
+    githubToken: "", githubUsername: "", githubEmail: "", githubAvatarUrl: "",
+    bottomTabs: { ...cfg.bottomTabs, git: false },
+  });
   invalidateGitHubTokenCache();
   try {
     await executeCommand(
