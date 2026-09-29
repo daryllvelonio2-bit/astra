@@ -72,4 +72,3 @@ provisioning, process killing). Start with
 
 - `PROGRESS.md` — chronological build log; the ground truth for *why*
   things are the way they are.
-- `tasks.md` — the performance-optimization plan and its exit gates.
