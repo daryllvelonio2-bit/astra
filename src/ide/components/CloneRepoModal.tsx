@@ -23,6 +23,8 @@ import {
   cancelClone,
 } from '../services/gitCloneService';
 import { getWorkspacesDir, formatDisplayPath } from '../services/storagePaths';
+import { subscribeToolchainGate, GateStatus } from '../services/toolchainGate';
+import { ToolchainGateScreen } from './git/ToolchainGateScreen';
 
 interface CloneRepoModalProps {
   visible: boolean;
@@ -50,6 +52,12 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
   const { keyboardOffset, isKeyboardVisible } = useAccurateKeyboard(8);
   const scrollRef = useRef<ScrollView>(null);
   const cloneCancelled = useRef(false);
+
+  // Toolchain gate: cloning needs git + TLS certificates in the guest.
+  // Show setup instead of the form when they are missing.
+  const [gate, setGate] = useState<GateStatus | null>(null);
+  useEffect(() => subscribeToolchainGate(setGate), []);
+  const gateOpen = !!gate && gate.ready && gate.gitEssentialsReady;
 
   const resetAll = () => {
     setRepoUrl('');
@@ -162,6 +170,25 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
 
   const parentDir = resolveParentDir();
   const previewFolder = folderName.trim() || (repoUrl.trim() ? folderNameFromCloneUrl(repoUrl.trim()) : '');
+
+  // Gate: while the toolchain (or git essentials) is missing, the sheet shows
+  // the setup screen instead of the clone form. Before the first probe lands
+  // (gate === null) show nothing — a provisioned device must not flash it.
+  if (visible && gate && !gate.settled) {
+    return null;
+  }
+  if (visible && gate && !gateOpen) {
+    return (
+      <Modal visible animationType="slide" transparent onRequestClose={handleClose}>
+        <View style={[styles.modalOverlay, { paddingTop: 60 }]}
+        >
+          <View style={[styles.bottomSheet, { backgroundColor: theme.bgSecondary, borderColor: theme.border, height: '88%' }]}>
+            <ToolchainGateScreen gate={gate} title="Clone" />
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>

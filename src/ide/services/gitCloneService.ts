@@ -4,6 +4,7 @@ import {
   addCommandOutputListener,
   stopCommand,
 } from "../../../modules/linux-runner/src";
+import { isToolchainReadyForGit } from "./toolchainGate";
 
 export interface CloneResult {
   success: boolean;
@@ -70,6 +71,18 @@ export async function cloneGitRepo(
   folderName?: string,
   onProgress?: (line: string) => void
 ): Promise<CloneResult> {
+  // Gate: cloning needs git + TLS trust roots in the guest. Without them
+  // clones fail with "server certificate verification failed. CAfile: none".
+  // Refuse early with an actionable error instead.
+  const toolchain = await isToolchainReadyForGit();
+  if (!toolchain.ok) {
+    return {
+      success: false,
+      error:
+        "The Linux toolchain is not ready — git and its TLS certificates are missing.\nOpen the Git tab and follow the setup steps (or Settings → Linux → install the toolchain), then clone again.",
+    };
+  }
+
   const name = (folderName || folderNameFromCloneUrl(url)).trim();
   if (!name) return { success: false, error: "Could not determine a folder name." };
   if (/[\/\\]/.test(name)) return { success: false, error: "Folder name must not contain slashes." };

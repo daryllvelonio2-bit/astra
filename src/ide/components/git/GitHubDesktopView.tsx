@@ -27,6 +27,8 @@ import { useStashRebase } from "./useStashRebase";
 import { GitRebaseBanner } from "./GitRebaseBanner";
 import { GitStashModal } from "./GitStashModal";
 import { loadGitHubSession, GitHubSession } from "../../services/gitService";
+import { useToolchainGate } from "./useToolchainGate";
+import { ToolchainGateScreen } from "./ToolchainGateScreen";
 
 interface GitHubDesktopViewProps {
   workspaceId?: string;
@@ -193,6 +195,16 @@ export function GitHubDesktopView({
     });
     return () => sub.remove();
   }, [isLandscape, portraitShowDetail, setPortraitShowDetail]);
+
+  // Toolchain gate: git runs inside the Debian guest, so block the whole tab
+  // (with a repair path) until the toolchain + git essentials are installed.
+  const gate = useToolchainGate();
+  const gateOpen = gate.ready && gate.gitEssentialsReady;
+
+  // `settled` = first status/probe pass ran; render nothing before that so a
+  // provisioned device never flashes the gate screen.
+  if (!gate.settled) return null;
+  if (!gateOpen) return <ToolchainGateScreen gate={gate} title="Git" />;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bgPrimary }]}>
