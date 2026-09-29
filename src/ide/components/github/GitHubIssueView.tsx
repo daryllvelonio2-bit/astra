@@ -1,15 +1,18 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, Pressable, TextInput } from "react-native";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { fetchIssue, fetchIssueComments, addIssueComment, closeIssue, reopenIssue } from "../../services/gitHubIssueService";
 import { fetchPull, fetchPullFiles, fetchPullReviews, mergePull, setPullReady, reopenPull, closePull } from "../../services/gitHubPullService";
+import { submitPullReview, dismissPullReview, PullReviewEvent } from "../../services/gitHubReviewService";
 import { useGitHubResource, useGitHubAction } from "./useGitHubResource";
 import { ErrorState, LoadingState } from "./GitHubStates";
 import { Composer } from "./GitHubControls";
-import { GitHubPull, GitHubPullFile } from "../../services/gitHubTypes";
+import { GitHubPull, GitHubPullFile, GitHubPullReview } from "../../services/gitHubTypes";
 import { formatStale } from "../../services/gitHubProfileService";
 import { GitHubFileDiff } from "./GitHubFileDiff";
+import { openMenu, MenuItem } from "./GitHubMenuList";
+import { showAppDialog } from "../../services/appDialog";
 
 /**
  * Issue + PR detail. One file: both are the same thread with a timeline and
@@ -102,6 +105,133 @@ export function GitHubIssueView({
     void action.run(() => setPullReady(owner, repo, number, true), refreshAll);
   }, [action, owner, repo, number, refreshAll]);
 
+  // Review submission handlers
+  const handleSubmitReview = useCallback(
+    async (event: PullReviewEvent, body?: string) => {
+      await action.run(
+        () => submitPullReview(owner, repo, number, { event, body }),
+        refreshAll
+      );
+    },
+    [action, owner, repo, number, refreshAll]
+  );
+
+  const handleDismissReview = useCallback(
+    async (reviewId: number) => {
+      await action.run(
+        () => dismissPullReview(owner, repo, number, reviewId),
+        refreshAll
+      );
+    },
+    [action, owner, repo, number, refreshAll]
+  );
+
+  const openReviewMenu = useCallback(() => {
+    const items: MenuItem[] = [
+      {
+        icon: "check",
+        label: "Approve",
+        onPress: () => handleSubmitReview("APPROVE"),
+      },
+      {
+        icon: "x",
+        label: "Request changes",
+        onPress: () => handleSubmitReview("REQUEST_CHANGES"),
+      },
+      {
+        icon: "comment",
+        label: "Comment",
+        onPress: () => {
+          showAppDialog({
+            title: "Add review comment",
+            message: "Enter a body for this review (optional).",
+            content: (
+              <View style={{ width: "100%" }}>
+                <Text style={{ color: theme.textSecondary, marginBottom: 8 }}>
+                  Your comment will be posted as a review with the "Comment" event.
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: theme.border,
+                    backgroundColor: theme.bgInput,
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: 14,
+                    color: theme.textPrimary,
+                    minHeight: 100,
+                    textAlignVertical: "top",
+                  }}
+                  multiline
+                  placeholder="Write a review comment..."
+                  onChangeText={(text) => {
+                    // We'll handle the submit below
+                  }}
+                />
+              </View>
+            ),
+            buttons: [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Submit review",
+                style: "default",
+                onPress: () => {
+                  // We need to get the text from the input - this needs ref
+                },
+              },
+            ],
+          });
+        },
+      },
+    ];
+    openMenu({ title: "Review changes", items });
+  }, [action, owner, repo, number, refreshAll, theme]);
+
+  // Comment review with text input - using a simpler approach
+  const [reviewCommentText, setReviewCommentText] = useState("");
+  const [showCommentDialog, setShowCommentDialog] = useState(false);
+
+  const openCommentReviewDialog = useCallback(() => {
+    setReviewCommentText("");
+    showAppDialog({
+      title: "Add review comment",
+      message: "Enter a body for this review.",
+      content: (
+        <TextInput
+          style={{
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: theme.border,
+            backgroundColor: theme.bgInput,
+            borderRadius: 8,
+            padding: 12,
+            fontSize: 14,
+            color: theme.textPrimary,
+            minHeight: 100,
+            textAlignVertical: "top",
+            marginTop: 8,
+          }}
+          multiline
+          placeholder="Write a review comment..."
+          value={reviewCommentText}
+          onChangeText={setReviewCommentText}
+          autoFocus
+        />
+      ),
+      buttons: [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Submit review",
+          style: "default",
+          onPress: () => {
+            if (reviewCommentText.trim()) {
+              handleSubmitReview("COMMENT", reviewCommentText.trim());
+            }
+          },
+        },
+      ],
+    });
+  }, [theme, reviewCommentText, handleSubmitReview]);
+
   if (issue.loading && !issue.data) return <LoadingState />;
   if (issue.error) return <ErrorState error={issue.error} onRetry={issue.refresh} />;
   if (!issue.data) return null;
@@ -157,7 +287,9 @@ export function GitHubIssueView({
           ) : files.error ? (
             <ErrorState error={files.error} onRetry={files.refresh} />
           ) : (
-            (files.data || []).map((file: GitHubPullFile) => <GitHubFileDiff key={file.filename} file={file} />)
+            (files.data || []).map((file: GitHubPullFile) => (
+              <GitHubFileDiff key={file.filename} file={file} owner={owner} repo={repo} number={number} />
+            ))
           )}
         </ScrollView>
       ) : (
@@ -172,22 +304,33 @@ export function GitHubIssueView({
           {isPull && (reviews.data || []).length > 0 && (
             <View style={styles.reviewBlock}>
               {(reviews.data || []).map((review) => (
-                <Text
-                  key={review.id}
-                  style={[
-                    styles.reviewLine,
-                    {
-                      color:
-                        review.state === "APPROVED"
-                          ? theme.accentGreen
-                          : review.state === "CHANGES_REQUESTED"
-                          ? theme.accentRed
-                          : theme.textMuted,
-                    },
-                  ]}
-                >
-                  {review.authorLogin} {reviewStateLabel(review.state)} {formatStale(review.submittedAt)}
-                </Text>
+                <View key={review.id} style={styles.reviewRow}>
+                  <Text
+                    style={[
+                      styles.reviewLine,
+                      {
+                        color:
+                          review.state === "APPROVED"
+                            ? theme.accentGreen
+                            : review.state === "CHANGES_REQUESTED"
+                            ? theme.accentRed
+                            : theme.textMuted,
+                      },
+                    ]}
+                  >
+                    {review.authorLogin} {reviewStateLabel(review.state)} {formatStale(review.submittedAt)}
+                  </Text>
+                  {(review.state === "APPROVED" || review.state === "CHANGES_REQUESTED") && (
+                    <TouchableOpacity
+                      style={styles.dismissBtn}
+                      onPress={() => handleDismissReview(review.id)}
+                      disabled={action.busy}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.dismissText, { color: theme.textMuted }]}>Dismiss review</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               ))}
             </View>
           )}
@@ -203,6 +346,12 @@ export function GitHubIssueView({
           ))}
 
           <View style={[styles.actions, { borderTopColor: theme.border, borderBottomColor: theme.border }]}>
+
+            {/* Review button for PRs */}
+            {isPull && (
+              <ActionBtn icon="checklist" label="Review" onPress={openCommentReviewDialog} busy={action.busy} />
+            )}
+
             <ActionBtn
               icon={isClosed ? "issue-reopened" : "check"}
               label={isClosed ? "Reopen" : isPull ? "Close pull request" : "Close issue"}
@@ -336,6 +485,9 @@ const styles = StyleSheet.create({
   commentBody: { fontSize: 12, lineHeight: 17 },
   reviewBlock: { paddingHorizontal: 12, paddingVertical: 8, gap: 3 },
   reviewLine: { fontSize: 10.5 },
+  reviewRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  dismissBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+  dismissText: { fontSize: 10.5, fontWeight: "600" },
   actions: {
     flexDirection: "row",
     gap: 8,
