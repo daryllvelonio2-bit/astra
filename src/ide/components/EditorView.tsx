@@ -207,6 +207,21 @@ function EditorViewInner({
     cmRef.current?.selectAll();
   }, []);
 
+  // Clipboard: wired to the SYSTEM clipboard through the engine bridge
+  // (clipboardService stays for terminal/git surfaces — the editor WebView
+  // owns its own execCommand/async-clipboard path).
+  const handleCopy = useCallback(() => {
+    cmRef.current?.copy();
+  }, []);
+
+  const handleCut = useCallback(() => {
+    cmRef.current?.cut();
+  }, []);
+
+  const handlePaste = useCallback(() => {
+    cmRef.current?.paste();
+  }, []);
+
   const handleManualSave = useCallback(() => {
     onManualSave?.();
   }, [onManualSave]);
@@ -296,6 +311,9 @@ function EditorViewInner({
         onSave={handleManualSave}
         onSelectLine={handleSelectLine}
         onSelectAll={handleSelectAll}
+        onCopy={handleCopy}
+        onCut={handleCut}
+        onPaste={handlePaste}
         onOpenSearch={onOpenSearch}
         onDeleteFile={onDeleteFile}
         onImport={onImport}

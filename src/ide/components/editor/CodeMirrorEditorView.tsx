@@ -12,6 +12,7 @@ import { StyleSheet, View, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import { buildCodeMirrorHtml } from "./codemirrorHtml.generated";
 import { buildCmThemeObj } from "./codemirrorThemeObj";
+import { createEchoGate, EchoGate } from "./echoGate";
 
 // Module-level cache: avoids replaceAll over the 500+ KB blob on every mount.
 // Key = bgPrimary + "|" + isDark.  The blob string itself is already cached
@@ -31,6 +32,12 @@ export interface CodeMirrorEditorHandle {
   selectLine: () => void;
   /** Select the entire document (new). */
   selectAll: () => void;
+  /** Copy the current selection (cursor's line when empty) to the system clipboard. */
+  copy: () => void;
+  /** Cut the current selection (cursor's line when empty) to the system clipboard. */
+  cut: () => void;
+  /** Paste the system clipboard at the caret (replaces selection). */
+  paste: () => void;
 }
 
 interface CodeMirrorEditorViewProps {
@@ -65,16 +72,7 @@ interface CodeMirrorEditorViewProps {
 // intermediate render must never be injected back (it would clobber newer
 // keystrokes and reset the cursor). Only file switches and true external
 // edits (format / disk reload) may push content into the WebView.
-const ECHO_HISTORY_MAX = 30;
-const ECHO_HISTORY_TTL_MS = 3000;
-
-function hashText(s: string): number {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) {
-    h = ((h << 5) + h + s.charCodeAt(i)) | 0;
-  }
-  return ((h * 33) ^ s.length) | 0;
-}
+// (Gate implementation lives in echoGate.ts.)
 
 export const CodeMirrorEditorView = memo(
   forwardRef<CodeMirrorEditorHandle, CodeMirrorEditorViewProps>(
@@ -112,52 +110,8 @@ export const CodeMirrorEditorView = memo(
       const lastEmittedTextRef = useRef(content);
       const lastPropContentRef = useRef(content);
       const currentFileNameRef = useRef(fileName);
-      // Recent typing emissions (hash + timestamp). A content prop whose
-      // hash is in here is a stale intermediate echo, not an external edit.
-      const echoHashesRef = useRef<Set<number>>(new Set());
-      const echoQueueRef = useRef<Array<{ h: number; t: number }>>([]);
-
-      const rememberEmitted = (text: string) => {
-        const h = hashText(text || "");
-        const now = Date.now();
-        if (!echoHashesRef.current.has(h)) {
-          echoHashesRef.current.add(h);
-          echoQueueRef.current.push({ h, t: now });
-        } else {
-          // Refresh timestamp so live undo/redo back-and-forth stays recognized.
-          const q = echoQueueRef.current;
-          for (let i = 0; i < q.length; i++) {
-            if (q[i].h === h) {
-              q[i].t = now;
-              break;
-            }
-          }
-        }
-        // Prune by TTL and cap: keeps disk-reload-after-pause from
-        // false-matching an old typing state.
-        const cutoff = now - ECHO_HISTORY_TTL_MS;
-        const q = echoQueueRef.current;
-        while (q.length > 0 && (q[0].t < cutoff || q.length > ECHO_HISTORY_MAX)) {
-          const old = q.shift();
-          if (old && !q.some((e) => e.h === old.h)) echoHashesRef.current.delete(old.h);
-        }
-      };
-
-      const isStaleEcho = (text: string): boolean => {
-        const now = Date.now();
-        const cutoff = now - ECHO_HISTORY_TTL_MS;
-        const q = echoQueueRef.current;
-        while (q.length > 0 && (q[0].t < cutoff || q.length > ECHO_HISTORY_MAX)) {
-          const old = q.shift();
-          if (old && !q.some((e) => e.h === old.h)) echoHashesRef.current.delete(old.h);
-        }
-        return echoHashesRef.current.has(hashText(text || ""));
-      };
-
-      const clearEchoHistory = () => {
-        echoHashesRef.current.clear();
-        echoQueueRef.current = [];
-      };
+      // Anti-echo gate (see echoGate.ts).
+      const echo = useRef<EchoGate>(createEchoGate());
 
       const html = useRef((() => {
         const bg = theme.bgPrimary || "#1e1e1e";
@@ -231,6 +185,19 @@ export const CodeMirrorEditorView = memo(
               `try{var c=document.querySelector('.cm-content');var t=c&&c.cmTile;var v=t&&t.root&&t.root.view;if(v){v.dispatch({selection:{anchor:0,head:v.state.doc.length},scrollIntoView:true});}}catch(_){}`
             );
           },
+          // Clipboard: the engine exposes __cmCopy/__cmCut/__cmPaste
+          // (codemirror-clipboard.js). Copy/cut of an empty selection fall
+          // back to the cursor's line inside the bridge; paste is async
+          // (navigator.clipboard.readText, synthetic Ctrl+V fallback).
+          copy: () => {
+            inject(`window.__cmCopy && window.__cmCopy()`);
+          },
+          cut: () => {
+            inject(`window.__cmCut && window.__cmCut()`);
+          },
+          paste: () => {
+            inject(`window.__cmPaste && window.__cmPaste()`);
+          },
           blur: triggerBlur,
         }),
         [inject, triggerBlur]
@@ -262,10 +229,10 @@ export const CodeMirrorEditorView = memo(
               inject(`window.__cmSetKeyboardMouseMode && window.__cmSetKeyboardMouseMode(${!!keyboardMouseMode})`);
               inject(`window.__cmSetReadOnly && window.__cmSetReadOnly(${!isEditing})`);
               inject(`window.__cmSetSidebarPullEnabled && window.__cmSetSidebarPullEnabled(${!isSidebarOpen && !isEditing})`);
-            } else if (data.type === "change" && typeof data.text === "string") {
+            } else            if (data.type === "change" && typeof data.text === "string") {
               lastEmittedTextRef.current = data.text;
               try {
-                rememberEmitted(data.text);
+                echo.current.rememberEmitted(data.text);
               } catch (_) {}
               onChangeContent(data.text);
             } else if (data.type === "cursor") {
@@ -345,11 +312,11 @@ export const CodeMirrorEditorView = memo(
 
         if (fileChanged) {
           try {
-            clearEchoHistory();
+            echo.current.clear();
           } catch (_) {}
           lastEmittedTextRef.current = content;
           try {
-            rememberEmitted(content || "");
+            echo.current.rememberEmitted(content || "");
           } catch (_) {}
           const safeText = JSON.stringify(content || "");
           const safeName = JSON.stringify(fileName || "");
@@ -364,7 +331,7 @@ export const CodeMirrorEditorView = memo(
         // emitted "ab"): skip — CM is already ahead. Crucially, do NOT
         // overwrite lastEmittedTextRef here.
         try {
-          if (isStaleEcho(content || "")) return;
+          if (echo.current.isStaleEcho(content || "")) return;
         } catch (_) {
           return;
         }
@@ -372,8 +339,8 @@ export const CodeMirrorEditorView = memo(
         // True external edit: push into CM and adopt as new baseline.
         lastEmittedTextRef.current = content;
         try {
-          clearEchoHistory();
-          rememberEmitted(content || "");
+          echo.current.clear();
+          echo.current.rememberEmitted(content || "");
         } catch (_) {}
         const safeText = JSON.stringify(content || "");
         const safeName = JSON.stringify(fileName || "");

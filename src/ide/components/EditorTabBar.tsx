@@ -46,6 +46,12 @@ interface EditorTabBarProps {
   onSelectLine?: () => void;
   /** Select the entire document in the CodeMirror editor. */
   onSelectAll?: () => void;
+  /** Copy the current selection to the system clipboard. */
+  onCopy?: () => void;
+  /** Cut the current selection to the system clipboard. */
+  onCut?: () => void;
+  /** Paste the system clipboard at the caret. */
+  onPaste?: () => void;
   /** Open the global project search modal. */
   onOpenSearch?: () => void;
   /** Delete the active file. */
@@ -89,6 +95,9 @@ function EditorTabBarInner({
   onSave,
   onSelectLine,
   onSelectAll,
+  onCopy,
+  onCut,
+  onPaste,
   onOpenSearch,
   onDeleteFile,
   onImport,
@@ -145,6 +154,16 @@ function EditorTabBarInner({
     if (onSelectAll) {
       items.push({ key: "selectAll", label: "Select all", icon: "checkbox-outline", run: onSelectAll });
     }
+    // Clipboard actions (system clipboard via the CodeMirror bridge).
+    if (onCopy) {
+      items.push({ key: "copy", label: "Copy", icon: "copy-outline", run: onCopy });
+    }
+    if (onCut) {
+      items.push({ key: "cut", label: "Cut", icon: "cut-outline", run: onCut });
+    }
+    if (onPaste) {
+      items.push({ key: "paste", label: "Paste", icon: "clipboard-outline", run: onPaste });
+    }
     if (onOpenSettings) {
       items.push({ key: "settings", label: "Settings", icon: "settings-outline", run: onOpenSettings });
     }
@@ -161,7 +180,7 @@ function EditorTabBarInner({
       items.push({ key: "exit", label: "Exit Project", icon: "exit-outline", destructive: true, run: onExitProject });
     }
     return items;
-  }, [onOpenSearch, onOpenFind, onUndo, onRedo, onSave, onFormat, onSelectLine, onSelectAll, onOpenSettings, onImport, onExport, fileName, onDeleteFile, onExitProject]);
+  }, [onOpenSearch, onOpenFind, onUndo, onRedo, onSave, onFormat, onSelectLine, onSelectAll, onCopy, onCut, onPaste, onOpenSettings, onImport, onExport, fileName, onDeleteFile, onExitProject]);
 
   return (
     <>
