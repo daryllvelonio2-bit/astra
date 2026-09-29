@@ -352,7 +352,7 @@ object ToolchainProvisioner {
                 // exist). Per-package loop installs what's available, flags
                 // the rest as PKG_FAIL, and always exits 0 so provisioning
                 // converges across runs instead of looping forever.
-                val aptBase = "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; export HOME=/root; export LC_ALL=C.UTF-8; export LANG=C.UTF-8; export DEBIAN_FRONTEND=noninteractive; export NODE_OPTIONS=--dns-result-order=ipv4first; rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock /var/lib/apt/lists/lock 2>/dev/null"
+                val aptBase = "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; export HOME=/root; export LC_ALL=C.UTF-8; export LANG=C.UTF-8; export DEBIAN_FRONTEND=noninteractive; export NODE_OPTIONS=--dns-result-order=ipv4first; rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock /var/lib/apt/lists/lock 2>/dev/null; dpkg --configure -a 2>/dev/null || true; apt-get install -f -y 2>/dev/null || true"
                 val aptUpdate = "for i in 1 2 3; do apt-get update && break || sleep 5; done"
                 fun aptInstall(pkgs: String) = "for p in $pkgs; do apt-get install -y --no-install-recommends \"\$p\" || echo \"PKG_FAIL:\$p\"; done; true"
                 val stage1Cmd = aptBase + "; " + aptUpdate + "; " + aptInstall("bash coreutils findutils grep sed gawk ripgrep tar gzip zip unzip tree ca-certificates curl wget git openssh-client sqlite3 nodejs npm")

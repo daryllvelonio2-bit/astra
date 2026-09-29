@@ -264,16 +264,48 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
     return false;
   };
 
+  /** True when apt refused because a previous install was killed mid-way. */
+  const isDpkgInterrupted = (out: string): boolean =>
+    /dpkg was interrupted|dpkg --configure -a/i.test(out);
+
+  /** Best-effort guest repair, then caller retries the install once. */
+  const repairDpkg = async (): Promise<void> => {
+    try {
+      await executeCommand(
+        "export DEBIAN_FRONTEND=noninteractive; rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock /var/lib/apt/lists/lock 2>/dev/null; dpkg --configure -a; apt-get install -f -y"
+      );
+    } catch (_) {}
+  };
+
+  const failDialog = (title: string, output: string, retry: () => void) => {
+    const dpkgError = isDpkgInterrupted(output);
+    showAppDialog({
+      title,
+      message: dpkgError
+        ? "The package database was left half-installed by an earlier interrupted download. It has been repaired — tap Retry to install again."
+        : (output || "Unknown error").slice(-400),
+      buttons: [{ text: "OK", style: "cancel" }, { text: "Retry", onPress: retry }],
+    });
+  };
+
   const handleInstallOne = (pkg: OptionalPackage) => {
     if (guardProvisioning()) return;
-    const run = async () => {
+    const run = async (retried = false) => {
       setBusy((prev) => ({ ...prev, [pkg.id]: true }));
       try {
         const res = await installPackages(pkg.apt);
         if (res.exitCode === 0) {
           await refresh([pkg]);
+        } else if (!retried && isDpkgInterrupted(res.stdout || "")) {
+          await repairDpkg();
+          const retry = await installPackages(pkg.apt);
+          if (retry.exitCode === 0) {
+            await refresh([pkg]);
+          } else {
+            failDialog(`Failed to install ${pkg.name}`, retry.stdout || "", () => run(true));
+          }
         } else {
-          showAppDialog({ title: `Failed to install ${pkg.name}`, message: (res.stdout || "Unknown error").slice(-400) });
+          failDialog(`Failed to install ${pkg.name}`, res.stdout || "", () => run(true));
         }
       } finally {
         setBusy((prev) => ({ ...prev, [pkg.id]: false }));
@@ -295,11 +327,17 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
       setGroupBusy((prev) => ({ ...prev, [group.id]: true }));
       try {
         const apts = missing.flatMap((p) => p.apt);
-        const res = await installPackages(apts);
+        const attempt = async (): Promise<{ exitCode: number; stdout: string }> =>
+          installPackages(apts);
+        let res = await attempt();
+        if (res.exitCode !== 0 && isDpkgInterrupted(res.stdout || "")) {
+          await repairDpkg();
+          res = await attempt();
+        }
         if (res.exitCode === 0) {
           await refresh(missing);
         } else {
-          showAppDialog({ title: `Failed to install ${group.title}`, message: (res.stdout || "Unknown error").slice(-400) });
+          failDialog(`Failed to install ${group.title}`, res.stdout || "", run);
         }
       } finally {
         setGroupBusy((prev) => ({ ...prev, [group.id]: false }));

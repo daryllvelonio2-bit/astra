@@ -5184,3 +5184,11 @@
 - **User report:** every single tap in the terminal popped the virtual keyboard, making scrolling/reading output annoying.
 - **Fix (`scripts/build-xterm-html.js` WebView glue):** single taps no longer post `{type:'tap'}`; a new `raiseKeyboardOnDoubleTap()` posts it only when two taps land within 400ms. The synthetic click that follows a touch tap is recognized as the same gesture (750ms twin window) so it never counts as the second tap, and the existing scroll/pinch click guard is kept. Generated file rebuilt via `node scripts/build-xterm-html.js` (touchend + click paths both routed through the gate).
 - **Verification:** regenerated `xtermHtml.generated.ts` contains the gate (3 references, single remaining `post({type:'tap'})` inside it); `tsc --noEmit` 0 errors. JS/HTML-only change — Metro reload is enough, no APK rebuild.
+
+### [2026-09-29] - Linux settings: self-healing dpkg-interrupted installs (CA Certificates fix)
+- **Ask:** screenshot of Settings → Linux → CA Certificates Get failing with "Failed to install CA Certificates / E: dpkg was interrupted, you must manually run 'dpkg --configure -a'".
+- **Root cause:** a previously killed/cancelled apt (provisioning Stop, timeout, app kill) leaves dpkg half-configured. Lock-file deletion alone doesn't clear that state, and `installPackages()` ran a bare `apt-get install` with no repair — so every later Get failed with the same dialog.
+- **`modules/linux-runner/src/index.ts`:** `installPackages()` now runs lock cleanup + `dpkg --configure -a` + `apt-get install -f -y` before the requested install, in the same guest shell.
+- **`ToolchainProvisioner.kt`:** stage `aptBase` preamble gains the same `dpkg --configure -a` + `install -f -y` repair so background stages converge instead of tripping on the same state.
+- **`OptionalPackagesSection.tsx`:** detects dpkg-interrupted output, auto-repairs once and retries the install; failure dialogs now explain the half-installed state in plain words and offer Retry (single + Install-all paths).
+- **Verification:** code-reviewed hunks only; no on-device build in this session. Needs: fresh provisioned device → kill an install mid-way → Get CA Certificates succeeds after auto-repair.
