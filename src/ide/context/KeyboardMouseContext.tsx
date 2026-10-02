@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Keyboard, Platform } from "react-native";
 import {
   loadKeyboardMouseMode,
@@ -60,13 +60,15 @@ export function KeyboardMouseProvider({ children }: { children: React.ReactNode 
     await saveKeyboardMouseMode(enabled);
   }, []);
 
+  // Stable context value: an inline object literal would change identity on
+  // every provider render and re-render EVERY consumer in the app tree.
+  const value = useMemo(
+    () => ({ keyboardMouseMode, setKeyboardMouseMode: handleSetMode }),
+    [keyboardMouseMode, handleSetMode]
+  );
+
   return (
-    <KeyboardMouseContext.Provider
-      value={{
-        keyboardMouseMode,
-        setKeyboardMouseMode: handleSetMode,
-      }}
-    >
+    <KeyboardMouseContext.Provider value={value}>
       {children}
     </KeyboardMouseContext.Provider>
   );

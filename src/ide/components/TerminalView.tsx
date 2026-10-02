@@ -144,6 +144,22 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
     keyboardMouseMode,
   });
 
+  // Stable handlers for the memoized XtermView panes. Inline arrows here
+  // would be recreated on every TerminalView render and defeat its memo.
+  const handleRequestKeyboardPrimary = useCallback(() => {
+    if (isSplit) {
+      setFocusedPane("primary");
+      xtermRef.current?.focusTerminal();
+    }
+    handleFocusTerminal();
+  }, [isSplit, setFocusedPane, handleFocusTerminal]);
+
+  const handleRequestKeyboardSecondary = useCallback(() => {
+    setFocusedPane("secondary");
+    xtermRefSecondary.current?.focusTerminal();
+    handleFocusTerminal();
+  }, [setFocusedPane, handleFocusTerminal]);
+
   // Publish COLUMNS/LINES once the native session is ready and whenever the
   // viewport grid changes (rotation, font zoom). Skipped in PTY mode: the
   // kernel window size (TIOCSWINSZ from xterm's fit) is authoritative there.
@@ -318,13 +334,7 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
                     ? getBannerCompact(workspaceId)
                     : getBannerTitle(workspaceId, theme.id !== "light")
                 }
-                onRequestKeyboard={() => {
-                  if (isSplit) {
-                    setFocusedPane("primary");
-                    xtermRef.current?.focusTerminal();
-                  }
-                  handleFocusTerminal();
-                }}
+                onRequestKeyboard={handleRequestKeyboardPrimary}
                 visible={visible}
                 isKeyboardVisible={isSplit ? focusedPane === "primary" && isKeyboardVisible : isKeyboardVisible}
                 visibleRows={isSplit ? (focusedPane === "primary" ? visibleRows : 0) : visibleRows}
@@ -376,11 +386,7 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
                     foreground={theme.foreground}
                     cursor={theme.cursor}
                     banner={getBannerCompact(workspaceId)}
-                    onRequestKeyboard={() => {
-                      setFocusedPane("secondary");
-                      xtermRefSecondary.current?.focusTerminal();
-                      handleFocusTerminal();
-                    }}
+                    onRequestKeyboard={handleRequestKeyboardSecondary}
                     visible={visible}
                     isKeyboardVisible={focusedPane === "secondary" && isKeyboardVisible}
                     visibleRows={focusedPane === "secondary" ? visibleRows : 0}
