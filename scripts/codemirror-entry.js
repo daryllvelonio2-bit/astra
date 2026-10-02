@@ -30,7 +30,7 @@ import {
   closeSearchPanel,
 } from "@codemirror/search";
 import { buildEditorTheme, createFontTheme } from "./codemirror-theme.js";
-import { engineExtensions, installSnippetApi } from "./codemirror-extensions.js";
+import { engineExtensions, installSnippetApi, setCompletionLanguage } from "./codemirror-extensions.js";
 import { initClipboardBridge } from "./codemirror-clipboard.js";
 import { initEditorGestures, setGesturePost, setDoubleTapReset, setSidebarPullEnabled } from "./codemirror-gestures.js";
 import { python } from "@codemirror/lang-python";
@@ -216,6 +216,8 @@ import { json as jsonLang } from "@codemirror/lang-json";
     if (isNewFile) {
       currentFileName = fileName;
       effects.push(languageCompartment.reconfigure(getLanguageExtension(fileName)));
+      // Keep keyword completion in sync with the highlighted language.
+      setCompletionLanguage(fileName);
     }
 
     if (text !== currentText) {
