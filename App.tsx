@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { LogBox, View, StyleSheet, Text } from "react-native";
+import { LogBox, View, StyleSheet, Text, AppState } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ProjectPicker } from "./src/ide/components/ProjectPicker";
@@ -11,7 +11,9 @@ import { KeyboardMouseProvider } from "./src/ide/context/KeyboardMouseContext";
 import { ideActionService } from "./src/ide/services/ideActionService";
 import { StartupWizard } from "./src/onboarding/StartupWizard";
 import { AppBootScreen } from "./src/onboarding/AppBootScreen";
+import { TrialExpiredScreen } from "./src/onboarding/TrialExpiredScreen";
 import { loadHasCompletedStartup, subscribeConfigChanges } from "./src/ide/services/configService";
+import { getLicenseState, type LicenseState } from "./src/ide/services/licenseService";
 import { AppDialogHost } from "./src/ide/services/appDialog";
 import { GlobalNotificationBanner } from "./src/ide/components/GlobalNotificationBanner";
 import {
@@ -48,6 +50,8 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<"picker" | "editor">("picker");
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [hasCompletedStartup, setHasCompletedStartup] = useState<boolean | null>(null);
+  // Trial gate: null until the first-launch stamp has been read/created.
+  const [licenseState, setLicenseState] = useState<LicenseState | null>(null);
   const [bootVisible, setBootVisible] = useState(true);
   const [bootPhase, setBootPhase] = useState("Loading settings…");
   // True only when settings AND sandbox are actually ready — the splash
@@ -82,6 +86,13 @@ export default function App() {
         setBootPhase("Preparing sandbox…");
       })
       .catch(() => {});
+    // Trial gate: read (or create) the first-launch stamp up front, so an
+    // expired install never reaches the picker or the IDE.
+    const licenseReady = getLicenseState()
+      .then((state) => {
+        if (!cancelled) setLicenseState(state);
+      })
+      .catch(() => {});
     // Sandbox warms detached: every consumer (terminal, agent, git, VS Code)
     // awaits ensureReady internally, so the picker is usable instantly while
     // first-install provisioning finishes in the background. Splash waits
@@ -92,7 +103,7 @@ export default function App() {
         if (!cancelled && !bootDoneRef.current) setBootPhase("Readying workspace…");
       });
     void sandboxReady;
-    Promise.allSettled([settingsReady]).then(() => {
+    Promise.allSettled([settingsReady, licenseReady]).then(() => {
       if (!cancelled) {
         bootDoneRef.current = true;
         setBootDone(true);
@@ -107,21 +118,42 @@ export default function App() {
       }
     });
     const unsubConfig = subscribeConfigChanges(() => {});
-    startGithubNotificationPoller();
 
     return () => {
       cancelled = true;
       clearTimeout(bootFallback);
-      stopGithubNotificationPoller();
       unsubSwitchWs();
       unsubConfig();
     };
   }, []);
 
+  // GitHub polling runs only while the app is actually usable — an expired
+  // trial must not keep making background calls. The same effect re-checks the
+  // trial whenever the app returns to the foreground, so a clock wound back
+  // mid-session cannot extend it.
+  const trialStatus = licenseState?.status ?? null;
+  useEffect(() => {
+    if (trialStatus !== "active") {
+      stopGithubNotificationPoller();
+      return;
+    }
+    startGithubNotificationPoller();
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next !== "active") return;
+      getLicenseState(true)
+        .then(setLicenseState)
+        .catch(() => {});
+    });
+    return () => sub.remove();
+  }, [trialStatus]);
+
   const handleOpenWorkspace = (workspaceId: string) => {
     setActiveWorkspaceId(workspaceId);
     showScreen("editor");
   };
+
+  const trialExpired =
+    !!licenseState && licenseState.status === "expired" && !licenseState.unlocked;
 
   return (
     <SafeAreaProvider>
@@ -135,7 +167,9 @@ export default function App() {
             />
           )}
           <KeyboardMouseProvider>
-            {hasCompletedStartup === false ? (
+            {trialExpired && licenseState ? (
+              <TrialExpiredScreen state={licenseState} />
+            ) : hasCompletedStartup === false ? (
               <StartupWizard onComplete={() => setHasCompletedStartup(true)} />
             ) : (
               <>
