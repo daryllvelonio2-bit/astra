@@ -243,10 +243,24 @@ export const CodeMirrorEditorView = memo(
                 typeof data.patch.to === "number"
               ) {
                 const base = lastEmittedTextRef.current || "";
-                text =
-                  base.slice(0, data.patch.from) +
-                  (typeof data.patch.insert === "string" ? data.patch.insert : "") +
-                  base.slice(data.patch.to);
+                const insert =
+                  typeof data.patch.insert === "string" ? data.patch.insert : "";
+                // Stale-baseline guard: a queued patch could land after an
+                // external injection (format / disk reload) reset the editor,
+                // which would splice at the wrong offset and corrupt state.
+                // The engine reports the resulting doc length, so the base
+                // length is exactly derivable — mismatch means re-sync instead.
+                const expectedBase =
+                  typeof data.length === "number"
+                    ? data.length - insert.length + (data.patch.to - data.patch.from)
+                    : -1;
+                if (expectedBase >= 0 && base.length !== expectedBase) {
+                  inject(
+                    `try{var v=window.__cmView;if(v){window.ReactNativeWebView.postMessage(JSON.stringify({type:'change',text:v.state.doc.toString()}));}}catch(_){}`
+                  );
+                  return;
+                }
+                text = base.slice(0, data.patch.from) + insert + base.slice(data.patch.to);
               }
               if (text !== null) {
                 lastEmittedTextRef.current = text;
