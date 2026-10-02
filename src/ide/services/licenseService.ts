@@ -22,6 +22,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** A clock that goes back further than this is treated as tampering. */
 const CLOCK_ROLLBACK_TOLERANCE_MS = 6 * 60 * 60 * 1000;
 
+/**
+ * How long a computed state may be reused. The memo must NEVER outlive the
+ * answer it describes — otherwise a session left open across the deadline keeps
+ * serving a stale "active" — so the effective lifetime is always
+ * `min(expiresAt, now + CACHE_TTL_MS)`.
+ */
+const CACHE_TTL_MS = 60 * 1000;
+
 const LICENSE_FILE = `${FileSystem.documentDirectory || ""}.license.json`;
 
 export type TrialStatus = "active" | "expired";
@@ -51,6 +59,8 @@ interface LicenseRecord {
 }
 
 let cached: LicenseState | null = null;
+/** Wall-clock ms until which `cached` may still be served. */
+let cachedValidUntil = 0;
 let accessQueue: Promise<unknown> = Promise.resolve();
 
 /** Serialise every read-modify-write so concurrent callers can't clobber. */
@@ -58,6 +68,12 @@ function withLock<T>(task: () => Promise<T>): Promise<T> {
   const run = accessQueue.then(task, task);
   accessQueue = run.catch(() => undefined);
   return run;
+}
+
+/** When a record's answer stops being reusable. */
+function validUntilFor(record: LicenseRecord, now: number): number {
+  if (record.unlocked) return Number.MAX_SAFE_INTEGER;
+  return Math.min(record.expiresAt, now + CACHE_TTL_MS);
 }
 
 async function readRecord(): Promise<LicenseRecord | null> {
@@ -109,13 +125,14 @@ function toState(record: LicenseRecord, now: number): LicenseState {
 
 /**
  * Current trial state. Creates the first-launch stamp when absent, advances the
- * monotonic clock guard, and is cheap to call repeatedly (memoised until the
- * next real change).
+ * monotonic clock guard, and is cheap to call repeatedly. The memo expires with
+ * the trial (see `CACHE_TTL_MS`), so crossing the deadline flips the result even
+ * if the session is never backgrounded.
  */
 export async function getLicenseState(force = false): Promise<LicenseState> {
-  if (cached && !force) return cached;
+  if (cached && !force && Date.now() < cachedValidUntil) return cached;
   return withLock(async () => {
-    if (cached && !force) return cached;
+    if (cached && !force && Date.now() < cachedValidUntil) return cached;
     const now = Date.now();
     let record = await readRecord();
     if (!record) {
@@ -132,6 +149,7 @@ export async function getLicenseState(force = false): Promise<LicenseState> {
       await writeRecord(record);
     }
     cached = toState(record, now);
+    cachedValidUntil = validUntilFor(record, now);
     return cached;
   });
 }
@@ -156,6 +174,7 @@ export async function setTrialUnlocked(unlocked: boolean): Promise<LicenseState>
     if (now > record.lastSeenMax) record.lastSeenMax = now;
     await writeRecord(record);
     cached = toState(record, now);
+    cachedValidUntil = validUntilFor(record, now);
     return cached;
   });
 }
@@ -163,6 +182,7 @@ export async function setTrialUnlocked(unlocked: boolean): Promise<LicenseState>
 /** Drop the memoised state so the next check re-reads disk. */
 export function clearLicenseCache(): void {
   cached = null;
+  cachedValidUntil = 0;
 }
 
 /** "6 days left" / "23 hours left" / "Trial ended". */

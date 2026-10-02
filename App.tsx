@@ -147,6 +147,21 @@ export default function App() {
     return () => sub.remove();
   }, [trialStatus]);
 
+  // Flip exactly at the deadline even if the app is never backgrounded: the
+  // service's memo self-expires, but an idle foreground screen never calls it.
+  const licenseExpiresAt = licenseState?.expiresAt ?? 0;
+  useEffect(() => {
+    if (trialStatus !== "active" || !licenseExpiresAt) return;
+    const msUntilDeadline = licenseExpiresAt - Date.now();
+    if (msUntilDeadline <= 0) return;
+    const timer = setTimeout(() => {
+      getLicenseState(true)
+        .then(setLicenseState)
+        .catch(() => {});
+    }, msUntilDeadline + 1000);
+    return () => clearTimeout(timer);
+  }, [trialStatus, licenseExpiresAt]);
+
   const handleOpenWorkspace = (workspaceId: string) => {
     setActiveWorkspaceId(workspaceId);
     showScreen("editor");
