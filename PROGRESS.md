@@ -1,5 +1,15 @@
 # Project Progress Tracker
 
+### [2026-10-03] - Perf: incremental editor bridge (typing no longer ships the whole doc)
+- **Ask:** user pinpointed the felt lag as **typing in the editor** (multi-select follow-up to the "everything" optimization request).
+- **Root cause (dominant typing cost):** `scripts/codemirror-entry.js`'s `updateListener` posted `{ type: "change", text: update.state.doc.toString() }` on **every** `docChanged` update. So each keystroke did an O(n) `toString()` in the WebView, `JSON.stringify` of the entire document, a full-document WebView→RN bridge transfer, `JSON.parse` on the RN side, and a full-string hash in the echo gate — i.e. cost scaled with file size, not with the keystroke.
+- **Fix — incremental patch protocol:**
+  - Engine (`codemirror-entry.js`, 418 → 437): `update.changes.iterChanges(...)` collects the change ranges; a **single-range** change (the normal keystroke path) posts `{ type: "change", patch: { from, to, insert }, length }`; only genuinely multi-range changes (paste, multi-cursor) fall back to `{ text: doc.toString() }`.
+  - RN (`CodeMirrorEditorView.tsx`, 453 → 473): the `change` handler applies `patch` to `lastEmittedTextRef.current` (`base.slice(0, from) + insert + base.slice(to)`) so RN's baseline still converges to the WebView's exact document, and falls back to `data.text` for the full-doc case. `echo.rememberEmitted` / `onChangeContent` semantics unchanged.
+- **Blob:** `npm run build:codemirror` regenerated `codemirrorHtml.generated.ts` (613,035 bytes). Verified the bundled `ChangeSet.iterChanges` exists and the new call site is present.
+- **Also this day:** eliminated the editor keystroke render cascade (dead `Memo*` wrappers in `IDELayout`, memoized explorer sidebar element, memoized `KeyboardMouseProvider` value, stable `XtermView` `onRequestKeyboard` callbacks) — commit `20ad5af`.
+- **Verified:** `npx tsc --noEmit` exit 0; all files ≤500 (`CodeMirrorEditorView` 473, `IDELayout` 464, `TerminalView` 485); generated blob rebuilt. JS-only (Metro reload).
+
 ### [2026-10-03] - Perf: editor keystroke render cascade (terminal/browser/git isolation)
 - **Ask:** "optimize the application for smoother and lag free usage, its currently laggy, a bit" → scope "everything".
 - **Root cause found (dead code):** `IDELayout.tsx` declared `MemoTerminalView` / `MemoWebBrowserPreview` / `MemoGitHubDesktopView` (`React.memo(...)`) with a comment promising keystroke isolation, but the JSX rendered the RAW `TerminalView` / `WebBrowserPreview` / `GitHubDesktopView`. The wrappers were never referenced, so every editor keystroke (`handleContentChange` → `setActiveFile`) re-rendered the mounted terminal xterm WebView, browser WebView and Git tab. Now the JSX uses the memo wrappers — all three freeze on keystroke (their props `workspaceId` / `initialUrl` / `visible` / stable `onSyncWorkspace` don't change while typing).
