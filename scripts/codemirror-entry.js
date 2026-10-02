@@ -30,7 +30,7 @@ import {
   closeSearchPanel,
 } from "@codemirror/search";
 import { buildEditorTheme, createFontTheme } from "./codemirror-theme.js";
-import { engineExtensions } from "./codemirror-extensions.js";
+import { engineExtensions, installSnippetApi } from "./codemirror-extensions.js";
 import { initClipboardBridge } from "./codemirror-clipboard.js";
 import { initEditorGestures, setGesturePost, setDoubleTapReset, setSidebarPullEnabled } from "./codemirror-gestures.js";
 import { python } from "@codemirror/lang-python";
@@ -389,6 +389,9 @@ import { json as jsonLang } from "@codemirror/lang-json";
 
   // --- Clipboard bridge (copy/cut/paste over the CM selection; RN touch) ---
   initClipboardBridge(view);
+
+  // --- Marketplace snippet bridge (window.__cmSetSnippets; RN pushes) ---
+  installSnippetApi();
 
   // Multi-touch gestures & pinch-to-zoom + sidebar pull relay
   setGesturePost(post);

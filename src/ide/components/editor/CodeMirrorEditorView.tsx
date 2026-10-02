@@ -13,6 +13,7 @@ import { WebView } from "react-native-webview";
 import { buildCodeMirrorHtml } from "./codemirrorHtml.generated";
 import { buildCmThemeObj } from "./codemirrorThemeObj";
 import { createEchoGate, EchoGate } from "./echoGate";
+import { useEditorSnippets } from "./useEditorSnippets";
 
 // Module-level cache: avoids replaceAll over the 500+ KB blob on every mount.
 // Key = bgPrimary + "|" + isDark.  The blob string itself is already cached
@@ -137,6 +138,10 @@ export const CodeMirrorEditorView = memo(
           `try{if(document.activeElement&&document.activeElement.blur){document.activeElement.blur();}var el=document.querySelector('.cm-content');if(el&&el.blur){el.blur();}}catch(_){}`
         );
       }, [inject]);
+
+      // Feed installed marketplace snippets (Open VSX) into the engine's
+      // autocomplete for the active file's language.
+      useEditorSnippets(fileName, isReady, inject);
 
       useImperativeHandle(
         ref,
