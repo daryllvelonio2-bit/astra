@@ -30,7 +30,7 @@ import {
   closeSearchPanel,
 } from "@codemirror/search";
 import { buildEditorTheme, createFontTheme } from "./codemirror-theme.js";
-import { engineExtensions } from "./codemirror-extensions.js";
+import { engineExtensions, installSnippetApi, setCompletionLanguage } from "./codemirror-extensions.js";
 import { initClipboardBridge } from "./codemirror-clipboard.js";
 import { initEditorGestures, setGesturePost, setDoubleTapReset, setSidebarPullEnabled } from "./codemirror-gestures.js";
 import { python } from "@codemirror/lang-python";
@@ -136,7 +136,26 @@ import { json as jsonLang } from "@codemirror/lang-json";
       kmmCompartment.of([]),
       EditorView.updateListener.of((update) => {
         if (update.docChanged && !isInternalUpdate) {
-          post({ type: "change", text: update.state.doc.toString() });
+          // Incremental patch: a plain keystroke must never serialize the
+          // ENTIRE document across the WebView bridge. On large files that is
+          // an O(n) toString + JSON.stringify + bridge transfer + parse per
+          // character — the dominant source of typing lag. Post a single-range
+          // patch for the common case; fall back to full text only for
+          // genuinely multi-range changes (paste, multi-cursor edits).
+          const doc = update.state.doc;
+          let patch = null;
+          let count = 0;
+          update.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+            count++;
+            if (patch === null) {
+              patch = { from: fromA, to: toA, insert: inserted.toString() };
+            }
+          });
+          if (count === 1 && patch) {
+            post({ type: "change", patch: patch, length: doc.length });
+          } else {
+            post({ type: "change", text: doc.toString(), length: doc.length });
+          }
         }
         if (update.selectionSet) {
           const pos = update.state.selection.main.head;
@@ -197,6 +216,8 @@ import { json as jsonLang } from "@codemirror/lang-json";
     if (isNewFile) {
       currentFileName = fileName;
       effects.push(languageCompartment.reconfigure(getLanguageExtension(fileName)));
+      // Keep keyword completion in sync with the highlighted language.
+      setCompletionLanguage(fileName);
     }
 
     if (text !== currentText) {
@@ -370,6 +391,9 @@ import { json as jsonLang } from "@codemirror/lang-json";
 
   // --- Clipboard bridge (copy/cut/paste over the CM selection; RN touch) ---
   initClipboardBridge(view);
+
+  // --- Marketplace snippet bridge (window.__cmSetSnippets; RN pushes) ---
+  installSnippetApi();
 
   // Multi-touch gestures & pinch-to-zoom + sidebar pull relay
   setGesturePost(post);

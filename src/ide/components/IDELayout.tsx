@@ -311,6 +311,39 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
     sidebarWidthAnim,
   });
 
+  // Keystroke isolation: the explorer subtree is built as ONE memoized element.
+  // Every keystroke re-renders IDELayout via setActiveFile; keeping this element
+  // identity stable (workspace + explorer callbacks only, all stable while
+  // typing) lets React bail out of reconciling the whole file tree entirely.
+  const sidebarElement = useMemo(() => {
+    if (!workspace) return null;
+    return (
+      <Animated.View style={sidebarAnimStyle} pointerEvents={isSidebarOpen ? "auto" : "none"}>
+        <PanelErrorBoundary panelName="Explorer" resetKey={workspace.id}>
+          <FileExplorer
+            projectName={workspace.name}
+            workspaceId={workspace.id}
+            files={workspace.root.children || []}
+            onSelectFile={handleSelectFile}
+            activeFileId={activeFile?.id}
+            onToggleCollapse={handleToggleCollapse}
+            onLongPressNode={handleLongPressNode}
+            onCreateFile={handleCreateNode}
+            onQuickAddFile={handleQuickAddFile}
+            onMoveNode={handleMoveNode}
+            onRefresh={refreshWorkspace}
+            onOpenSearch={handleOpenSearch}
+            resizerPanHandlers={resizerPanHandlers} isDraggingSidebar={isDraggingSidebar}
+          />
+        </PanelErrorBoundary>
+      </Animated.View>
+    );
+  }, [
+    workspace, sidebarAnimStyle, isSidebarOpen, activeFile?.id, handleSelectFile,
+    handleToggleCollapse, handleLongPressNode, handleCreateNode, handleQuickAddFile,
+    handleMoveNode, refreshWorkspace, handleOpenSearch, resizerPanHandlers, isDraggingSidebar,
+  ]);
+
   if (!workspace) {
     return (
       <WorkspaceLoadingScreen
@@ -363,27 +396,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
                 isSidebarOpen={isSidebarOpen}
                 onPullStart={handlePullStart} onPullMove={handlePullMove} onPullEnd={handlePullEnd}
                 edgePanHandlers={edgePanHandlers}
-                sidebar={
-                  <Animated.View style={sidebarAnimStyle} pointerEvents={isSidebarOpen ? "auto" : "none"}>
-                    <PanelErrorBoundary panelName="Explorer" resetKey={workspace?.id}>
-                    <FileExplorer
-                      projectName={workspace.name}
-                      workspaceId={workspace.id}
-                      files={workspace.root.children || []}
-                      onSelectFile={handleSelectFile}
-                      activeFileId={activeFile?.id}
-                      onToggleCollapse={handleToggleCollapse}
-                      onLongPressNode={handleLongPressNode}
-                      onCreateFile={handleCreateNode}
-                      onQuickAddFile={handleQuickAddFile}
-                      onMoveNode={handleMoveNode}
-                      onRefresh={refreshWorkspace}
-                      onOpenSearch={handleOpenSearch}
-                      resizerPanHandlers={resizerPanHandlers} isDraggingSidebar={isDraggingSidebar}
-                    />
-                    </PanelErrorBoundary>
-                  </Animated.View>
-                }
+                sidebar={sidebarElement}
               />
               </PanelErrorBoundary>
             </View>
@@ -392,21 +405,21 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
           {visitedTabs.has("terminal") && (
             <View style={[tabContentStyle, bottomTab !== "terminal" && styles.hiddenTab]}>
               <PanelErrorBoundary panelName="Terminal" resetKey={workspace?.id}>
-              <TerminalView key={workspace?.id || "none"} workspaceId={workspace?.id} visible={bottomTab === "terminal"} />
+              <MemoTerminalView key={workspace?.id || "none"} workspaceId={workspace?.id} visible={bottomTab === "terminal"} />
               </PanelErrorBoundary>
             </View>
           )}
           {visitedTabs.has("browser") && (
             <View style={[tabContentStyle, bottomTab !== "browser" && styles.hiddenTab]}>
               <PanelErrorBoundary panelName="Browser" resetKey={workspace?.id}>
-              <WebBrowserPreview initialUrl={browserUrl} workspaceId={workspace?.id} />
+              <MemoWebBrowserPreview initialUrl={browserUrl} workspaceId={workspace?.id} />
               </PanelErrorBoundary>
             </View>
           )}
           {visitedTabs.has("git") && (
             <View style={[tabContentStyle, bottomTab !== "git" && styles.hiddenTab]}>
               <PanelErrorBoundary panelName="Git" resetKey={workspace?.id}>
-              <GitHubDesktopView workspaceId={workspace?.id} projectName={workspace?.name} visible={bottomTab === "git"} onSyncWorkspace={refreshWorkspace} />
+              <MemoGitHubDesktopView workspaceId={workspace?.id} projectName={workspace?.name} visible={bottomTab === "git"} onSyncWorkspace={refreshWorkspace} />
               </PanelErrorBoundary>
             </View>
           )}

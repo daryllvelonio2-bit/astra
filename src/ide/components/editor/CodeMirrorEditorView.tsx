@@ -13,6 +13,7 @@ import { WebView } from "react-native-webview";
 import { buildCodeMirrorHtml } from "./codemirrorHtml.generated";
 import { buildCmThemeObj } from "./codemirrorThemeObj";
 import { createEchoGate, EchoGate } from "./echoGate";
+import { useEditorSnippets } from "./useEditorSnippets";
 
 // Module-level cache: avoids replaceAll over the 500+ KB blob on every mount.
 // Key = bgPrimary + "|" + isDark.  The blob string itself is already cached
@@ -138,6 +139,10 @@ export const CodeMirrorEditorView = memo(
         );
       }, [inject]);
 
+      // Feed installed marketplace snippets (Open VSX) into the engine's
+      // autocomplete for the active file's language.
+      useEditorSnippets(fileName, isReady, inject);
+
       useImperativeHandle(
         ref,
         () => ({
@@ -229,12 +234,46 @@ export const CodeMirrorEditorView = memo(
               inject(`window.__cmSetKeyboardMouseMode && window.__cmSetKeyboardMouseMode(${!!keyboardMouseMode})`);
               inject(`window.__cmSetReadOnly && window.__cmSetReadOnly(${!isEditing})`);
               inject(`window.__cmSetSidebarPullEnabled && window.__cmSetSidebarPullEnabled(${!isSidebarOpen && !isEditing})`);
-            } else            if (data.type === "change" && typeof data.text === "string") {
-              lastEmittedTextRef.current = data.text;
-              try {
-                echo.current.rememberEmitted(data.text);
-              } catch (_) {}
-              onChangeContent(data.text);
+            } else if (data.type === "change") {
+              // Incremental patch (normal typing) or full text (paste /
+              // multi-cursor). The patch is applied to the last text we know
+              // CodeMirror holds, so RN's baseline converges to the exact
+              // WebView document without transferring it whole every keystroke.
+              let text: string | null = null;
+              if (typeof data.text === "string") {
+                text = data.text;
+              } else if (
+                data.patch &&
+                typeof data.patch.from === "number" &&
+                typeof data.patch.to === "number"
+              ) {
+                const base = lastEmittedTextRef.current || "";
+                const insert =
+                  typeof data.patch.insert === "string" ? data.patch.insert : "";
+                // Stale-baseline guard: a queued patch could land after an
+                // external injection (format / disk reload) reset the editor,
+                // which would splice at the wrong offset and corrupt state.
+                // The engine reports the resulting doc length, so the base
+                // length is exactly derivable — mismatch means re-sync instead.
+                const expectedBase =
+                  typeof data.length === "number"
+                    ? data.length - insert.length + (data.patch.to - data.patch.from)
+                    : -1;
+                if (expectedBase >= 0 && base.length !== expectedBase) {
+                  inject(
+                    `try{var v=window.__cmView;if(v){window.ReactNativeWebView.postMessage(JSON.stringify({type:'change',text:v.state.doc.toString()}));}}catch(_){}`
+                  );
+                  return;
+                }
+                text = base.slice(0, data.patch.from) + insert + base.slice(data.patch.to);
+              }
+              if (text !== null) {
+                lastEmittedTextRef.current = text;
+                try {
+                  echo.current.rememberEmitted(text);
+                } catch (_) {}
+                onChangeContent(text);
+              }
             } else if (data.type === "cursor") {
               onCursorChange?.(data.line || 1, data.col || 1);
             } else if (data.type === "doubleTap") {

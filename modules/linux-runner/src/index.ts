@@ -204,11 +204,19 @@ export function addCommandOutputListener(
 }
 
 // High-level utility helpers
+// Self-healing: a previously killed/cancelled apt leaves dpkg in the
+// "was interrupted, you must manually run 'dpkg --configure -a'" state,
+// which makes every later install fail (seen on CA Certificates Get).
+// Repair first, then install, in the same guest shell.
 export async function installPackages(
   packages: string[],
   workspaceId?: string
 ): Promise<ExecutionResult> {
-  return executeCommand(`DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${packages.join(" ")}`, workspaceId);
+  const pkgs = packages.join(" ");
+  return executeCommand(
+    `export DEBIAN_FRONTEND=noninteractive; rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock /var/lib/apt/lists/lock 2>/dev/null; dpkg --configure -a 2>/dev/null || true; apt-get install -f -y 2>/dev/null || true; apt-get install -y --no-install-recommends ${pkgs}`,
+    workspaceId
+  );
 }
 
 export function showSystemNotification(title: string, body: string): boolean {
