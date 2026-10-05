@@ -5252,3 +5252,9 @@
 - **Nothing else referenced them** (verified: only `App.tsx` imported `licenseService`/`TrialExpiredScreen`), so no orphan imports or dead gates remain.
 - **Verification:** `npx tsc --noEmit` exit 0 after the removal; `grep -E 'getLicenseState|TrialExpiredScreen|licenseState' App.tsx` → 0 hits; the rebuilt release bundle no longer contains the trial markers.
 - **Where the feature still lives:** branch `tempo` (and `origin/tempo`) keeps the full tested implementation — 7-day window, clock-rollback guard, dual storage that survives clear-app-data, and the owner override.
+
+### [2026-10-05] - GitHubIssueView split under the 500-line cap; scratch probes removed (refactor)
+- **Rule violation:** `src/ide/components/github/GitHubIssueView.tsx` was 510 lines against agents.md rule 5 (no file over 500).
+- **Fix:** moved its `StyleSheet.create` block into `GitHubIssueView.styles.ts` (45 lines) and imported it — the same pattern already used by `CloneRepoModal.styles.ts` and `git/GitChangesList.styles.ts`. The component is now 470 lines and **no style value changed**.
+- **Cleanup:** removed the accidentally-committed scratch probes `cdp1.tmp.js` and `inspect_scroll.tmp.js` (both were tracked in git), plus the 102 MB stale `app-debug.apk` sitting in the build output directory.
+- **Verification:** `npx tsc --noEmit` exit 0; `find src -name '*.ts' -o -name '*.tsx'` filtered at >500 lines returns nothing.
