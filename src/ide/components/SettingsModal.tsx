@@ -27,6 +27,7 @@ import { EditorSection } from "./settings/EditorSection";
 import { EnvironmentSection } from "./settings/EnvironmentSection";
 import { ShortcutsSection } from "./settings/ShortcutsSection";
 import { NotificationsSection } from "./settings/NotificationsSection";
+import { FeedbackSection } from "./settings/FeedbackSection";
 
 interface SettingsModalProps {
   visible: boolean;
@@ -193,6 +194,9 @@ export function SettingsModal({ visible, onClose, onSyncWorkspace, onRerunStartu
             )}
             {activeTab === "shortcuts" && (
               <ShortcutsSection theme={theme} />
+            )}
+            {activeTab === "feedback" && (
+              <FeedbackSection theme={theme} />
             )}
           </ScrollView>
         </View>
