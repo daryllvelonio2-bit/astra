@@ -8,7 +8,6 @@ import {
 import { loadWorkspaceShallow } from "../services/workspaceTreeService";
 import { readDirectoryNative } from "../services/nativeFs";
 import {
-  computeWorkspaceFingerprint,
   computeWorkspaceFingerprintAsync,
   FingerprintStats,
 } from "../services/workspaceWatcherService";
@@ -18,6 +17,8 @@ const POLL_INTERVAL_MS = 2500;
 /** Poll cost scales with tree size: next check waits 4x the last check's cost. */
 const POLL_INTERVAL_MAX_MS = 60000;
 const LOAD_TIMEOUT_MS = 30000;
+/** Directories visited between JS-thread yields in the chunked walks. */
+const WALK_YIELD_EVERY = 25;
 
 /** Module-level pause (set by useSidebarResizer while dragging). */
 let watcherPausedExternal = false;
@@ -34,15 +35,6 @@ export function cancelInFlightFingerprint(): void {
 
 function timeout<T>(ms: number): Promise<T | undefined> {
   return new Promise((resolve) => setTimeout(() => resolve(undefined), ms));
-}
-
-/** Thin wrapper so the hook keeps passing a bare function reference. */
-function fingerprintOf(dirPath: string): string {
-  try {
-    return computeWorkspaceFingerprint(readDirectoryNative, dirPath);
-  } catch (_) {
-    return "";
-  }
 }
 
 export function useWorkspaceAutoRefresh(
@@ -78,13 +70,38 @@ export function useWorkspaceAutoRefresh(
     if (!workspaceId) return;
 
     let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let seeded = false;
 
-    getWorkspaceDirPath(workspaceId).then((p) => {
-      dirPathRef.current = p;
-      try {
-        lastFingerprintRef.current = fingerprintOf(p);
-      } catch (_) {}
-    });
+    // Baseline fingerprint, taken OFF the JS thread. The synchronous walk
+    // visits the whole tree (depth 8) through the native FS bridge and blocked
+    // the JS thread for the length of a full directory scan at exactly the
+    // moment the IDE mounts — the "freezes for a moment when opening a
+    // project" stall. The chunked walk yields between directories instead.
+    // Polling stays dormant until the baseline lands (and is enabled anyway on
+    // failure) so a half-seeded state can never fire a spurious refresh.
+    getWorkspaceDirPath(workspaceId)
+      .then((p) => {
+        if (!mountedRef.current) return undefined;
+        dirPathRef.current = p;
+        const stats: FingerprintStats = { dirCount: 0, durationMs: 0 };
+        return computeWorkspaceFingerprintAsync(
+          readDirectoryNative,
+          p,
+          undefined,
+          WALK_YIELD_EVERY,
+          stats,
+          () => !mountedRef.current || idRef.current !== workspaceId
+        );
+      })
+      .then((fp) => {
+        if (mountedRef.current && idRef.current === workspaceId && fp) {
+          lastFingerprintRef.current = fp;
+        }
+        seeded = true;
+      })
+      .catch(() => {
+        seeded = true;
+      });
 
     const run = async () => {
       if (inFlightRef.current) {
@@ -129,6 +146,7 @@ export function useWorkspaceAutoRefresh(
     const pollMsRef = { current: POLL_INTERVAL_MS };
     const checkDiskChanges = () => {
       if (
+        !seeded ||
         !dirPathRef.current ||
         inFlightRef.current ||
         fpInFlightRef.current ||
@@ -140,7 +158,7 @@ export function useWorkspaceAutoRefresh(
       fpInFlightRef.current = true;
       const stats: FingerprintStats = { dirCount: 0, durationMs: 0 };
       const myGen = watcherAbortGen;
-      computeWorkspaceFingerprintAsync(readDirectoryNative, dirPathRef.current, undefined, 25, stats, () => myGen !== watcherAbortGen)
+      computeWorkspaceFingerprintAsync(readDirectoryNative, dirPathRef.current, undefined, WALK_YIELD_EVERY, stats, () => myGen !== watcherAbortGen)
         .then((currentFp) => {
           fpInFlightRef.current = false;
           // Cost-proportional poll: checking costs ~durationMs of bridge
