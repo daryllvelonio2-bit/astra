@@ -1,0 +1,45 @@
+import { StyleSheet } from "react-native";
+
+/** Layout for GitHubIssueView. Split out to keep the component under the
+ * 500-line cap (agents.md rule 5) without changing any style values. */
+export const styles = StyleSheet.create({
+  wrap: { flex: 1 },
+  titleBlock: { paddingHorizontal: 12, paddingVertical: 10, gap: 5, borderBottomWidth: StyleSheet.hairlineWidth },
+  title: { fontSize: 14.5, fontWeight: "800", lineHeight: 19 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  metaText: { fontSize: 10.5 },
+  tabs: { flexDirection: "row", paddingHorizontal: 8, borderBottomWidth: StyleSheet.hairlineWidth },
+  tabBtn: { paddingVertical: 8, paddingHorizontal: 10, borderBottomWidth: 2 },
+  tabText: { fontSize: 11.5, fontWeight: "700" },
+  comment: { paddingHorizontal: 12, paddingVertical: 10, gap: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  commentHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  avatar: { width: 20, height: 20, borderRadius: 10, backgroundColor: "#333" },
+  commentAuthor: { fontSize: 12, fontWeight: "700" },
+  commentTime: { fontSize: 10 },
+  commentBody: { fontSize: 12, lineHeight: 17 },
+  reviewBlock: { paddingHorizontal: 12, paddingVertical: 8, gap: 3 },
+  reviewLine: { fontSize: 10.5 },
+  reviewRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  dismissBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+  dismissText: { fontSize: 10.5, fontWeight: "600" },
+  actions: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexWrap: "wrap",
+  },
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    height: 30,
+    borderRadius: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  actionText: { fontSize: 11.5, fontWeight: "700" },
+  errorText: { fontSize: 11.5, paddingHorizontal: 12, paddingTop: 8 },
+});
