@@ -17,7 +17,6 @@ import {
 import { STAGES } from "./environmentStages";
 import { EnvironmentStageCard } from "./EnvironmentStageCard";
 import { OptionalPackagesSection } from "./OptionalPackagesSection";
-import { OpencodeRepairCard } from "./OpencodeRepairCard";
 
 interface EnvironmentSectionProps {
   theme: ThemeColors;
@@ -138,10 +137,7 @@ export function EnvironmentSection({ theme }: EnvironmentSectionProps) {
         />
       </View>
 
-      {/* 1. opencode CLI health + postinstall repair */}
-      <OpencodeRepairCard theme={theme} />
-
-      {/* 2. Main Status Banner */}
+      {/* 1. Main Status Banner */}
       <View
         style={[
           styles.card,

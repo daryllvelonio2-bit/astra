@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
 
@@ -7,6 +7,7 @@ export type SettingsTabId = "general" | "editor" | "notifications" | "environmen
 
 interface SettingsTab {
   id: SettingsTabId;
+  /** Label kept for accessibility only — the bar renders icons, no text. */
   title: string;
   icon: any;
 }
@@ -27,24 +28,30 @@ interface SettingsTabBarProps {
 
 export function SettingsTabBar({ activeTab, onSelectTab, theme }: SettingsTabBarProps) {
   return (
-    <View style={[styles.tabBar, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
+    <View style={[styles.tabBar, { borderColor: theme.border }]}>
       {TABS.map((tab) => {
         const isActive = activeTab === tab.id;
-        const color = isActive ? theme.accent : theme.textMuted;
         return (
           <TouchableOpacity
             key={tab.id}
             style={[
               styles.tab,
-              { borderBottomColor: isActive ? theme.accent : "transparent" },
+              isActive && {
+                backgroundColor: `${theme.accent}22`,
+                borderColor: `${theme.accent}55`,
+              },
             ]}
             onPress={() => onSelectTab(tab.id)}
             activeOpacity={0.7}
+            accessibilityRole="tab"
+            accessibilityLabel={tab.title}
+            accessibilityState={{ selected: isActive }}
           >
-            <Ionicons name={tab.icon} size={18} color={color} />
-            <Text style={[styles.tabText, { color }]}>
-              {tab.title}
-            </Text>
+            <Ionicons
+              name={tab.icon}
+              size={21}
+              color={isActive ? theme.accent : theme.textMuted}
+            />
           </TouchableOpacity>
         );
       })}
@@ -55,20 +62,17 @@ export function SettingsTabBar({ activeTab, onSelectTab, theme }: SettingsTabBar
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
+    gap: 6,
+    paddingVertical: 6,
     borderBottomWidth: 1,
   },
   tab: {
     flex: 1,
-    flexDirection: "row",
+    height: 42,
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 11,
-    paddingHorizontal: 4,
-    borderBottomWidth: 2,
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: "600",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
 });
