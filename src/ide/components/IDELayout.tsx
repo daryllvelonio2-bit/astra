@@ -409,8 +409,12 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
               </PanelErrorBoundary>
             </View>
           )}
-          {visitedTabs.has("browser") && (
-            <View style={[tabContentStyle, bottomTab !== "browser" && styles.hiddenTab]}>
+          {/* Browser preview is the one tab that is NOT kept alive in the
+              background: a mounted WebView keeps its renderer resident even
+              under display:none, and this tab is the least-reused of the four.
+              It remounts (and reloads initialUrl) on return. */}
+          {bottomTab === "browser" && (
+            <View style={tabContentStyle}>
               <PanelErrorBoundary panelName="Browser" resetKey={workspace?.id}>
               <MemoWebBrowserPreview initialUrl={browserUrl} workspaceId={workspace?.id} />
               </PanelErrorBoundary>

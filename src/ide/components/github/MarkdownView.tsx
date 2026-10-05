@@ -167,10 +167,10 @@ function BlockList({ blocks, align }: { blocks: MarkdownBlock[]; align?: "center
   );
 }
 
-export function MarkdownView({ source }: { source: string }) {
+export const MarkdownView = React.memo(function MarkdownView({ source }: { source: string }) {
   const blocks = useMemo(() => parseMarkdown(normalizeReadmeHtml(source)), [source]);
   return <BlockList blocks={blocks} />;
-}
+});
 
 const mdStyles = StyleSheet.create({
   hRule: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#8884", paddingBottom: 4 },
