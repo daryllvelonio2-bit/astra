@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, Pressable, TextInput } from "react-native";
+import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, Pressable, TextInput, FlatList } from "react-native";
 import { Octicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { fetchIssue, fetchIssueComments, addIssueComment, closeIssue, reopenIssue } from "../../services/gitHubIssueService";
@@ -282,17 +282,25 @@ export function GitHubIssueView({
       )}
 
       {tab === "files" && isPull ? (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {files.loading && !files.data ? (
-            <LoadingState />
-          ) : files.error ? (
-            <ErrorState error={files.error} onRetry={files.refresh} />
-          ) : (
-            (files.data || []).map((file: GitHubPullFile) => (
-              <GitHubFileDiff key={file.filename} file={file} owner={owner} repo={repo} number={number} />
-            ))
+        <FlatList
+          data={files.data || []}
+          keyExtractor={(file: GitHubPullFile) => file.filename}
+          renderItem={({ item }) => (
+            <GitHubFileDiff file={item} owner={owner} repo={repo} number={number} />
           )}
-        </ScrollView>
+          ListEmptyComponent={
+            files.loading ? (
+              <LoadingState />
+            ) : files.error ? (
+              <ErrorState error={files.error} onRetry={files.refresh} />
+            ) : null
+          }
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          removeClippedSubviews
+        />
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <CommentBlock
@@ -401,7 +409,10 @@ function reviewStateLabel(state: string): string {
   }
 }
 
-function CommentBlock({
+/** Memoized: a busy thread must not re-render every comment body on each
+ *  composer keystroke — all four props are primitives, so shallow prop
+ *  equality is exact. */
+const CommentBlock = React.memo(function CommentBlock({
   author,
   avatar,
   body,
@@ -427,7 +438,7 @@ function CommentBlock({
       <Text style={[styles.commentBody, { color: theme.textSecondary }]}>{body || "(no description)"}</Text>
     </View>
   );
-}
+});
 
 function TabBtn({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   const { theme } = useTheme();
