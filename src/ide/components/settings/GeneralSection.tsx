@@ -13,7 +13,6 @@ import {
   loadExtensionRegistry,
   subscribeExtensionRegistry,
 } from "../../services/extensions/extensionRegistry";
-import { NotificationsSection } from "./NotificationsSection";
 
 interface GeneralSectionProps {
   activeTheme: AppTheme;
@@ -313,10 +312,7 @@ export function GeneralSection({
         )}
       </View>
 
-      {/* 4. Notifications */}
-      <NotificationsSection theme={theme} />
-
-      {/* 5. Onboarding Action */}
+      {/* 4. Onboarding Action */}
       {onRerunStartup && (
         <View style={{ marginTop: 4 }}>
           <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>ONBOARDING</Text>
@@ -334,7 +330,7 @@ export function GeneralSection({
         </View>
       )}
 
-      {/* 6. Live Development over Wi-Fi (__DEV__ only) */}
+      {/* 5. Live Development over Wi-Fi (__DEV__ only) */}
       {__DEV__ && (
         <View style={{ marginTop: 4 }}>
           <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>DEVELOPER TOOLS</Text>
