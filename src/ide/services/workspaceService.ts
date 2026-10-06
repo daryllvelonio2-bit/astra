@@ -150,25 +150,15 @@ export async function readFileContent(workspaceId: string, filePath: string): Pr
 
 export type WorkspaceLoadProgress = (dirsScanned: number, currentPath: string) => void;
 
-const SCAN_TIMEOUT_MS = 45000;
-const withTimeout = <T>(p: Promise<T>, ms: number, label: string): Promise<T> =>
-  Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error(label)), ms))]);
-
-export async function loadWorkspace(workspaceId: string, onProgress?: WorkspaceLoadProgress): Promise<Workspace> {
-  await ensureWorkspacesDir();
-  const workspacePath = await getWorkspaceDirPath(workspaceId);
-  await makeDir(workspacePath);
-
-  const yieldCounter = { n: 0 };
-  const scan = readDirectoryRecursive(workspacePath, `${workspaceId}::root`, workspaceId, workspacePath, 0, yieldCounter, onProgress);
-  const root = await withTimeout(scan, SCAN_TIMEOUT_MS, "Workspace scan timed out after 45s");
-  return {
-    id: workspaceId,
-    name: workspaceId,
-    root,
-    dirPath: workspacePath,
-  };
-}
+/**
+ * NOTE: there is deliberately NO deep-scan loader in this file any more.
+ * `loadWorkspace` and its recursive walk were removed after they turned out to
+ * be dead weight on the project-open path: they walked the WHOLE tree (wrapped
+ * in a 45s timeout) and every caller discarded the result, because the IDE
+ * renders from the lazy `loadWorkspaceShallow` in workspaceTreeService. A full
+ * scan here is what made large projects look like the app could not open them —
+ * do not reintroduce one.
+ */
 
 export async function loadOrCreateDefaultWorkspace(): Promise<Workspace> {
   try {
@@ -177,82 +167,6 @@ export async function loadOrCreateDefaultWorkspace(): Promise<Workspace> {
     if (dirs?.length) return await loadWorkspaceShallow(dirs[0]);
   } catch (_) {}
   return await createWorkspace("MyFirstProject");
-}
-
-async function readDirectoryRecursive(
-  dirPath: string,
-  parentId: string,
-  workspaceId: string,
-  baseDir: string,
-  depth = 0,
-  shared?: { n: number },
-  onProgress?: WorkspaceLoadProgress
-): Promise<FileNode> {
-  if (depth > 6) {
-    return { id: parentId, name: parentId, type: "folder", path: "", children: [] };
-  }
-
-  // Sync native listFiles() per dir blocks JS: yield so taps interleave.
-  if (shared) {
-    shared.n++;
-    if (shared.n % 12 === 0) {
-      await new Promise<void>((r) => setTimeout(r, 0));
-    }
-  }
-  try { onProgress?.(shared?.n || 0, dirPath); } catch (_) {}
-
-  const cleanBaseDir = normalizeCleanPath(baseDir).replace(/\/+$/, "");
-  const cleanDirPath = normalizeCleanPath(dirPath).replace(/\/+$/, "");
-
-  try {
-    const entries = await readDirEntries(cleanDirPath);
-    const fileChildren: FileNode[] = [];
-    const subFolders: FileNode[] = [];
-
-    for (const entry of entries) {
-      if (IGNORED_FOLDERS.has(entry.name)) continue;
-      if (entry.name.startsWith(".") && entry.name !== ".env" && entry.name !== ".gitignore" && entry.name !== ".env.example") continue;
-
-      const cleanFullPath = normalizeCleanPath(entry.path);
-      const relativePath = cleanFullPath.startsWith(cleanBaseDir)
-        ? cleanFullPath.slice(cleanBaseDir.length).replace(/^\/+/, "")
-        : cleanFullPath.replace(/^\/+/, "");
-
-      const id = `${workspaceId}::${relativePath}`;
-
-      if (entry.isDirectory) {
-        const cf = await readDirectoryRecursive(`${cleanFullPath}/`, id, workspaceId, cleanBaseDir, depth + 1, shared, onProgress);
-        cf.path = relativePath;
-        subFolders.push(cf);
-      } else {
-        fileChildren.push({
-          id,
-          name: entry.name,
-          type: "file",
-          path: relativePath,
-          content: "",
-        });
-      }
-    }
-
-    const children: FileNode[] = [...subFolders, ...fileChildren];
-
-    const folderName = cleanDirPath.split("/").filter(Boolean).pop() || workspaceId;
-    let relFolder = cleanDirPath;
-    if (cleanDirPath.startsWith(cleanBaseDir)) {
-      relFolder = cleanDirPath.slice(cleanBaseDir.length).replace(/^\/+/, "");
-    }
-
-    return {
-      id: parentId,
-      name: folderName,
-      type: "folder",
-      path: relFolder,
-      children,
-    };
-  } catch (e) {
-    return { id: parentId, name: workspaceId, type: "folder", path: "", children: [] };
-  }
 }
 
 export async function createWorkspace(
