@@ -18,7 +18,7 @@ import { ThemeColors } from "../../../theme/themeContext";
  * sideloaded) or a licence server that verifies a purchase. Keep the copy on
  * this screen honest about that: it is a tip jar.
  */
-export const SUPPORT_URL = "";
+export const SUPPORT_URL = "https://buymeacoffee.com/Astra12";
 
 const SUPPORT_HOST = "buymeacoffee.com";
 
