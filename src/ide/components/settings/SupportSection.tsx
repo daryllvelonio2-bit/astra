@@ -1,5 +1,15 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Clipboard, Platform, ToastAndroid } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  Clipboard,
+  Platform,
+  ToastAndroid,
+  type ImageSourcePropType,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
 import {
@@ -26,10 +36,29 @@ import {
  * this one is sideloaded) or a licence server. Keep the copy honest about that.
  */
 
+/**
+ * Bundled GCash personal QR, shown above the number so senders can scan it.
+ *
+ * null until `assets/gcash-qr.png` exists: Metro resolves `require()` at BUILD
+ * time and fails on a missing file, so this cannot point at the path
+ * speculatively. To enable it, save the PNG from GCash (Receive Money → QR →
+ * download) as `assets/gcash-qr.png`, then set this to
+ * `require("../../../../assets/gcash-qr.png")`.
+ *
+ * It cannot be derived from the number here — a GCash QR is a signed QR Ph
+ * payload, and a look-alike QR built from the digits would fail when scanned.
+ *
+ * The number stays visible on purpose: some people would rather type it than
+ * scan, and it is the fallback if scanning from another screen is awkward.
+ */
+const GCASH_QR: ImageSourcePropType | null = null;
+
 export function SupportSection({ theme }: { theme: ThemeColors }) {
   const [copied, setCopied] = useState(false);
   const valid = isValidGcashNumber(GCASH_NUMBER);
   const pretty = formatGcashNumber(GCASH_NUMBER);
+  const hasQr = GCASH_QR !== null;
+  const canDonate = hasQr || valid;
 
   const copy = () => {
     if (!valid) return;
@@ -45,6 +74,19 @@ export function SupportSection({ theme }: { theme: ThemeColors }) {
       setCopied(false);
     }
   };
+
+  // The steps follow whichever method is actually available.
+  const steps = hasQr
+    ? [
+        "Open the GCash app and tap Scan QR",
+        "Scan the code above — or save it and upload it from your gallery",
+        "Enter any amount and confirm",
+      ]
+    : [
+        "Open the GCash app and tap Send",
+        "Choose Express Send, then paste the number",
+        "Enter any amount and confirm",
+      ];
 
   return (
     <View>
@@ -62,7 +104,18 @@ export function SupportSection({ theme }: { theme: ThemeColors }) {
         </View>
       </View>
 
-      {valid ? (
+      {hasQr && (
+        <View style={[styles.qrBox, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
+          <Text style={[styles.numberLabel, { color: theme.textMuted }]}>SCAN OR UPLOAD THIS CODE</Text>
+          <Image source={GCASH_QR as ImageSourcePropType} style={styles.qrImage} resizeMode="contain" />
+          <Text style={[styles.qrHint, { color: theme.textMuted }]}>
+            This is {GCASH_LABEL ? `${GCASH_LABEL}'s` : "the"} GCash code. Save the image and upload it
+            from your gallery if you cannot scan from another screen.
+          </Text>
+        </View>
+      )}
+
+      {valid && (
         <>
           <View style={[styles.numberBox, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
             <Text style={[styles.numberLabel, { color: theme.textMuted }]}>
@@ -84,25 +137,23 @@ export function SupportSection({ theme }: { theme: ThemeColors }) {
               {copied ? "Copied" : "Copy number"}
             </Text>
           </TouchableOpacity>
-
-          <View style={styles.stepsBlock}>
-            {[
-              "Open the GCash app and tap Send",
-              "Choose Express Send, then paste the number",
-              "Enter any amount and confirm",
-            ].map((step, i) => (
-              <View key={i} style={styles.stepRow}>
-                <Text style={[styles.stepNum, { color: theme.accent }]}>{i + 1}</Text>
-                <Text style={[styles.stepText, { color: theme.textSecondary }]}>{step}</Text>
-              </View>
-            ))}
-          </View>
         </>
+      )}
+
+      {canDonate ? (
+        <View style={styles.stepsBlock}>
+          {steps.map((step, i) => (
+            <View key={i} style={styles.stepRow}>
+              <Text style={[styles.stepNum, { color: theme.accent }]}>{i + 1}</Text>
+              <Text style={[styles.stepText, { color: theme.textSecondary }]}>{step}</Text>
+            </View>
+          ))}
+        </View>
       ) : (
         <View style={[styles.numberBox, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
           <Text style={[styles.numberLabel, { color: theme.textMuted }]}>GCash</Text>
           <Text style={[styles.sub, { color: theme.textSecondary }]}>
-            This build has no GCash number set up yet.
+            This build has no GCash details set up yet.
           </Text>
         </View>
       )}
@@ -135,6 +186,16 @@ const styles = StyleSheet.create({
   labels: { flex: 1, gap: 2 },
   title: { fontSize: 13.5, fontWeight: "700" },
   sub: { fontSize: 11, lineHeight: 15 },
+  qrBox: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 12,
+    alignItems: "center",
+    gap: 8,
+  },
+  qrImage: { width: 190, height: 190, borderRadius: 8 },
+  qrHint: { fontSize: 10.5, lineHeight: 14, textAlign: "center" },
   numberBox: {
     marginTop: 10,
     borderRadius: 10,
