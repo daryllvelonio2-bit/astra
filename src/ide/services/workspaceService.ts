@@ -15,19 +15,15 @@ import {
 const WORKSPACES_DIR = `${FileSystem.documentDirectory}workspaces/`;
 const REGISTRY_FILE = `${FileSystem.documentDirectory}workspaces_registry.json`;
 
-export const IGNORED_FOLDERS = new Set([
-  "node_modules",
-  "vendor",
-  ".git",
-  ".next",
-  "dist",
-  "build",
-  ".cache",
-  "coverage",
-  ".idea",
-  ".vscode",
-  ".ai",
-]);
+// Canonical ignore list now lives in workspaceIgnore (a pure module, so the
+// walk that consumes it stays headlessly testable). Re-exported under the old
+// name so workspaceTreeService and fileTreeWalker need no change.
+export { IGNORED_FOLDERS } from "./workspaceIgnore";
+import { IGNORED_FOLDERS } from "./workspaceIgnore";
+// The lazy tree loader lives in workspaceTreeService, which imports from this
+// module — so this is a cycle. It is benign: both modules only DEFINE hoisted
+// functions and call each other at runtime, never while a module initialises.
+import { loadWorkspaceShallow } from "./workspaceTreeService";
 
 export interface WorkspaceMeta {
   id: string;
@@ -178,7 +174,7 @@ export async function loadOrCreateDefaultWorkspace(): Promise<Workspace> {
   try {
     await ensureWorkspacesDir();
     const dirs = await listWorkspaces();
-    if (dirs?.length) return await loadWorkspace(dirs[0]);
+    if (dirs?.length) return await loadWorkspaceShallow(dirs[0]);
   } catch (_) {}
   return await createWorkspace("MyFirstProject");
 }
@@ -292,7 +288,7 @@ export async function createWorkspace(
   } catch (e) {}
 
   notifyWorkspaceChanged(workspaceId);
-  return await loadWorkspace(workspaceId);
+  return await loadWorkspaceShallow(workspaceId);
 }
 
 export async function openExistingDirectoryAsProject(
@@ -315,7 +311,7 @@ export async function openExistingDirectoryAsProject(
   });
 
   notifyWorkspaceChanged(workspaceId);
-  return await loadWorkspace(workspaceId);
+  return await loadWorkspaceShallow(workspaceId);
 }
 
 export async function saveFileContent(workspaceId: string, filePath: string, content: string): Promise<void> {

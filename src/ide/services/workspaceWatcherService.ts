@@ -1,10 +1,11 @@
 import type { NativeDirEntry } from "../../../modules/linux-runner/src";
 
-/** Directories never worth re-scanning (deps, build output, VCS, caches). */
-const IGNORED_NAMES = new Set([
-  "node_modules", "vendor", ".git", "dist", "build", ".cache",
-  "coverage", ".idea", ".vscode",
-]);
+/**
+ * Directories the fingerprint walk skips. The canonical two-tier list lives in
+ * workspaceIgnore; the walk uses the aggressive tier because a folder skipped
+ * here is only skipped for change detection — the explorer still shows it.
+ */
+import { WATCHER_SKIP_NAMES as IGNORED_NAMES } from "./workspaceIgnore";
 
 /** Deep enough for real trees (android/app/src/main/… is 6); depth still bounds symlink loops. */
 export const WATCHER_MAX_DEPTH = 8;
