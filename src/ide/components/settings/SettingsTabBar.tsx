@@ -3,7 +3,7 @@ import { View, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
 
-export type SettingsTabId = "general" | "editor" | "notifications" | "environment" | "shortcuts" | "feedback" | "plan";
+export type SettingsTabId = "general" | "editor" | "notifications" | "environment" | "shortcuts" | "feedback" | "support";
 
 interface SettingsTab {
   id: SettingsTabId;
@@ -19,7 +19,7 @@ const TABS: SettingsTab[] = [
   { id: "environment", title: "Linux", icon: "cube-outline" },
   { id: "shortcuts", title: "Keys", icon: "key-outline" },
   { id: "feedback", title: "Feedback", icon: "mail-outline" },
-  { id: "plan", title: "Full features", icon: "diamond-outline" },
+  { id: "support", title: "Support", icon: "cafe-outline" },
 ];
 
 interface SettingsTabBarProps {
