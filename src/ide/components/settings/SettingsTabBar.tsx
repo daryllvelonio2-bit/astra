@@ -19,7 +19,7 @@ const TABS: SettingsTab[] = [
   { id: "environment", title: "Linux", icon: "cube-outline" },
   { id: "shortcuts", title: "Keys", icon: "key-outline" },
   { id: "feedback", title: "Feedback", icon: "mail-outline" },
-  { id: "support", title: "Support", icon: "cafe-outline" },
+  { id: "support", title: "Support", icon: "wallet-outline" },
 ];
 
 interface SettingsTabBarProps {
