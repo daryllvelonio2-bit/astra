@@ -5499,3 +5499,15 @@
 - **Verification:** `npx tsc --noEmit` 0 errors; the regenerated runtime HTML contains `'\x1b[5~'` with exactly **one** backslash (verified by loading the generated module and inspecting the real string, not by reading reprs — nested template/string escaping had already fooled me once); sizes `workspaceService.ts` 428, `CloneRepoModal.tsx` 413, `MyReposList.tsx` 211 — all under the 500-line cap.
 - **NOT verified:** none of the three fixes has been exercised on the device yet; that needs the rebuilt APK installed.
 - **Also learned:** driving the phone over adb collides with Jay using it — a tap aimed at the repo-list toggle surfaced his Messenger. Stopped driving the UI and said so.
+
+### [2026-10-08] - Duplicate workspaces: found the real cause by instrumenting, not theorising
+- **Two fixes failed before this one, both because I reasoned instead of measuring.** Attempt 1 collapsed by `dirPath` exactly; attempt 2 case-insensitively. The device still showed **5 cards for 3 projects** each time.
+- **Ground truth came from a temporary `console.log` of the live metas** read out of `adb logcat` (the release build is not debuggable, so `run-as` cannot read the app's private dirs). The real values:
+  - `id=Teachers-Day      dir=file:///data/user/0/.../workspaces/Teachers-Day/`  ← derived from the directory on disk
+  - `id=teachers-day      dir=/data/user/0/.../workspaces/Teachers-Day/`          ← the registry entry
+  - `id=shiina-cli        dir=/data/user/0/.../workspaces/shiina-cli/`            ← appears ONCE
+- **Root cause, both halves at once:** the registry id is a slug (`teachers-day`) while the folder on disk keeps its case (`Teachers-Day`), so `listWorkspaces()` returns BOTH from its two sources; and the disk-derived entry builds its path from `WORKSPACES_DIR`, which is a `file://` URI, while the registry stores a plain path — so even a case-insensitive compare never matched. A folder already named as a slug (`shiina-cli`) suffers neither and appeared once, which is exactly why only the capitalised projects duplicated.
+- **Fix:** identity now runs through `workspacePathKey()` — strip `file://`, strip trailing slashes, fold case — used both by `collapseWorkspaceMetas()` and by `openExistingDirectoryAsProject`'s "is this folder already a workspace?" lookup, so a project cannot mint a second id on the way in.
+- **Test rewritten from the live data:** `astra-harness/dedupe` replays those five real metas and expects **3** cards, plus guards that different projects are never merged (including `app` vs `app2`, which share a display name) and that two unknown paths never collapse into one. **18/18**, `tsc` 0.
+- **Lesson:** the fix lived one layer below where I was looking — the id/path disagreement between the two listing sources — and only measurement showed it. Reading the code twice produced two confident wrong answers.
+- **Verified on the device after rebuild: see the entry above** (3 cards, no repeats).

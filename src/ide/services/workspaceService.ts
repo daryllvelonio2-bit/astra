@@ -24,7 +24,7 @@ import { IGNORED_FOLDERS } from "./workspaceIgnore";
 // module — so this is a cycle. It is benign: both modules only DEFINE hoisted
 // functions and call each other at runtime, never while a module initialises.
 import { loadWorkspaceShallow } from "./workspaceTreeService";
-import { collapseWorkspaceMetas } from "./workspaceMetaDedupe";
+import { collapseWorkspaceMetas, workspacePathKey } from "./workspaceMetaDedupe";
 
 export interface WorkspaceMeta {
   id: string;
@@ -228,7 +228,7 @@ export async function openExistingDirectoryAsProject(
   // key is the slug ("teachers-day"), and listWorkspaces() unions both sources.
   const registry = await loadWorkspaceRegistry();
   const existingId = Object.keys(registry).find(
-    (id) => (registry[id]?.dirPath || "").replace(/\/+$/, "") === normalizedPath.replace(/\/+$/, "")
+    (id) => workspacePathKey(registry[id]?.dirPath, id) === workspacePathKey(normalizedPath, folderName)
   );
   const workspaceId = existingId || slug;
 
