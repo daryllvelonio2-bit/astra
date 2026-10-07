@@ -29,8 +29,14 @@ import {
   executeCommand,
   isEnvironmentReady,
 } from "../../../modules/linux-runner/src";
+import {
+  HostProjectKind,
+  HOST_PLANS,
+  NodeFlavor,
+  RuntimeInfo,
+} from "./hostingPlans";
 
-export type HostProjectKind = "laravel" | "node" | "static";
+
 
 export type HostStatus =
   | "idle"
@@ -55,16 +61,6 @@ export interface HostState {
   error: string | null;
 }
 
-export interface RuntimeInfo {
-  installed: boolean;
-  /** What the user needs to install, in plain words. */
-  label: string;
-  binary: string;
-  /** apt packages, in the order the guest wants them. */
-  apt: string[];
-  /** Rough download size, so the user can decide on mobile data. */
-  approxSize: string;
-}
 
 const HOST_LOG = "/tmp/astra-host.log";
 const HOST_PID = "/tmp/astra-host.pid";
@@ -76,102 +72,11 @@ const TUNNEL_PID = "/tmp/astra-tunnel.pid";
  * that actually serves it. Kept in one table so the panel and the service can
  * never disagree about what "Laravel" means.
  */
-export const HOST_PLANS: Record<
-  HostProjectKind,
-  {
-    label: string;
-    binary: string;
-    apt: string[];
-    approxSize: string;
-    defaultPort: number;
-    serve: (guestDir: string, port: number, flavor?: NodeFlavor) => string;
-    /** A file whose presence in the project root identifies this kind. */
-    detect: (rootNames: string[], pkg: any) => boolean;
-  }
-> = {
-  laravel: {
-    label: "Laravel (PHP)",
-    binary: "php",
-    // Deliberately the -cli packages only: no web server, no composer. The
-    // guest serves with PHP's built-in server, and vendor/ is expected in the
-    // repository (or installed by the user), which keeps this a ~60 MB download
-    // instead of several hundred.
-    apt: [
-      "php-cli",
-      "php-sqlite3",
-      "php-mbstring",
-      "php-xml",
-      "php-curl",
-      "php-zip",
-      "php-gd",
-      "php-bcmath",
-    ],
-    approxSize: "≈60 MB",
-    defaultPort: 8000,
-    serve: (dir, port) =>
-      `cd ${dir} && php artisan serve --host=0.0.0.0 --port=${port}`,
-    detect: (rootNames) => has(rootNames, "artisan"),
-  },
-  node: {
-    label: "React / Node dev server",
-    binary: "npm",
-    apt: ["nodejs", "npm"],
-    approxSize: "≈40 MB",
-    defaultPort: 5173,
-    serve: (dir, port, flavor) => {
-      // Each framework wants its host/port flags spelled its own way; a bare
-      // `npm run dev` would bind to 127.0.0.1 inside the guest and be reachable
-      // only from the guest itself, which is the classic "the tunnel is up but
-      // the site is blank" failure.
-      switch (flavor) {
-        case "vite":
-          return `cd ${dir} && npm run dev -- --host 0.0.0.0 --port ${port}`;
-        case "next":
-          return `cd ${dir} && npm run dev -- -H 0.0.0.0 -p ${port}`;
-        case "cra":
-          return `cd ${dir} && HOST=0.0.0.0 PORT=${port} BROWSER=none npm start`;
-        default:
-          return `cd ${dir} && HOST=0.0.0.0 PORT=${port} npm run dev`;
-      }
-    },
-    detect: (rootNames, pkg) => has(rootNames, "package.json") && !!pkg,
-  },
-  static: {
-    label: "Static site",
-    binary: "python3",
-    apt: ["python3"],
-    approxSize: "≈30 MB",
-    defaultPort: 8080,
-    serve: (dir, port) => `cd ${dir} && python3 -m http.server ${port} --bind 0.0.0.0`,
-    detect: (rootNames, pkg) => !pkg && has(rootNames, "index.html"),
-  },
-};
-
-function has(rootNames: string[], name: string): boolean {
-  const lower = rootNames.map((n) => n.toLowerCase());
-  return lower.includes(name.toLowerCase());
-}
-
-export type NodeFlavor = "vite" | "next" | "cra" | "other";
-
-/** Which dev-server dialect this package.json speaks. */
-export function nodeFlavor(pkg: any): NodeFlavor {
-  const deps = { ...(pkg?.dependencies || {}), ...(pkg?.devDependencies || {}) };
-  if (deps.vite) return "vite";
-  if (deps.next) return "next";
-  if (deps["react-scripts"]) return "cra";
-  return "other";
-}
 
 /**
  * Pick the project kind from the files at the workspace root. Order matters:
  * a Laravel app can also contain an index.html in public/, but artisan wins.
  */
-export function detectHostKind(rootNames: string[], pkg: any): HostProjectKind | null {
-  const order: HostProjectKind[] = ["laravel", "node", "static"];
-  return order.find((k) => HOST_PLANS[k].detect(rootNames, pkg)) ?? null;
-}
-
 // ---------------------------------------------------------------------------
 // state + subscription (same shape as the toolchain gate, so the UI is boring)
 // ---------------------------------------------------------------------------
@@ -326,6 +231,8 @@ export async function startHosting(opts: {
     return null;
   }
 
+  await prepareGuest();
+
   const runtime = await checkRuntime(kind);
   if (!runtime.installed) {
     set({
@@ -347,9 +254,23 @@ export async function startHosting(opts: {
 
   // Wait for something to answer on the port. A dev server can take a while
   // (first vite/webpack build), so this is generous but bounded.
-  const ready = await waitForPort(port, 60, () => {
+  let ready = await waitForPort(port, 60, () => {
     set({ step: `Waiting for the server to answer on port ${port}…` });
   });
+  // artisan serve shells out to PHP's built-in server itself; the spike measured
+  // `php -S 0.0.0.0:<port> -t public` working directly, so fall back to that
+  // instead of reporting failure when artisan is unhappy about vendor/.
+  if (!ready && kind === "laravel") {
+    pushLog("php artisan serve did not answer; retrying with PHP's built-in server on public/");
+    set({ step: "Retrying with PHP's built-in server…" });
+    await run(`rm -f ${HOST_LOG}`);
+    await run(
+      `cd ${guestDir} && nohup bash -lc 'php -S 0.0.0.0:${port} -t public' > ${HOST_LOG} 2>&1 & echo $! > ${HOST_PID}; sleep 1; true`
+    );
+    ready = await waitForPort(port, 45, () => {
+      set({ step: "Waiting for PHP to answer…" });
+    });
+  }
   if (!ready) {
     const log = await run(`tail -n 8 ${HOST_LOG}`);
     log.out.split("\n").forEach(pushLog);
@@ -386,6 +307,26 @@ export async function startHosting(opts: {
   return url;
 }
 
+/**
+ * Two files the guest lacks that broke every measured attempt until they were
+ * added, so they are asserted before anything else runs:
+ *
+ *  - /etc/hosts has no `localhost`. cloudflared looks it up, fails
+ *    ("lookup localhost on 1.1.1.1:53: no such host") and EXITS after printing
+ *    its URL -- a tunnel that looks fine and is already dead.
+ *  - curl exits (77) on a missing CA-bundle path, which killed the readiness
+ *    probe even though the probe itself is plain HTTP.
+ *
+ * Both are idempotent and cheap enough to assert on every start.
+ */
+async function prepareGuest(): Promise<void> {
+  await run(
+    "grep -q '127.0.0.1 localhost' /etc/hosts 2>/dev/null || echo '127.0.0.1 localhost' >> /etc/hosts; " +
+      "[ -e /etc/ssl/cert.pem ] || ln -sf /etc/ssl/certs/ca-certificates.crt /etc/ssl/cert.pem; " +
+      "true"
+  );
+}
+
 /** Poll the guest's own loopback until the server answers. */
 async function waitForPort(port: number, seconds: number, onTick: () => void): Promise<boolean> {
   for (let i = 0; i < seconds; i++) {
@@ -414,7 +355,7 @@ async function openTunnel(port: number): Promise<string | null> {
     set({ step: "Opening a Cloudflare quick tunnel…", tunnel: "cloudflared" });
     await run(`rm -f ${TUNNEL_LOG} ${TUNNEL_PID}`);
     await run(
-      `nohup cloudflared tunnel --url http://localhost:${port} --no-autoupdate > ${TUNNEL_LOG} 2>&1 & echo $! > ${TUNNEL_PID}; sleep 1; true`
+      `nohup cloudflared tunnel --url http://127.0.0.1:${port} --no-autoupdate > ${TUNNEL_LOG} 2>&1 & echo $! > ${TUNNEL_PID}; sleep 1; true`
     );
     const url = await waitForUrl(TUNNEL_LOG, /https:\/\/[a-z0-9-]+\.trycloudflare\.com/, 45);
     if (url) return url;
@@ -435,7 +376,7 @@ async function openTunnel(port: number): Promise<string | null> {
   await run(
     `nohup ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ` +
       `-o ServerAliveInterval=30 -o ExitOnForwardFailure=yes ` +
-      `-R 80:localhost:${port} nokey@localhost.run > ${TUNNEL_LOG} 2>&1 & ` +
+      `-R 80:127.0.0.1:${port} nokey@localhost.run > ${TUNNEL_LOG} 2>&1 & ` +
       `echo $! > ${TUNNEL_PID}; sleep 1; true`
   );
   return await waitForUrl(

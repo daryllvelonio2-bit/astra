@@ -13,12 +13,13 @@ import { readFileContent } from "../../services/workspaceService";
 import {
   HostProjectKind,
   HOST_PLANS,
-  NodeFlavor,
-  checkRuntime,
   detectHostKind,
+  nodeFlavor,
+} from "../../services/hostingPlans";
+import {
+  checkRuntime,
   getHostingState,
   installRuntime,
-  nodeFlavor,
   startHosting,
   stopHosting,
   subscribeHosting,
