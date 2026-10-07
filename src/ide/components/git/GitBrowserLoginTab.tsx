@@ -95,7 +95,13 @@ export function GitBrowserLoginTab({ onSessionChange }: { onSessionChange?: (s: 
         applySession(sess);
         setPhase("loggedIn");
         setFlow(null);
-        showAppDialog({ title: "Signed in", message: `Welcome, ${sess.username}! Push, pull and clone now work with your account.` });
+        showAppDialog({
+          title: "Signed in",
+          message:
+            sess.credentialsWired === false
+              ? `Welcome, ${sess.username}! Your account is linked. Git will authenticate as you once the Linux environment finishes setting up — you do not need to sign in again.`
+              : `Welcome, ${sess.username}! Push, pull and clone now work with your account.`,
+        });
       } catch (e: any) {
         setError(e?.message || "Sign-in failed.");
         setFlow(null);

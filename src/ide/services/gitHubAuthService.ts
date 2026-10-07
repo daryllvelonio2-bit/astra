@@ -31,6 +31,14 @@ export interface GitHubSession {
   email: string;
   avatarUrl: string;
   hasToken: boolean;
+  /**
+   * False when ~/.git-credentials could not be written yet (the Linux
+   * environment was not provisioned at sign-in time). The account is signed in
+   * either way — git auth self-heals through ensureGitHubCredentials(), which
+   * needs nothing but a saved session. Optional so every existing construction
+   * site stays valid.
+   */
+  credentialsWired?: boolean;
 }
 
 export interface DeviceFlowSession {
@@ -163,14 +171,11 @@ export async function completeGitHubLogin(token: string): Promise<GitHubSession>
     email = (emails?.find((item) => item.primary)?.email || emails?.[0]?.email || "").trim();
   }
   const finalEmail = email || `${username}@users.noreply.github.com`;
-  const envReady = await PRootService.ensureReady();
-  if (!envReady) {
-    throw new Error(
-      "Signed in, but the Linux environment is not ready yet. Download the Linux resources in Settings → Environment first, then sign in again."
-    );
-  }
-  const configured = await configureGitCredentials(token, username, finalEmail);
-  if (!configured) throw new Error("Signed in, but git credential wiring failed.");
+
+  // Persist the session FIRST. GitHub has already issued this token, so guest
+  // plumbing that is not ready yet must never cost the user another trip
+  // through the device flow — that is what made sign-in look broken right
+  // after a fresh install: the token was thrown away and nothing got linked.
   const cfg = await loadConfig();
   await saveConfig({
     githubToken: token,
@@ -180,7 +185,27 @@ export async function completeGitHubLogin(token: string): Promise<GitHubSession>
     bottomTabs: { ...cfg.bottomTabs, git: true },
   });
   invalidateGitHubTokenCache();
-  return { username, email: finalEmail, avatarUrl: user?.avatar_url || "", hasToken: true };
+
+  // Best-effort from here: write ~/.git-credentials in the guest. If the Linux
+  // environment is not provisioned yet, the account is signed in regardless and
+  // ensureGitHubCredentials() re-wires the file later (it runs on the login
+  // tab's mount and needs only a saved session).
+  let credentialsWired = false;
+  try {
+    if (await PRootService.ensureReady()) {
+      credentialsWired = await configureGitCredentials(token, username, finalEmail);
+    }
+  } catch (_) {
+    credentialsWired = false;
+  }
+
+  return {
+    username,
+    email: finalEmail,
+    avatarUrl: user?.avatar_url || "",
+    hasToken: true,
+    credentialsWired,
+  };
 }
 
 async function apiGet<T>(path: string, token: string): Promise<T | null> {
