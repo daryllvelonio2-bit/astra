@@ -297,10 +297,13 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
         {cloning ? (
           <ActivityIndicator size="small" color="#fff" />
         ) : (
+          // Plain "Clone", never the repo name: a name like
+          // "Boarding-House-Management-w-Ai-Chatbot-and-Epayment" overflowed the
+          // button and collided with the sheet title. The selected repo is
+          // already obvious from the highlighted row and the destination line
+          // below it, and the sheet is short in landscape.
           <Text style={[styles.buttonTextCreate, { color: theme.sendButtonIcon }]} numberOfLines={1}>
-            {mode === 'account'
-              ? (selectedRepo ? `Clone ${selectedRepo.name}` : 'Pick a repo above')
-              : 'Clone & Open'}
+            {mode === 'account' ? 'Clone' : 'Clone & Open'}
           </Text>
         )}
       </TouchableOpacity>
