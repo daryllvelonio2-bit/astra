@@ -138,8 +138,13 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
         return true;
       }
       if (res.needsAuth) {
+        // Never tell a signed-in user to sign in again. The usual cause is the
+        // guest never receiving ~/.git-credentials (fresh install, or the Linux
+        // environment was not extracted when they signed in).
         setError(
-          'This repo needs authentication. Sign in to GitHub in the Git tab first, then clone again.'
+          res.credentialsWired === false
+            ? "Your GitHub account is linked, but the Linux environment could not store your git credentials yet. Open the Git tab once (or Settings → Linux) so it can finish setting up, then clone again."
+            : "GitHub refused this repository. If it is private, sign in again in the Git tab — your token may not cover it."
         );
       } else {
         setError(res.error || 'Clone failed.');

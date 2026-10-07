@@ -5,6 +5,7 @@ import {
   stopCommand,
 } from "../../../modules/linux-runner/src";
 import { isToolchainReadyForGit } from "./toolchainGate";
+import { ensureGitHubCredentials } from "./gitHubAuthService";
 
 export interface CloneResult {
   success: boolean;
@@ -12,6 +13,11 @@ export interface CloneResult {
   folderName?: string;
   error?: string;
   needsAuth?: "token" | "ssh";
+  /**
+   * Whether the guest actually holds ~/.git-credentials at clone time. False
+   * means an auth failure is about the environment, not about the account.
+   */
+  credentialsWired?: boolean;
 }
 
 const AUTH_PATTERNS = /401|403|authentication failed|authorization failed|permission denied|publickey|could not read username|terminal prompts disabled|askpass|host key verification failed/i;
@@ -93,6 +99,21 @@ export async function cloneGitRepo(
     return { success: false, error: `A folder named "${name}" already exists here.` };
   }
 
+  // A saved GitHub session is not enough on its own: git only authenticates via
+  // the guest's ~/.git-credentials, and sign-in writes that file best-effort —
+  // it is deferred when the Linux environment has not been extracted yet. A
+  // fresh install or a wiped guest therefore makes a PRIVATE repo fail exactly
+  // like a signed-out user ("could not read Username", terminal prompts
+  // disabled), and the UI then tells someone who IS signed in to sign in again.
+  // Every clone passes through here, so wire the credentials at this choke
+  // point instead of trusting the login tab to have been mounted.
+  let credentialsWired = false;
+  try {
+    credentialsWired = await ensureGitHubCredentials();
+  } catch (_) {
+    credentialsWired = false;
+  }
+
   const sshCmd = "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new";
   const cmd =
     `GIT_TERMINAL_PROMPT=0 git -c core.sshCommand="${sshCmd}" clone --progress "${url}" "${name}" 2>&1`;
@@ -132,6 +153,7 @@ export async function cloneGitRepo(
       success: false,
       error: firstLine || "Clone failed.",
       needsAuth,
+      credentialsWired,
     };
   }
   return { success: true, dirPath, folderName: name };
