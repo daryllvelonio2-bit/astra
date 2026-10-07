@@ -2,8 +2,8 @@
  * Pure terminal-buffer helpers (headlessly testable).
  *
  * Rules that keep the terminal honest:
- * - The buffer NEVER contains a fake shell prompt. The banner is a title
- *   line only; the real prompt always comes from the shell stream, so `cd`
+ * - The buffer NEVER contains a fake shell prompt. The banner is a single
+ *   path line only; the real prompt always comes from the shell stream, so `cd`
  *   directory changes always display.
  * - Native history merges are delta-only appends. Replacing the buffer with
  *   native history wipes locally-echoed command lines (the shell has no tty
@@ -16,61 +16,24 @@ export const TERMINAL_BUFFER_KEEP = 80000;
 // rather than "native buffer trimmed".
 const RESTART_CEILING = 4096;
 
-const ASTRA_ART = [
-  "    _    ____ _____ ____      _    ",
-  "   / \\  / ___|_   _|  _ \\    / \\   ",
-  "  / _ \\ \\___ \\ | | | |_) |  / _ \\  ",
-  " / ___ \\ ___) || | |  _ <  / ___ \\ ",
-  "/_/   \\_\\____/ |_| |_| \\_\\/_/   \\_\\",
-];
-
-export function getBannerTitle(workspaceId?: string, isDark: boolean = true): string {
-  const dir = workspaceId ? `/workspaces/${workspaceId}` : "/workspace";
-  const R = "\u001b[0m";
-
-  // Vibrant, high-contrast palette
-  const artColor = isDark ? "\u001b[1;36m" : "\u001b[1;34m";
-  const userColor = "\u001b[1;32m";
-  const hostColor = isDark ? "\u001b[1;36m" : "\u001b[1;34m";
-  const dimColor = "\u001b[90m";
-
-  // Metric icon colors
-  const cOs = "\u001b[1;36m";
-  const cKer = "\u001b[1;35m";
-  const cSh = "\u001b[1;33m";
-  const cWs = "\u001b[1;34m";
-  const cTerm = "\u001b[1;32m";
-  const cEng = "\u001b[1;31m";
-
-  // Labels: bold high-contrast
-  const L = isDark ? "\u001b[1;37m" : "\u001b[1;30m";
-
-  const lines = [
-    `${artColor}${ASTRA_ART[0]}${R}`,
-    `${artColor}${ASTRA_ART[1]}${R}`,
-    `${artColor}${ASTRA_ART[2]}${R}`,
-    `${artColor}${ASTRA_ART[3]}${R}`,
-    `${artColor}${ASTRA_ART[4]}${R}`,
-    ``,
-    `${userColor}astra${R}@${hostColor}debian${R}`,
-    `${dimColor}──────────────────────────────────────────${R}`,
-    `  ${cOs}▲${R}  ${L}OS:${R}         Debian Linux (PRoot sandbox)`,
-    `  ${cKer}◉${R}  ${L}Kernel:${R}     Linux userland (embedded)`,
-    `  ${cSh}⚡${R} ${L}Shell:${R}      bash`,
-    `  ${cWs}📁${R} ${L}Workspace:${R}  ${cWs}${dir}${R}`,
-    `  ${cTerm}💻${R} ${L}Terminal:${R}   xterm.js pty`,
-    `  ${cEng}🚀${R} ${L}Engine:${R}     PRoot + glibc`,
-    ``,
-    `  \u001b[31m● \u001b[32m● \u001b[33m● \u001b[34m● \u001b[35m● \u001b[36m● \u001b[37m● \u001b[90m●${R}`,
-  ];
-  return lines.join("\r\n") + "\r\n";
-}
-
-/** Split-view banner: panes are too short for the full card — directory only. */
-export function getBannerCompact(workspaceId?: string): string {
+/**
+ * The terminal's startup line: the project path, and nothing else.
+ *
+ * This replaced a fastfetch-style card (ASCII art plus OS / kernel / shell /
+ * workspace / terminal / engine rows). Jay asked for it gone — when a terminal
+ * opens, the one thing worth showing is where you are, so that is all this
+ * prints.
+ *
+ * The path is the guest path the shell actually starts in: ProotSessionConfig
+ * binds the host workspaces directory to /workspaces, so this is the same string
+ * a `pwd` prints immediately after startup. Plain grey, no box drawing, so the
+ * first real prompt follows it without a wall of decoration in between.
+ */
+export function getBannerPath(workspaceId?: string): string {
   const dir = workspaceId ? `/workspaces/${workspaceId}` : "/workspace";
   return `\u001b[90m${dir}\u001b[0m\r\n`;
 }
+
 export function appendCapped(current: string, chunk: string): string {
   if (!chunk) return current;
   const updated = current + chunk;

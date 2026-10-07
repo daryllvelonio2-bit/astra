@@ -18,7 +18,7 @@ import { themeToTerminalTheme, TerminalTheme } from "./terminalThemes";
 import { useRunSessionEffect } from "./useRunSession";
 import { useTheme } from "../../../theme/themeContext";
 import {
-  getBannerTitle,
+  getBannerPath,
   appendCapped,
   mergeNativeHistory,
   stripLeakedTerminalText,
@@ -39,7 +39,7 @@ interface UseTerminalSessionProps {
   workspaceId?: string;
 }
 
-const getBanner = (workspaceId?: string, isDark: boolean = true) => getBannerTitle(workspaceId, isDark);
+const getBanner = (workspaceId?: string) => getBannerPath(workspaceId);
 
 // Lipgloss/bubbletea TUIs (opencode) pick dark vs light variants via
 // COLORFGBG. Native defaults to dark ("15;default;0"); JS live-exports the
@@ -57,13 +57,12 @@ async function startShellSession(sessionId: string, workspaceId?: string) {
 
 export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
   const { theme: appTheme } = useTheme();
-  const isDarkInitial = appTheme.isDark;
   const [sessions, setSessions] = useState<TerminalTab[]>([
     { id: "session-1", name: "1: sh" },
   ]);
   const [activeSessionId, setActiveSessionId] = useState<string>("session-1");
   const [sessionOutputs, setSessionOutputs] = useState<Record<string, string>>({
-    "session-1": getBanner(workspaceId, isDarkInitial),
+    "session-1": getBanner(workspaceId),
   });
   const [isCtrlActive, setIsCtrlActive] = useState<boolean>(false);
   const [isAltActive, setIsAltActive] = useState<boolean>(false);

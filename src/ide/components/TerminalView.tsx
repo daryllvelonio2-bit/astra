@@ -15,7 +15,7 @@ import { AnsiRenderer } from "./terminal/AnsiRenderer";
 import { TerminalHeader } from "./terminal/TerminalHeader";
 import { ExtraKeysBar, EXTRA_KEYS_BAR_HEIGHT } from "./terminal/ExtraKeysBar";
 import { XtermView, XtermViewHandle } from "./terminal/XtermView";
-import { getBannerTitle, getBannerCompact } from "./terminal/terminalBuffer";
+import { getBannerPath } from "./terminal/terminalBuffer";
 import { PTY_XTERM_ENABLED } from "./terminal/ptyConfig";
 import { useTerminalInput } from "./terminal/useTerminalInput";
 import { useSplitTerminal } from "./terminal/useSplitTerminal";
@@ -329,11 +329,7 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
                 background={theme.background}
                 foreground={theme.foreground}
                 cursor={theme.cursor}
-                banner={
-                  isSplit || isLandscape
-                    ? getBannerCompact(workspaceId)
-                    : getBannerTitle(workspaceId, theme.id !== "light")
-                }
+                banner={getBannerPath(workspaceId)}
                 onRequestKeyboard={handleRequestKeyboardPrimary}
                 visible={visible}
                 isKeyboardVisible={isSplit ? focusedPane === "primary" && isKeyboardVisible : isKeyboardVisible}
@@ -385,7 +381,7 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
                     background={theme.background}
                     foreground={theme.foreground}
                     cursor={theme.cursor}
-                    banner={getBannerCompact(workspaceId)}
+                    banner={getBannerPath(workspaceId)}
                     onRequestKeyboard={handleRequestKeyboardSecondary}
                     visible={visible}
                     isKeyboardVisible={focusedPane === "secondary" && isKeyboardVisible}
