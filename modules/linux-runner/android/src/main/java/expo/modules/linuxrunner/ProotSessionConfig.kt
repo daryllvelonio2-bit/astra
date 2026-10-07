@@ -206,9 +206,12 @@ object ProotSessionConfig {
             "LANG" to "C.UTF-8",
             "LC_ALL" to "C.UTF-8",
             "ENV" to "/root/.profile",
-            // Plain prompt on purpose: keep it ASCII-safe for the xterm
-            // renderer and consistent across shells (dash, bash).
-            "PS1" to "linux:\\w# ",
+            // Pathless prompt on purpose. The project path is printed once by
+            // the terminal banner; \w here made the shell prompt repeat it as a
+            // 60+ character host path (/data/user/0/...) that wrapped over three
+            // rows on a phone. A short prompt removes the duplicate AND the wrap
+            // noise in one go, and stays ASCII-safe for the xterm renderer.
+            "PS1" to "linux# ",
             "PROOT_TMP_DIR" to tmpDir,
             "LD_LIBRARY_PATH" to ProotCapabilities.guestLdLibraryPath(context)
         )

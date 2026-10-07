@@ -323,9 +323,11 @@ export LC_ALL=C.UTF-8
 export CI=1
 export EXPO_NO_TELEMETRY=1
 export EXPO_USE_LOCAL_CLI=1
-# Plain prompt on purpose: keep it ASCII-safe for the xterm renderer
-# and consistent across shells (dash, bash).
-export PS1='linux:\w# '
+# Pathless prompt on purpose: the project path is printed once by the terminal
+# banner, and \w here made the shell prompt repeat it as a 60+ character host
+# path that wrapped over three rows. Short, ASCII-safe, and the same in dash
+# and bash.
+export PS1='linux# '
 # Keep arrow-key history working even if a stray INPUTRC remaps it.
 if [ -n "${'$'}BASH_VERSION" ]; then
   set -o emacs 2>/dev/null
