@@ -4,6 +4,7 @@ import { FileNode } from "../types";
 import { moveNodeInTree } from "./fileExplorerUtils";
 import {
   createFileInWorkspace,
+  createFolderInWorkspace,
   deleteNodeInWorkspace,
   renameNodeInWorkspace,
   moveNodeInWorkspace,
@@ -130,25 +131,44 @@ export function useWorkspaceFileActions({
     }
   }, [refreshWorkspace]);
 
-  const handleCreateNode = useCallback(async (inputName: string) => {
+  const handleCreateNode = useCallback(async (
+    inputName: string,
+    kind: "file" | "folder" = "file",
+    target?: FileNode | null
+  ) => {
     const ws = workspaceRef.current;
-    const sel = selectedNodeRef.current;
     if (!ws || !inputName.trim()) return;
-    const fileName = inputName.trim();
-    const isFolder = fileName.endsWith("/");
-    const cleanName = isFolder ? fileName.slice(0, -1) : fileName;
+    const rawName = inputName.trim();
+    // A trailing slash still means "folder" — that was the only way to ask for
+    // one before the explorer had explicit buttons, and it is cheap to keep.
+    const isFolder = kind === "folder" || rawName.endsWith("/");
+    const cleanName = isFolder ? rawName.replace(/\/+$/, "") : rawName;
+    if (!cleanName.trim()) return;
 
+    // target === undefined: legacy callers (the long-press menu) mean "inside the
+    // node I long-pressed". target === null: an explicit request for the
+    // workspace ROOT, which is what the explorer's + button asks for — without
+    // this distinction a stale selection silently nested new files in whatever
+    // folder was last long-pressed.
+    const anchor = target === undefined ? selectedNodeRef.current : target;
     let targetPath = cleanName;
-    if (sel && sel.type === "folder") {
-      const parentFolder = sel.path || sel.name;
+    if (anchor && anchor.type === "folder") {
+      const parentFolder = anchor.path || anchor.name;
       targetPath = `${parentFolder}/${cleanName}`;
     }
 
     try {
-      const newNode = await createFileInWorkspace(ws.id, targetPath, "");
+      const newNode = isFolder
+        ? await createFolderInWorkspace(ws.id, targetPath)
+        : await createFileInWorkspace(ws.id, targetPath, "");
       if (!isFolder) setActiveFile(newNode);
       await refreshWorkspace();
-    } catch (_) {}
+    } catch (_) {
+      showAppDialog({
+        title: isFolder ? "Could not create folder" : "Could not create file",
+        message: `"${cleanName}" was not created.`,
+      });
+    }
   }, [refreshWorkspace, setActiveFile]);
 
   const handleMoveNode = useCallback(async (source: FileNode, targetFolder: FileNode | null) => {

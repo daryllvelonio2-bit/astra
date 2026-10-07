@@ -21,7 +21,7 @@ interface FileExplorerProps {
   onToggleCollapse: () => void;
   onLongPressNode?: (node: FileNode, coords: { x: number; y: number }) => void;
   onQuickAddFile?: () => void;
-  onCreateFile?: (name: string) => void;
+  onCreateFile?: (name: string, kind?: "file" | "folder", target?: FileNode | null) => void;
   onMoveNode?: (source: FileNode, targetFolder: FileNode | null) => void;
   resizerPanHandlers?: any;
   isDraggingSidebar?: boolean;
@@ -53,6 +53,10 @@ function FileExplorerInner({
   expandedFoldersRef.current = expandedFolders;
   const [isCreating, setIsCreating] = React.useState(false);
   const [inlineName, setInlineName] = React.useState("");
+  // What the inline row is about to create. Before this there was only the
+  // "name/" suffix convention, which nothing on screen explained.
+  const [createKind, setCreateKind] = React.useState<"file" | "folder">("file");
+  const [newMenu, setNewMenu] = React.useState(false);
 
   // Lazy tree (own hook): shallow base + fetch-on-expand overlays.
   const { mergedFiles, expandFolder } = useLazyExplorerTree(
@@ -148,9 +152,13 @@ function FileExplorerInner({
     }
     setIsCreating(false);
     setInlineName("");
-    if (onCreateFile) onCreateFile(trimmed);
+    setNewMenu(false);
+    // target === null is an explicit request for the workspace ROOT: the inline
+    // row sits at the tree's top level, and passing the last long-pressed folder
+    // instead is how a .env could end up buried in a subfolder.
+    if (onCreateFile) onCreateFile(trimmed, createKind, null);
     else if (onQuickAddFile) onQuickAddFile();
-  }, [inlineName, onCreateFile, onQuickAddFile]);
+  }, [inlineName, onCreateFile, onQuickAddFile, createKind]);
 
   // Stable sort: same order+subtree returns the previous array with the
   // same node objects, so memo'd rows skip re-render on every refresh.
@@ -256,18 +264,53 @@ function FileExplorerInner({
         <Text style={[styles.header, { color: theme.textSecondary, flex: 1 }]} numberOfLines={1}>
           EXPLORER
         </Text>
+        {/* The discoverable way in. Creation existed but only behind a long-press
+            on the list background, which is why "i cant make a .env file here"
+            happened at all. */}
+        <TouchableOpacity
+          style={{ width: 26, height: 26, alignItems: "center", justifyContent: "center" }}
+          onPress={() => setNewMenu((v) => !v)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel="New file or folder"
+        >
+          <Ionicons name="add" size={19} color={newMenu ? theme.accent : theme.textSecondary} />
+        </TouchableOpacity>
       </View>
+      {newMenu && (
+        <View
+          style={{
+            position: "absolute", top: 28, right: 8, zIndex: 60, elevation: 9,
+            minWidth: 156, borderRadius: 8, borderWidth: 1, overflow: "hidden",
+            backgroundColor: theme.bgSecondary, borderColor: theme.border,
+          }}
+        >
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 11 }}
+            onPress={() => { setCreateKind("file"); setInlineName(""); setNewMenu(false); setIsCreating(true); }}
+          >
+            <Ionicons name="document-text-outline" size={15} color={theme.accent} />
+            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textPrimary }}>New file</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderTopWidth: 1, borderTopColor: theme.border }}
+            onPress={() => { setCreateKind("folder"); setInlineName(""); setNewMenu(false); setIsCreating(true); }}
+          >
+            <Ionicons name="folder-outline" size={15} color={theme.accentGold} />
+            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textPrimary }}>New folder</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       {isCreating && (
         <View style={[styles.inlineCreateRow, { backgroundColor: theme.bgInput, borderColor: theme.accent }]}>
           <Ionicons
-            name={inlineName.endsWith("/") ? "folder" : "document-text-outline"}
+            name={inlineName.endsWith("/") || createKind === "folder" ? "folder" : "document-text-outline"}
             size={14}
-            color={inlineName.endsWith("/") ? theme.accentGold : theme.accent}
+            color={inlineName.endsWith("/") || createKind === "folder" ? theme.accentGold : theme.accent}
             style={{ marginRight: 4 }}
           />
           <TextInput
             style={[styles.inlineInput, { color: theme.textPrimary }]}
-            placeholder="filename (or folder/)..."
+            placeholder={createKind === "folder" ? "New folder name…" : "New file name (.env, index.js…)"}
             placeholderTextColor={theme.textMuted}
             value={inlineName}
             onChangeText={setInlineName}
@@ -286,6 +329,13 @@ function FileExplorerInner({
           />
           <TouchableOpacity onPress={handleInlineSubmit} style={styles.inlineBtn}>
             <Ionicons name="checkmark" size={14} color={theme.accentGreen} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { setIsCreating(false); setInlineName(""); }}
+            style={styles.inlineBtn}
+            accessibilityLabel="Cancel"
+          >
+            <Ionicons name="close" size={15} color={theme.textMuted} />
           </TouchableOpacity>
         </View>
       )}

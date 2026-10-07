@@ -265,6 +265,31 @@ export async function createFileInWorkspace(workspaceId: string, fileName: strin
   };
 }
 
+/**
+ * Create a folder inside the workspace.
+ *
+ * The explorer used to route "New Folder" through createFileInWorkspace, which
+ * wrote an empty FILE with that name — a folder needs makeDir, which the guest
+ * and fallback file layers already provide. Kept next to createFileInWorkspace
+ * so the two stay in step: same path resolution, same notify, only the
+ * filesystem call and the node type differ.
+ */
+export async function createFolderInWorkspace(workspaceId: string, folderPath: string): Promise<FileNode> {
+  const cleanPath = folderPath.replace(/^\/+/, "").replace(/\/+$/, "");
+  const rawBaseDir = await getWorkspaceDirPath(workspaceId);
+  const baseDir = normalizeCleanPath(rawBaseDir).replace(/\/+$/, "");
+  const targetFullPath = resolveFullPath(baseDir, cleanPath);
+  await makeDir(targetFullPath);
+  notifyWorkspaceChanged(workspaceId);
+  return {
+    id: `${workspaceId}::${cleanPath}`,
+    name: cleanPath.split("/").pop() || cleanPath,
+    type: "folder",
+    path: cleanPath,
+    children: [],
+  };
+}
+
 export async function deleteFileFromWorkspace(workspaceId: string, filePath: string): Promise<void> {
   try {
     const rawBaseDir = await getWorkspaceDirPath(workspaceId);
