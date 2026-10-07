@@ -37,21 +37,23 @@ import {
  */
 
 /**
- * Bundled GCash personal QR, shown above the number so senders can scan it.
+ * Bundled GCash personal QR — assets/gcash-qr.png, shown above the number.
  *
- * null until `assets/gcash-qr.png` exists: Metro resolves `require()` at BUILD
- * time and fails on a missing file, so this cannot point at the path
- * speculatively. To enable it, save the PNG from GCash (Receive Money → QR →
- * download) as `assets/gcash-qr.png`, then set this to
- * `require("../../../../assets/gcash-qr.png")`.
+ * Cropped from the GCash app's "Receive Money" screen down to the code itself
+ * on a clean white quiet zone, so the masked name, the partial mobile number
+ * and the user ID printed on that screen are NOT shipped in the APK.
  *
- * It cannot be derived from the number here — a GCash QR is a signed QR Ph
- * payload, and a look-alike QR built from the digits would fail when scanned.
+ * Verified with zbarimg: the asset decodes, to the byte-identical 159-byte QR
+ * Ph payload of the original screenshot. Note what that check caught — a plain
+ * image crop of the same region did NOT decode at any padding (22/40/56/64/80/
+ * 100px), while the same crop binarized to pure black/white does. Without that
+ * check this would have shipped a QR that looks perfect and scans as nothing.
  *
- * The number stays visible on purpose: some people would rather type it than
- * scan, and it is the fallback if scanning from another screen is awkward.
+ * It cannot be generated from the number: a GCash QR is a signed QR Ph payload
+ * and a look-alike built from the digits fails when scanned. Set to null to
+ * fall back to the number-only screen.
  */
-const GCASH_QR: ImageSourcePropType | null = null;
+const GCASH_QR: ImageSourcePropType | null = require("../../../../assets/gcash-qr.png");
 
 export function SupportSection({ theme }: { theme: ThemeColors }) {
   const [copied, setCopied] = useState(false);
