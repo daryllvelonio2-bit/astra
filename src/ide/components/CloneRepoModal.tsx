@@ -16,6 +16,8 @@ import { useAccurateKeyboard } from '../../theme/useAccurateKeyboard';
 import { useKeyboardMouseMode } from '../context/KeyboardMouseContext';
 import { cloneRepoModalStyles as styles } from './CloneRepoModal.styles';
 import { DirectoryPickerModal } from './DirectoryPickerModal';
+import { MyReposList } from './git/MyReposList';
+import { GitHubRepo } from '../services/gitHubTypes';
 import {
   normalizeCloneUrl,
   folderNameFromCloneUrl,
@@ -48,6 +50,18 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
   const [clonePct, setClonePct] = useState<number | null>(null);
   const [cloneLog, setCloneLog] = useState<string[]>([]);
   const [error, setError] = useState('');
+  // Two ways in: paste a URL, or pick from the account's repos (private ones
+  // included). Picking fills the form below instead of cloning blind, so the
+  // destination and folder name stay visible before anything runs.
+  const [mode, setMode] = useState<'url' | 'account'>('url');
+
+  const handlePickRepo = (repo: GitHubRepo) => {
+    const url = repo.cloneUrl || `https://github.com/${repo.fullName}.git`;
+    setRepoUrl(url);
+    setError('');
+    if (!folderTouched) setFolderName(repo.name || folderNameFromCloneUrl(url));
+    setMode('url');
+  };
 
   const { keyboardOffset, isKeyboardVisible } = useAccurateKeyboard(8);
   const scrollRef = useRef<ScrollView>(null);
@@ -211,6 +225,48 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
             contentContainerStyle={styles.scrollContent}
           >
             <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Clone GitHub Repo</Text>
+
+            {/* Two options: paste a URL, or pick from the signed-in account's
+                repos — private ones included. Picking fills the URL + folder
+                below rather than cloning blind. */}
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  height: 36, borderRadius: 8, borderWidth: 1,
+                  backgroundColor: mode === 'url' ? `${theme.accent}20` : theme.bgTertiary,
+                  borderColor: mode === 'url' ? theme.accent : theme.border,
+                }}
+                onPress={() => { setMode('url'); setError(''); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="link-outline" size={14} color={mode === 'url' ? theme.accent : theme.textMuted} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: mode === 'url' ? theme.accent : theme.textSecondary }}>
+                  Paste URL
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  height: 36, borderRadius: 8, borderWidth: 1,
+                  backgroundColor: mode === 'account' ? `${theme.accent}20` : theme.bgTertiary,
+                  borderColor: mode === 'account' ? theme.accent : theme.border,
+                }}
+                onPress={() => { setMode('account'); setError(''); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="logo-github" size={14} color={mode === 'account' ? theme.accent : theme.textMuted} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: mode === 'account' ? theme.accent : theme.textSecondary }}>
+                  My GitHub repos
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {mode === 'account' && (
+              <View style={{ marginTop: 2 }}>
+                <MyReposList theme={theme} onPick={handlePickRepo} />
+              </View>
+            )}
 
             <Text style={[styles.label, { color: theme.textSecondary }]}>Repository URL</Text>
             <TextInput
