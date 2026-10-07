@@ -24,6 +24,7 @@ import { IGNORED_FOLDERS } from "./workspaceIgnore";
 // module — so this is a cycle. It is benign: both modules only DEFINE hoisted
 // functions and call each other at runtime, never while a module initialises.
 import { loadWorkspaceShallow } from "./workspaceTreeService";
+import { collapseWorkspaceMetas } from "./workspaceMetaDedupe";
 
 export interface WorkspaceMeta {
   id: string;
@@ -105,20 +106,10 @@ export async function listWorkspaceMetas(): Promise<WorkspaceMeta[]> {
     dirPath: `${WORKSPACES_DIR}${id}/`,
     createdAt: Date.now(),
   });
-  // One project, one card. listWorkspaces() unions the directories on disk with
-  // the registry keys, so a project whose folder name is not already a slug
-  // ("Teachers-Day" on disk vs "teachers-day" in the registry) comes back from
-  // BOTH sources and was rendered TWICE in the picker. Collapse by directory,
-  // keeping the registry entry when there is one — it carries the real name.
-  const byDir = new Map<string, WorkspaceMeta>();
-  for (const meta of metas) {
-    const key = (meta.dirPath || meta.id).replace(/\/+$/, "");
-    const prev = byDir.get(key);
-    const metaRegistered = !!registry[meta.id];
-    const prevRegistered = prev ? !!registry[prev.id] : false;
-    if (!prev || (metaRegistered && !prevRegistered)) byDir.set(key, meta);
-  }
-  return Array.from(byDir.values());
+  // One project, one card — see collapseWorkspaceMetas for why the comparison is
+  // by directory path and case-insensitively (the folder keeps its case while
+  // the registry id is a slug, so both sources described the same project).
+  return collapseWorkspaceMetas(metas, registry);
 }
 
 export function normalizeCleanPath(p: string): string {
