@@ -25,6 +25,7 @@ import { StartupStepId } from "./types";
 import { ThemeSelectionStep } from "./steps/ThemeSelectionStep";
 import { PermissionsStep } from "./steps/PermissionsStep";
 import { GitHubSetupStep } from "./steps/GitHubSetupStep";
+import { GuideStep } from "./steps/GuideStep";
 
 interface StartupWizardProps {
   onComplete: () => void;
@@ -34,6 +35,9 @@ const STEPS: { id: StartupStepId; label: string }[] = [
   { id: "theme", label: "Theme" },
   { id: "permissions", label: "System" },
   { id: "github", label: "GitHub" },
+  // Last step on purpose: it documents the tabs the user is about to land in,
+  // and the final button already reads "Get Started".
+  { id: "guide", label: "Guide" },
 ];
 
 export function StartupWizard({ onComplete }: StartupWizardProps) {
@@ -271,6 +275,10 @@ export function StartupWizard({ onComplete }: StartupWizardProps) {
               onConfigured={() => setGithubConfigured(true)}
               onSkip={handleFinish}
             />
+          )}
+
+          {currentStep.id === "guide" && (
+            <GuideStep theme={theme} isLandscape={isLandscape} />
           )}
           </Animated.View>
         </ScrollView>
