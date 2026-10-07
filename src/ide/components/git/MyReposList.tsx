@@ -186,7 +186,9 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 12.5, paddingVertical: 4 },
   countLine: { fontSize: 10.5, paddingHorizontal: 4 },
-  list: { maxHeight: 260 },
+  // Tall enough to browse a real repo list; the list itself scrolls (see the
+  // nestedScrollEnabled note in CloneRepoModal) rather than growing the sheet.
+  list: { maxHeight: 380 },
   listContent: { gap: 6, paddingBottom: 4 },
   row: {
     flexDirection: "row",

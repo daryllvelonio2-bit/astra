@@ -209,9 +209,20 @@ html, body {
     }
     if (!isAltScreen()) {
       term.scrollLines(lineDelta);
+      return;
     }
-    // Alt screen without mouse mode: nothing is scrollable (authentic
-    // terminal behavior — the app owns all input there).
+    // Alt screen with no mouse reporting: there is no scrollback to move
+    // (term.scrollLines() is a no-op) and the app owns the screen, so a
+    // drag used to do NOTHING -- which is why a full-screen TUI such as
+    // opencode could not be scrolled at all. A hardware terminal has a
+    // wheel the app opts into; on touch we forward the intent as
+    // PageUp/PageDown, which full-screen TUIs understand. Coalesced
+    // through the same one-post-per-frame buffer as the wheel path so a
+    // drag cannot flood the WebView bridge.
+    var pages = Math.max(1, Math.min(4, Math.round(Math.abs(lineDelta) / 6)));
+    var pageSeq = lineDelta < 0 ? '\\x1b[5~' : '\\x1b[6~';
+    for (var pi = 0; pi < pages; pi++) pendingWheel += pageSeq;
+    if (!wheelRaf) wheelRaf = requestAnimationFrame(flushWheel);
   };
 
   // CSS-pixel row height: touch deltas are in CSS px, so dividing by the

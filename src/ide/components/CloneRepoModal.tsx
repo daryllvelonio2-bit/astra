@@ -222,6 +222,11 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
             ref={scrollRef}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            // The "My GitHub repos" list is a FlatList inside this ScrollView.
+            // On Android a nested scrollable only receives touches when BOTH it
+            // and this parent opt in — without this the repo list renders but
+            // refuses to scroll, so you can only ever see the first few repos.
+            nestedScrollEnabled
             contentContainerStyle={styles.scrollContent}
           >
             <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Clone GitHub Repo</Text>

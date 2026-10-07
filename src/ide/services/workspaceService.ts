@@ -99,12 +99,26 @@ export async function listWorkspaces(): Promise<string[]> {
 export async function listWorkspaceMetas(): Promise<WorkspaceMeta[]> {
   const ids = await listWorkspaces();
   const registry = await loadWorkspaceRegistry();
-  return ids.map((id) => registry[id] || {
+  const metas = ids.map((id) => registry[id] || {
     id,
     name: id,
     dirPath: `${WORKSPACES_DIR}${id}/`,
     createdAt: Date.now(),
   });
+  // One project, one card. listWorkspaces() unions the directories on disk with
+  // the registry keys, so a project whose folder name is not already a slug
+  // ("Teachers-Day" on disk vs "teachers-day" in the registry) comes back from
+  // BOTH sources and was rendered TWICE in the picker. Collapse by directory,
+  // keeping the registry entry when there is one — it carries the real name.
+  const byDir = new Map<string, WorkspaceMeta>();
+  for (const meta of metas) {
+    const key = (meta.dirPath || meta.id).replace(/\/+$/, "");
+    const prev = byDir.get(key);
+    const metaRegistered = !!registry[meta.id];
+    const prevRegistered = prev ? !!registry[prev.id] : false;
+    if (!prev || (metaRegistered && !prevRegistered)) byDir.set(key, meta);
+  }
+  return Array.from(byDir.values());
 }
 
 export function normalizeCleanPath(p: string): string {
@@ -215,7 +229,17 @@ export async function openExistingDirectoryAsProject(
 
   const folderName = normalizedPath.split("/").filter(Boolean).pop() || "project";
   const name = customName?.trim() || folderName;
-  const workspaceId = name.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+  const slug = name.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+
+  // Reuse the id of a workspace that already points at this directory.
+  // Minting a fresh slug here is how ONE project ended up listed TWICE: the
+  // folder on disk keeps its original case ("Teachers-Day") while the registry
+  // key is the slug ("teachers-day"), and listWorkspaces() unions both sources.
+  const registry = await loadWorkspaceRegistry();
+  const existingId = Object.keys(registry).find(
+    (id) => (registry[id]?.dirPath || "").replace(/\/+$/, "") === normalizedPath.replace(/\/+$/, "")
+  );
+  const workspaceId = existingId || slug;
 
   await saveWorkspaceMeta({
     id: workspaceId,
