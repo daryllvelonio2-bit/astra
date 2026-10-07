@@ -36,6 +36,7 @@ const TAB_ROWS: TabRow[] = [
   { id: "terminal", title: "Terminal", icon: "terminal-outline" },
   { id: "browser", title: "Browser", icon: "globe-outline" },
   { id: "git", title: "Git", icon: "git-branch-outline" },
+  { id: "host", title: "Host", icon: "rocket-outline" },
 ];
 
 const THEME_OPTIONS: Array<{ id: AppTheme; title: string; icon: any }> = [

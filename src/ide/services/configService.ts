@@ -12,16 +12,21 @@ export interface ModelOption {
 const CONFIG_FILE = `${FileSystem.documentDirectory}config.json`;
 
 export type AppTheme = "dark" | "light" | "midnight" | (string & {});
-export type ToggleableBottomTab = "editor" | "terminal" | "browser" | "git";
+export type ToggleableBottomTab = "editor" | "terminal" | "browser" | "git" | "host";
 export type BottomTabVisibility = Record<ToggleableBottomTab, boolean>;
 
-export const TAB_ORDER: ToggleableBottomTab[] = ["editor", "terminal", "browser", "git"];
+export const TAB_ORDER: ToggleableBottomTab[] = ["editor", "terminal", "browser", "git", "host"];
 
 export const DEFAULT_BOTTOM_TABS: BottomTabVisibility = {
   editor: true,
   terminal: true,
   browser: true,
   git: true,
+  // Hosting is new and still proving itself, so it stays OFF until asked for
+  // (Settings -> BOTTOM BAR NAVIGATION -> Host). One project can be published at
+  // a time and it keeps a server and a tunnel alive, which is not something to
+  // switch on silently.
+  host: false,
 };
 
 export function normalizeBottomTabs(value?: Partial<BottomTabVisibility> | null): BottomTabVisibility {
@@ -33,6 +38,7 @@ export function normalizeBottomTabs(value?: Partial<BottomTabVisibility> | null)
     terminal: value?.terminal ?? DEFAULT_BOTTOM_TABS.terminal,
     browser: value?.browser ?? DEFAULT_BOTTOM_TABS.browser,
     git: value?.git ?? DEFAULT_BOTTOM_TABS.git,
+    host: value?.host ?? DEFAULT_BOTTOM_TABS.host,
   };
 }
 

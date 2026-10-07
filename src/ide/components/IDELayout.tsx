@@ -7,6 +7,7 @@ import { EditorView } from "./EditorView";
 import { TerminalView } from "./TerminalView";
 import { WebBrowserPreview } from "./WebBrowserPreview";
 import { GitHubDesktopView } from "./git/GitHubDesktopView";
+import { HostingPanel } from "./hosting/HostingPanel";
 import { IDEBottomBar } from "./IDEBottomBar";
 import { WorkspaceLoadingScreen } from "./WorkspaceLoadingScreen";
 import { IDEModals } from "./IDEModals";
@@ -424,6 +425,22 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
             <View style={[tabContentStyle, bottomTab !== "git" && styles.hiddenTab]}>
               <PanelErrorBoundary panelName="Git" resetKey={workspace?.id}>
               <MemoGitHubDesktopView workspaceId={workspace?.id} projectName={workspace?.name} visible={bottomTab === "git"} onSyncWorkspace={refreshWorkspace} />
+              </PanelErrorBoundary>
+            </View>
+          )}
+          {/* Host is kept alive like Git rather than remounted like Browser: it
+              subscribes to the hosting service, and a running server + tunnel
+              must not be dropped just because the user glanced at the editor.
+              The panel is switched on from Settings -> BOTTOM BAR NAVIGATION. */}
+          {visitedTabs.has("host") && (
+            <View style={[tabContentStyle, bottomTab !== "host" && styles.hiddenTab]}>
+              <PanelErrorBoundary panelName="Host" resetKey={workspace?.id}>
+                <HostingPanel
+                  workspaceId={workspace?.id}
+                  projectName={workspace?.name}
+                  rootNames={(workspace?.root?.children || []).map((n) => n.name)}
+                  onOpenBrowser={handleOpenInBrowser}
+                />
               </PanelErrorBoundary>
             </View>
           )}

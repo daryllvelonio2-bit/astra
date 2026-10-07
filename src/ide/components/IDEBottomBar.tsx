@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/themeContext";
 import { BottomTabVisibility, DEFAULT_BOTTOM_TABS } from "../services/configService";
 
-export type IDEBottomTab = "editor" | "terminal" | "browser" | "git";
+export type IDEBottomTab = "editor" | "terminal" | "browser" | "git" | "host";
 
 interface IDEBottomBarProps {
   bottomTab: IDEBottomTab;
@@ -154,6 +154,28 @@ function IDEBottomBarInner({
           ]}
         >
           Browser
+        </Text>
+      </TouchableOpacity>
+      )}
+
+      {visibleTabs.host && (
+      <TouchableOpacity
+        style={[
+          styles.bottomTabBtn,
+          bottomTab === "host" && { backgroundColor: theme.bgTertiary },
+        ]}
+        onPress={() => onChangeTab("host")}
+      >
+        <Ionicons name="rocket-outline" size={16} color={bottomTab === "host" ? theme.accent : theme.textMuted} />
+        <Text
+          style={[
+            styles.bottomTabText,
+            compact && styles.bottomTabTextCompact,
+            { color: theme.textMuted },
+            bottomTab === "host" && { color: theme.accent, fontWeight: "700" },
+          ]}
+        >
+          Host
         </Text>
       </TouchableOpacity>
       )}
