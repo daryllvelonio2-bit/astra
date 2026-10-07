@@ -5510,4 +5510,4 @@
 - **Fix:** identity now runs through `workspacePathKey()` — strip `file://`, strip trailing slashes, fold case — used both by `collapseWorkspaceMetas()` and by `openExistingDirectoryAsProject`'s "is this folder already a workspace?" lookup, so a project cannot mint a second id on the way in.
 - **Test rewritten from the live data:** `astra-harness/dedupe` replays those five real metas and expects **3** cards, plus guards that different projects are never merged (including `app` vs `app2`, which share a display name) and that two unknown paths never collapse into one. **18/18**, `tsc` 0.
 - **Lesson:** the fix lived one layer below where I was looking — the id/path disagreement between the two listing sources — and only measurement showed it. Reading the code twice produced two confident wrong answers.
-- **Verified on the device after rebuild: see the entry above** (3 cards, no repeats).
+- **Verified ON THE DEVICE:** rebuilt and installed this build (`723e447`, apk sha `831ebe93…`); a screenshot of the Workspaces screen shows the badge drop **5 → 3** with no repeated names. The duplicated cards are gone for real, not just in theory.
