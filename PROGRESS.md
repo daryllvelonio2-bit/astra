@@ -5466,3 +5466,13 @@
 - **Reachable again without reinstalling:** it is the wizard's last step, and Settings → General can re-run the whole setup.
 - **Files:** `GuideStep.tsx` (new, 202 lines), `StartupWizard.tsx` (466 → 474), `types.ts` (`StartupStepId` + `"guide"`).
 - **Verification:** `npx tsc --noEmit` 0 errors (the LSP briefly flagged the new step id before it re-read the union — tsc settled it as clean); all nine Ionicons names used resolve in the INSTALLED glyphmap; probe WIRING OK, and the probe gains a **guard for this whole class of bug** — it now derives the `StartupStepId` union, the wizard's STEPS array and the render branches and fails when they disagree, which is the same "step defined but renders nothing" failure the settings tabs had.
+
+### [2026-10-08] - Pushes now go to two repos: the team repo and Jay's profile
+- **Ask:** "for this repo in my profile then when you make a chanegs push to the two repo".
+- **Which two:** `daryllvelonio2-bit/astra` (team repo, still the FETCH source) and **`itsmejay18/Astra-Code-Editor`** — Jay's own profile copy. His profile has no `astra` repo; the project lives there under the older name, so "the repo in my profile" had to be identified from the account's repo list rather than guessed.
+- **Configured in `/home/jay/astra-work`:** `git remote set-url --push origin <team>` then `git remote set-url --add --push origin <profile>`. A plain `git push origin tempo` now hits both.
+- **Verified by SHA, not by exit code:** local `bb294a8`, team `bb294a8`, profile `bb294a8`; and `GET /repos/itsmejay18/Astra-Code-Editor/commits?sha=tempo` returns our three newest commits (`bb294a8`, `eb6eff4`, `92db2c0`).
+- **Writability proven BEFORE trusting it:** `git push --dry-run` reported `* [new branch] tempo -> tempo` for the profile, so the host's keyring credential can write there — it is Jay's account, and the same credential pushes to the team repo.
+- **Deliberately NOT touched — `main` on either side.** The profile repo's `main` is a **squashed single `first commit`** (2026-09-10) with no shared ancestry with ours, so updating it would take a force-push that overwrites Jay's snapshot: his call, not mine. The team's `main` stays clean as he required.
+- **Cost of the first profile push:** it uploaded the full history (~152 MB pack, mostly the two bundled Debian rootfs assets), so that repo now carries both the snapshot and our history.
+- **Still to do on the volume:** this lives only in the ext4 clone's `.git/config`. Once the Windows volume is repaired and writable, run the same two `set-url` commands inside `/run/media/jay/OS/Users/Jay/Documents/GitHub/FinalAstra` so Jay's own checkout pushes to both as well.
