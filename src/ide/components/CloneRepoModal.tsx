@@ -36,6 +36,10 @@ interface CloneRepoModalProps {
 
 const stripScheme = (p: string) => (p || '').replace(/^file:\/\//, '');
 
+/** The URL a repo row clones from. Kept in one place so mode and button agree. */
+const repoCloneUrl = (repo: GitHubRepo) =>
+  repo.cloneUrl || `https://github.com/${repo.fullName}.git`;
+
 export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalProps) {
   const { theme } = useTheme();
   const { keyboardMouseMode } = useKeyboardMouseMode();
@@ -50,17 +54,23 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
   const [clonePct, setClonePct] = useState<number | null>(null);
   const [cloneLog, setCloneLog] = useState<string[]>([]);
   const [error, setError] = useState('');
-  // Two ways in: paste a URL, or pick from the account's repos (private ones
-  // included). Picking fills the form below instead of cloning blind, so the
-  // destination and folder name stay visible before anything runs.
+  // Two ways in, and the two are kept apart on purpose.
+  //
+  //   'url'     a pasted URL, with protocol/folder controls.
+  //   'account' the signed-in account's repos, private ones included. NO url
+  //             field, no protocol switch, no folder input: the picked repo IS
+  //             the source of truth. The list is the only scrollable on screen
+  //             (see the two render branches below) so nothing can steal the
+  //             drag — an earlier version nested it in the sheet's ScrollView
+  //             and it refused to scroll on Android.
   const [mode, setMode] = useState<'url' | 'account'>('url');
+  const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null);
 
   const handlePickRepo = (repo: GitHubRepo) => {
-    const url = repo.cloneUrl || `https://github.com/${repo.fullName}.git`;
-    setRepoUrl(url);
+    setSelectedRepo(repo);
+    setRepoUrl(repoCloneUrl(repo));
     setError('');
-    if (!folderTouched) setFolderName(repo.name || folderNameFromCloneUrl(url));
-    setMode('url');
+    if (!folderTouched) setFolderName(repo.name || folderNameFromCloneUrl(repoCloneUrl(repo)));
   };
 
   const { keyboardOffset, isKeyboardVisible } = useAccurateKeyboard(8);
@@ -83,6 +93,7 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
     setCloning(false);
     setClonePct(null);
     setCloneLog([]);
+    setSelectedRepo(null);
     cloneCancelled.current = false;
     setError('');
   };
@@ -173,7 +184,12 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
   };
 
   const handleClone = () => {
-    const url = normalizeCloneUrl(repoUrl, useSsh);
+    const accountUrl = selectedRepo ? repoCloneUrl(selectedRepo) : '';
+    if (mode === 'account' && !accountUrl) {
+      setError('Pick a repository from your list first.');
+      return;
+    }
+    const url = mode === 'account' ? accountUrl : normalizeCloneUrl(repoUrl, useSsh);
     if (!url) {
       setError('Enter a repo URL or user/repo shorthand.');
       return;
@@ -188,7 +204,8 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
   };
 
   const parentDir = resolveParentDir();
-  const previewFolder = folderName.trim() || (repoUrl.trim() ? folderNameFromCloneUrl(repoUrl.trim()) : '');
+  const activeUrl = mode === 'account' ? (selectedRepo ? repoCloneUrl(selectedRepo) : '') : repoUrl.trim();
+  const previewFolder = folderName.trim() || (activeUrl ? folderNameFromCloneUrl(activeUrl) : '');
 
   // Gate: while the toolchain (or git essentials) is missing, the sheet shows
   // the setup screen instead of the clone form. Before the first probe lands
@@ -209,6 +226,87 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
     );
   }
 
+  const modeButton = (target: 'url' | 'account', icon: any, label: string) => (
+    <TouchableOpacity
+      style={{
+        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+        height: 36, borderRadius: 8, borderWidth: 1,
+        backgroundColor: mode === target ? `${theme.accent}20` : theme.bgTertiary,
+        borderColor: mode === target ? theme.accent : theme.border,
+      }}
+      onPress={() => { setMode(target); setError(''); }}
+      activeOpacity={0.8}
+    >
+      <Ionicons name={icon} size={14} color={mode === target ? theme.accent : theme.textMuted} />
+      <Text style={{ fontSize: 12, fontWeight: '700', color: mode === target ? theme.accent : theme.textSecondary }}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const destRow = (
+    <TouchableOpacity
+      style={[styles.destRow, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}
+      onPress={() => setDirPickerVisible(true)}
+      activeOpacity={0.7}
+    >
+      <Ionicons name="folder-open-outline" size={15} color={theme.accentGold} />
+      <Text style={[styles.destText, { color: theme.textSecondary }]} numberOfLines={1}>
+        {parentDir ? formatDisplayPath(parentDir) : 'Pick parent folder'}
+        {previewFolder ? `${previewFolder}/` : ''}
+      </Text>
+      <Ionicons name="chevron-forward" size={14} color={theme.textMuted} />
+    </TouchableOpacity>
+  );
+
+  const errorBox = error ? (
+    <View style={[styles.errorBox, { backgroundColor: `${theme.accentRed}14`, borderColor: `${theme.accentRed}40` }]}>
+      <Ionicons name="alert-circle-outline" size={14} color={theme.accentRed} />
+      <Text style={[styles.errorText, { color: theme.accentRed }]}>{error}</Text>
+    </View>
+  ) : null;
+
+  const progressBox = cloning ? (
+    <View style={[styles.progressBox, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}>
+      <View style={styles.progressRow}>
+        <Text style={[styles.progressPct, { color: theme.accent }]}>
+          {clonePct !== null ? `${clonePct}%` : '…'}
+        </Text>
+        <View style={[styles.progressTrack, { backgroundColor: theme.border }]}>
+          <View style={[styles.progressFill, { backgroundColor: theme.accent, width: `${clonePct ?? 0}%` as any }]} />
+        </View>
+      </View>
+      {cloneLog.length > 0 && (
+        <Text style={[styles.progressLine, { color: theme.textMuted }]} numberOfLines={2}>
+          {cloneLog[cloneLog.length - 1]}
+        </Text>
+      )}
+    </View>
+  ) : null;
+
+  const actions = (
+    <View style={styles.modalActions}>
+      <TouchableOpacity style={[styles.modalButton, { backgroundColor: theme.bgTertiary }]} onPress={handleCancelPress}>
+        <Text style={[styles.buttonTextCancel, { color: theme.textSecondary }]}>{cloning ? 'Cancel Clone' : 'Cancel'}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.modalButton, { backgroundColor: theme.accent, opacity: cloning || (mode === 'account' && !selectedRepo) ? 0.6 : 1 }]}
+        onPress={handleClone}
+        disabled={cloning}
+      >
+        {cloning ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Text style={[styles.buttonTextCreate, { color: theme.sendButtonIcon }]} numberOfLines={1}>
+            {mode === 'account'
+              ? (selectedRepo ? `Clone ${selectedRepo.name}` : 'Pick a repo above')
+              : 'Clone & Open'}
+          </Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={[styles.modalOverlay, isKeyboardVisible && { paddingBottom: keyboardOffset }]}>
@@ -216,182 +314,115 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
         <View style={[
           styles.bottomSheet,
           { backgroundColor: theme.bgSecondary, borderColor: theme.border },
+          // Account mode pins the sheet to a real height so the repo list has a
+          // definite box to scroll inside. Without a height the list would size
+          // to its content and there would be nothing to scroll.
+          mode === 'account' && { height: '82%' },
           isKeyboardVisible && styles.bottomSheetKeyboardOpen,
         ]}>
-          <ScrollView
-            ref={scrollRef}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            // The "My GitHub repos" list is a FlatList inside this ScrollView.
-            // On Android a nested scrollable only receives touches when BOTH it
-            // and this parent opt in — without this the repo list renders but
-            // refuses to scroll, so you can only ever see the first few repos.
-            nestedScrollEnabled
-            contentContainerStyle={styles.scrollContent}
-          >
-            <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Clone GitHub Repo</Text>
-
-            {/* Two options: paste a URL, or pick from the signed-in account's
-                repos — private ones included. Picking fills the URL + folder
-                below rather than cloning blind. */}
+          <View style={styles.sheetHeader}>
+            <Text style={[styles.modalTitle, { color: theme.textPrimary, marginBottom: 0 }]}>Clone GitHub Repo</Text>
             <View style={{ flexDirection: 'row', gap: 6 }}>
-              <TouchableOpacity
-                style={{
-                  flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  height: 36, borderRadius: 8, borderWidth: 1,
-                  backgroundColor: mode === 'url' ? `${theme.accent}20` : theme.bgTertiary,
-                  borderColor: mode === 'url' ? theme.accent : theme.border,
-                }}
-                onPress={() => { setMode('url'); setError(''); }}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="link-outline" size={14} color={mode === 'url' ? theme.accent : theme.textMuted} />
-                <Text style={{ fontSize: 12, fontWeight: '700', color: mode === 'url' ? theme.accent : theme.textSecondary }}>
-                  Paste URL
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{
-                  flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  height: 36, borderRadius: 8, borderWidth: 1,
-                  backgroundColor: mode === 'account' ? `${theme.accent}20` : theme.bgTertiary,
-                  borderColor: mode === 'account' ? theme.accent : theme.border,
-                }}
-                onPress={() => { setMode('account'); setError(''); }}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="logo-github" size={14} color={mode === 'account' ? theme.accent : theme.textMuted} />
-                <Text style={{ fontSize: 12, fontWeight: '700', color: mode === 'account' ? theme.accent : theme.textSecondary }}>
-                  My GitHub repos
-                </Text>
-              </TouchableOpacity>
+              {modeButton('url', 'link-outline', 'Paste URL')}
+              {modeButton('account', 'logo-github', 'My GitHub repos')}
             </View>
+          </View>
 
-            {mode === 'account' && (
-              <View style={{ marginTop: 2 }}>
-                <MyReposList theme={theme} onPick={handlePickRepo} />
+          {mode === 'account' ? (
+            // No ScrollView anywhere on this branch: the FlatList inside
+            // MyReposList is the ONLY scrollable, so a drag always lands on it.
+            <View style={styles.accountBody}>
+              <MyReposList
+                theme={theme}
+                onPick={handlePickRepo}
+                fill
+                selectedFullName={selectedRepo?.fullName}
+              />
+              <View style={styles.accountFooter}>
+                {destRow}
+                {errorBox}
+                {actions}
+                {progressBox}
               </View>
-            )}
-
-            <Text style={[styles.label, { color: theme.textSecondary }]}>Repository URL</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.bgInput, borderColor: theme.border, color: theme.textPrimary }]}
-              placeholder="https://github.com/user/repo or user/repo"
-              placeholderTextColor={theme.textMuted}
-              value={repoUrl}
-              onChangeText={handleUrlChange}
-              autoCapitalize="none"
-              autoCorrect={false}
-              showSoftInputOnFocus={!keyboardMouseMode}
-              returnKeyType="next"
-            />
-
-            <View style={styles.protoRow}>
-              <TouchableOpacity
-                style={[
-                  styles.protoBtn,
-                  { backgroundColor: theme.bgTertiary, borderColor: theme.border },
-                  !useSsh && { backgroundColor: `${theme.accent}20`, borderColor: theme.accent },
-                ]}
-                onPress={() => {
-                  setUseSsh(false);
-                  setError('');
-                  if (!folderTouched && repoUrl.trim()) {
-                    const n = normalizeCloneUrl(repoUrl, false);
-                    if (n) setFolderName(folderNameFromCloneUrl(n));
-                  }
-                }}
-              >
-                <Ionicons name="globe-outline" size={15} color={!useSsh ? theme.accent : theme.textMuted} />
-                <Text style={[styles.protoBtnText, { color: !useSsh ? theme.accent : theme.textSecondary }]}>HTTPS</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.protoBtn,
-                  { backgroundColor: theme.bgTertiary, borderColor: theme.border },
-                  useSsh && { backgroundColor: `${theme.accent}20`, borderColor: theme.accent },
-                ]}
-                onPress={() => {
-                  setUseSsh(true);
-                  setError('');
-                  if (!folderTouched && repoUrl.trim()) {
-                    const n = normalizeCloneUrl(repoUrl, true);
-                    if (n) setFolderName(folderNameFromCloneUrl(n));
-                  }
-                }}
-              >
-                <Ionicons name="key-outline" size={15} color={useSsh ? theme.accent : theme.textMuted} />
-                <Text style={[styles.protoBtnText, { color: useSsh ? theme.accent : theme.textSecondary }]}>SSH</Text>
-              </TouchableOpacity>
             </View>
-
-            <Text style={[styles.label, { color: theme.textSecondary }]}>Folder Name</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.bgInput, borderColor: theme.border, color: theme.textPrimary }]}
-              placeholder="repo-name"
-              placeholderTextColor={theme.textMuted}
-              value={folderName}
-              onChangeText={(v) => { setFolderName(v); setFolderTouched(true); }}
-              autoCapitalize="none"
-              autoCorrect={false}
-              showSoftInputOnFocus={!keyboardMouseMode}
-              returnKeyType="done"
-            />
-
-            <TouchableOpacity
-              style={[styles.destRow, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}
-              onPress={() => setDirPickerVisible(true)}
-              activeOpacity={0.7}
+          ) : (
+            <ScrollView
+              ref={scrollRef}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.scrollContent}
             >
-              <Ionicons name="folder-open-outline" size={15} color={theme.accentGold} />
-              <Text style={[styles.destText, { color: theme.textSecondary }]} numberOfLines={1}>
-                {parentDir ? formatDisplayPath(parentDir) : 'Pick parent folder'}
-                {previewFolder ? `${previewFolder}/` : ''}
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color={theme.textMuted} />
-            </TouchableOpacity>
+              <Text style={[styles.label, { color: theme.textSecondary }]}>Repository URL</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: theme.bgInput, borderColor: theme.border, color: theme.textPrimary }]}
+                placeholder="https://github.com/user/repo or user/repo"
+                placeholderTextColor={theme.textMuted}
+                value={repoUrl}
+                onChangeText={handleUrlChange}
+                autoCapitalize="none"
+                autoCorrect={false}
+                showSoftInputOnFocus={!keyboardMouseMode}
+                returnKeyType="next"
+              />
 
-            {error ? (
-              <View style={[styles.errorBox, { backgroundColor: `${theme.accentRed}14`, borderColor: `${theme.accentRed}40` }]}>
-                <Ionicons name="alert-circle-outline" size={14} color={theme.accentRed} />
-                <Text style={[styles.errorText, { color: theme.accentRed }]}>{error}</Text>
+              <View style={styles.protoRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.protoBtn,
+                    { backgroundColor: theme.bgTertiary, borderColor: theme.border },
+                    !useSsh && { backgroundColor: `${theme.accent}20`, borderColor: theme.accent },
+                  ]}
+                  onPress={() => {
+                    setUseSsh(false);
+                    setError('');
+                    if (!folderTouched && repoUrl.trim()) {
+                      const n = normalizeCloneUrl(repoUrl, false);
+                      if (n) setFolderName(folderNameFromCloneUrl(n));
+                    }
+                  }}
+                >
+                  <Ionicons name="globe-outline" size={15} color={!useSsh ? theme.accent : theme.textMuted} />
+                  <Text style={[styles.protoBtnText, { color: !useSsh ? theme.accent : theme.textSecondary }]}>HTTPS</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.protoBtn,
+                    { backgroundColor: theme.bgTertiary, borderColor: theme.border },
+                    useSsh && { backgroundColor: `${theme.accent}20`, borderColor: theme.accent },
+                  ]}
+                  onPress={() => {
+                    setUseSsh(true);
+                    setError('');
+                    if (!folderTouched && repoUrl.trim()) {
+                      const n = normalizeCloneUrl(repoUrl, true);
+                      if (n) setFolderName(folderNameFromCloneUrl(n));
+                    }
+                  }}
+                >
+                  <Ionicons name="key-outline" size={15} color={useSsh ? theme.accent : theme.textMuted} />
+                  <Text style={[styles.protoBtnText, { color: useSsh ? theme.accent : theme.textSecondary }]}>SSH</Text>
+                </TouchableOpacity>
               </View>
-            ) : null}
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={[styles.modalButton, { backgroundColor: theme.bgTertiary }]} onPress={handleCancelPress}>
-                <Text style={[styles.buttonTextCancel, { color: theme.textSecondary }]}>{cloning ? 'Cancel Clone' : 'Cancel'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: theme.accent, opacity: cloning ? 0.7 : 1 }]}
-                onPress={handleClone}
-                disabled={cloning}
-              >
-                {cloning ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={[styles.buttonTextCreate, { color: theme.sendButtonIcon }]}>Clone & Open</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-            {cloning && (
-              <View style={[styles.progressBox, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}>
-                <View style={styles.progressRow}>
-                  <Text style={[styles.progressPct, { color: theme.accent }]}>
-                    {clonePct !== null ? `${clonePct}%` : '…'}
-                  </Text>
-                  <View style={[styles.progressTrack, { backgroundColor: theme.border }]}>
-                    <View style={[styles.progressFill, { backgroundColor: theme.accent, width: `${clonePct ?? 0}%` as any }]} />
-                  </View>
-                </View>
-                {cloneLog.length > 0 && (
-                  <Text style={[styles.progressLine, { color: theme.textMuted }]} numberOfLines={2}>
-                    {cloneLog[cloneLog.length - 1]}
-                  </Text>
-                )}
-              </View>
-            )}
-          </ScrollView>
+              <Text style={[styles.label, { color: theme.textSecondary }]}>Folder Name</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: theme.bgInput, borderColor: theme.border, color: theme.textPrimary }]}
+                placeholder="repo-name"
+                placeholderTextColor={theme.textMuted}
+                value={folderName}
+                onChangeText={(v) => { setFolderName(v); setFolderTouched(true); }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                showSoftInputOnFocus={!keyboardMouseMode}
+                returnKeyType="done"
+              />
+
+              {destRow}
+              {errorBox}
+              {actions}
+              {progressBox}
+            </ScrollView>
+          )}
 
           <DirectoryPickerModal
             visible={dirPickerVisible}
@@ -410,4 +441,3 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
     </Modal>
   );
 }
-

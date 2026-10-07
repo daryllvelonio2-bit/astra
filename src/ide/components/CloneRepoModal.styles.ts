@@ -23,6 +23,24 @@ export const cloneRepoModalStyles = StyleSheet.create({
     paddingBottom: 28,
     gap: 4,
   },
+  // Title + the Paste URL / My GitHub repos switch. Lives OUTSIDE either body
+  // so the two modes share it without nesting one scrollable in another.
+  sheetHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  // Account mode body: takes the sheet's height, holds the repo list (which
+  // scrolls as the only scrollable) plus a static footer of controls.
+  accountBody: {
+    flex: 1,
+  },
+  accountFooter: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    paddingTop: 2,
+  },
   modalTitle: {
     fontSize: 17,
     fontWeight: '700',
