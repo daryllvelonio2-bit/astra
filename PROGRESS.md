@@ -5449,3 +5449,11 @@
 - **Files:** `MyReposList.tsx` (new, 209 lines), `CloneRepoModal.tsx` (352 → 408 lines). Both under the 500-line cap.
 - **Verification:** `npx tsc --noEmit` 0 errors (which caught a real mistake — the new file had the theme imported one directory too shallow); all eight Ionicons names used in the new UI resolve in the INSTALLED glyphmap, since a wrong icon name typechecks cleanly and only fails on a device; probe WIRING OK.
 - **Written in the ext4 clone**, not on the volume — see the entry above.
+
+### [2026-10-08] - Removed the Alerts tab from Settings
+- **Ask:** "remove the notification int eh tab nav in the settinsg we will not wneed those".
+- Removed in all three places the tab exists — the `SettingsTabId` union, its `TABS` entry and the `SettingsModal` render branch — plus the now-unused import, and **deleted `NotificationsSection.tsx`** (grep confirmed zero remaining references). Settings is now General · Editor · Linux · Keys · Feedback · Support.
+- **Kept on purpose:** the notification *service* is untouched — `notificationService.ts`, `githubNotificationPoller.ts` and `GlobalNotificationBanner.tsx` still use it for real system notifications. Only the Settings UI is gone.
+- **Measured side effect, and it is a fix rather than a tidy-up:** 7 tabs produced 42.3dp touch targets on a 360dp phone, under the 48dp guideline; 6 tabs give **50.0dp** at 360dp (43.3dp at 320dp, 58.5dp at 411dp). The stale `// 7 tabs …` comment in the styles now says 6.
+- **Files:** `SettingsTabBar.tsx` (82 → 81 lines), `SettingsModal.tsx` (248 → 244), deleted `NotificationsSection.tsx` (−166).
+- **Verification:** `npx tsc --noEmit` 0 errors; probe WIRING OK — its tab assertions are derived from the source rather than hardcoded, so it independently confirms 6 tabs, every one with a render branch, and the new unique label set.

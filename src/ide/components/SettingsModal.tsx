@@ -26,7 +26,6 @@ import { GeneralSection } from "./settings/GeneralSection";
 import { EditorSection } from "./settings/EditorSection";
 import { EnvironmentSection } from "./settings/EnvironmentSection";
 import { ShortcutsSection } from "./settings/ShortcutsSection";
-import { NotificationsSection } from "./settings/NotificationsSection";
 import { FeedbackSection } from "./settings/FeedbackSection";
 import { SupportSection } from "./settings/SupportSection";
 
@@ -186,9 +185,6 @@ export function SettingsModal({ visible, onClose, onSyncWorkspace, onRerunStartu
                 onChangeEditorSettings={setEditorSettings}
                 theme={theme}
               />
-            )}
-            {activeTab === "notifications" && (
-              <NotificationsSection theme={theme} />
             )}
             {activeTab === "environment" && (
               <EnvironmentSection theme={theme} />

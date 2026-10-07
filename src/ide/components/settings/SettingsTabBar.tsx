@@ -3,7 +3,7 @@ import { View, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
 
-export type SettingsTabId = "general" | "editor" | "notifications" | "environment" | "shortcuts" | "feedback" | "support";
+export type SettingsTabId = "general" | "editor" | "environment" | "shortcuts" | "feedback" | "support";
 
 interface SettingsTab {
   id: SettingsTabId;
@@ -15,7 +15,6 @@ interface SettingsTab {
 const TABS: SettingsTab[] = [
   { id: "general", title: "General", icon: "options-outline" },
   { id: "editor", title: "Editor", icon: "code-slash-outline" },
-  { id: "notifications", title: "Alerts", icon: "notifications-outline" },
   { id: "environment", title: "Linux", icon: "cube-outline" },
   { id: "shortcuts", title: "Keys", icon: "key-outline" },
   { id: "feedback", title: "Feedback", icon: "mail-outline" },
@@ -64,7 +63,7 @@ export function SettingsTabBar({ activeTab, onSelectTab, theme }: SettingsTabBar
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
-    // 7 tabs at flex:1 — a tighter gap keeps each touch target as wide as
+    // 6 tabs at flex:1 — a tighter gap keeps each touch target as wide as
     // possible inside the sheet's 20pt horizontal padding.
     gap: 4,
     paddingVertical: 6,
