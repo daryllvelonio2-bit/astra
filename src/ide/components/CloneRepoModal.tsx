@@ -44,7 +44,10 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
   const { theme } = useTheme();
   const { keyboardMouseMode } = useKeyboardMouseMode();
   const [repoUrl, setRepoUrl] = useState('');
-  const [useSsh, setUseSsh] = useState(false);
+  // HTTPS + token only. The HTTPS/SSH buttons were removed: one field accepts
+// owner/repo, a full URL or the git@ ssh form and normalizes it, so the
+// protocol is no longer a question the user has to answer.
+  const useSsh = false;
   const [folderName, setFolderName] = useState('');
   const [folderTouched, setFolderTouched] = useState(false);
   const [useCustomDir, setUseCustomDir] = useState(false);
@@ -56,7 +59,7 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
   const [error, setError] = useState('');
   // Two ways in, and the two are kept apart on purpose.
   //
-  //   'url'     a pasted URL, with protocol/folder controls.
+  //   'url'     a pasted URL and an optional folder name.
   //   'account' the signed-in account's repos, private ones included. NO url
   //             field, no protocol switch, no folder input: the picked repo IS
   //             the source of truth. The list is the only scrollable on screen
@@ -85,7 +88,6 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
 
   const resetAll = () => {
     setRepoUrl('');
-    setUseSsh(false);
     setFolderName('');
     setFolderTouched(false);
     setUseCustomDir(false);
@@ -367,45 +369,6 @@ export function CloneRepoModal({ visible, onClose, onCloned }: CloneRepoModalPro
                 showSoftInputOnFocus={!keyboardMouseMode}
                 returnKeyType="next"
               />
-
-              <View style={styles.protoRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.protoBtn,
-                    { backgroundColor: theme.bgTertiary, borderColor: theme.border },
-                    !useSsh && { backgroundColor: `${theme.accent}20`, borderColor: theme.accent },
-                  ]}
-                  onPress={() => {
-                    setUseSsh(false);
-                    setError('');
-                    if (!folderTouched && repoUrl.trim()) {
-                      const n = normalizeCloneUrl(repoUrl, false);
-                      if (n) setFolderName(folderNameFromCloneUrl(n));
-                    }
-                  }}
-                >
-                  <Ionicons name="globe-outline" size={15} color={!useSsh ? theme.accent : theme.textMuted} />
-                  <Text style={[styles.protoBtnText, { color: !useSsh ? theme.accent : theme.textSecondary }]}>HTTPS</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.protoBtn,
-                    { backgroundColor: theme.bgTertiary, borderColor: theme.border },
-                    useSsh && { backgroundColor: `${theme.accent}20`, borderColor: theme.accent },
-                  ]}
-                  onPress={() => {
-                    setUseSsh(true);
-                    setError('');
-                    if (!folderTouched && repoUrl.trim()) {
-                      const n = normalizeCloneUrl(repoUrl, true);
-                      if (n) setFolderName(folderNameFromCloneUrl(n));
-                    }
-                  }}
-                >
-                  <Ionicons name="key-outline" size={15} color={useSsh ? theme.accent : theme.textMuted} />
-                  <Text style={[styles.protoBtnText, { color: useSsh ? theme.accent : theme.textSecondary }]}>SSH</Text>
-                </TouchableOpacity>
-              </View>
 
               <Text style={[styles.label, { color: theme.textSecondary }]}>Folder Name</Text>
               <TextInput
