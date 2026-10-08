@@ -1,5 +1,10 @@
 import { getGitHubToken } from "./gitHubApi";
 import { formatPermissionLabel, humanMessageForStatus } from "./gitCollaboratorModel";
+import {
+  canManageVisibility,
+  humanMessageForVisibilityStatus,
+  isRepoPrivate,
+} from "./gitRepoVisibilityModel";
 
 /**
  * GitHub collaborators API for the active repo.
@@ -44,6 +49,22 @@ export interface MutationResult {
   ok: boolean;
   /** HTTP status; -1 when input was rejected before the call. */
   status: number;
+  error?: string;
+}
+
+/** Current visibility of the active repo plus what the account may do about it. */
+export interface RepoVisibilityInfo {
+  /** True when the repo is not public (private or enterprise-internal). */
+  isPrivate: boolean;
+  /** Raw GitHub visibility when the API reported one: public | private | internal. */
+  visibility: string;
+  /** True when the signed-in account is an admin/owner (permissions.admin). */
+  canManage: boolean;
+}
+
+export interface VisibilityResult {
+  ok: boolean;
+  data?: RepoVisibilityInfo;
   error?: string;
 }
 
@@ -200,4 +221,44 @@ export async function removeCollaborator(owner: string, repo: string, username: 
   const res = await ghRequest("DELETE", `${ownerRepoPath(owner, repo)}/collaborators/${encodeURIComponent(user)}`);
   if (res.ok) return { ok: true, status: res.status };
   return { ok: false, status: res.status, error: humanMessageForStatus(res.status) };
+}
+
+/**
+ * Read the repo's current visibility plus whether the signed-in account may
+ * change it. GET /repos/{owner}/{repo} returns `private`, `visibility`, and a
+ * `permissions` block — the source of truth for the modal's control.
+ */
+export async function getRepoVisibility(owner: string, repo: string): Promise<VisibilityResult> {
+  const res = await ghRequest("GET", ownerRepoPath(owner, repo));
+  if (!res.ok) return { ok: false, error: humanMessageForVisibilityStatus(res.status) };
+  const isPrivate = isRepoPrivate(res.json);
+  return {
+    ok: true,
+    data: {
+      isPrivate,
+      visibility: typeof res.json?.visibility === "string" && res.json.visibility
+        ? res.json.visibility
+        : isPrivate
+        ? "private"
+        : "public",
+      canManage: canManageVisibility(res.json),
+    },
+  };
+}
+
+/**
+ * Change the repo's visibility. PATCH /repos/{owner}/{repo} with
+ * `{"private": true|false}`. Success is 200; any failure is translated to one
+ * human sentence — a raw JSON error body never leaves this module. Callers must
+ * re-read the state with getRepoVisibility afterwards rather than assuming the
+ * change took effect.
+ */
+export async function setRepoVisibility(
+  owner: string,
+  repo: string,
+  makePrivate: boolean
+): Promise<MutationResult> {
+  const res = await ghRequest("PATCH", ownerRepoPath(owner, repo), { private: makePrivate });
+  if (res.ok) return { ok: true, status: res.status };
+  return { ok: false, status: res.status, error: humanMessageForVisibilityStatus(res.status) };
 }
