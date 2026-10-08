@@ -72,36 +72,12 @@ export function folderNameFromCloneUrl(url: string): string {
  * uses a single blocking call.
  */
 
-/**
- * One canonical form from whatever the user pastes. Jay asked for this: the field
- * should not require typing https:// and should not need the ssh form either.
- *   user/repo                       -> https://github.com/user/repo.git
- *   github.com/user/repo            -> https://github.com/user/repo.git
- *   github.com/user/repo.git        -> https://github.com/user/repo.git
- *   https://github.com/user/repo     -> unchanged
- *   git@github.com:user/repo.git    -> https://github.com/user/repo.git
- *   ssh://git@host/user/repo        -> https://host/user/repo.git
- */
-export function normalizeCloneUrl(raw: string): string {
-  const t = (raw || "").trim().replace(/^file:\/\//, "");
-  if (!t) return t;
-  const ssh = t.match(/^(?:ssh:\/\/)?git@([^:/]+)[:/](.+)$/i);
-  if (ssh) return `https://${ssh[1]}/${ssh[2].replace(/\.git$/i, "")}.git`;
-  if (/^https?:\/\//i.test(t)) return t;
-  if (/^[^\s/]+\.[^\s/]+\/.+/.test(t)) return `https://${t.replace(/\.git$/i, "")}.git`;
-  if (/^[\w.-]+\/[\w.-]+$/.test(t)) return `https://github.com/${t}.git`;
-  return t;
-}
-
 export async function cloneGitRepo(
   url: string,
   parentDir: string,
   folderName?: string,
   onProgress?: (line: string) => void
 ): Promise<CloneResult> {
-  // Every clone routes through here (repo list, pasted URL), so accepting
-  // owner/repo needs no per-caller handling.
-  const sourceUrl = normalizeCloneUrl(sourceUrl);
   // Gate: cloning needs git + TLS trust roots in the guest. Without them
   // clones fail with "server certificate verification failed. CAfile: none".
   // Refuse early with an actionable error instead.
