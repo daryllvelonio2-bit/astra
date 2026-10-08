@@ -132,7 +132,6 @@ export function GuideStep({ theme, isLandscape = false }: GuideStepProps) {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     gap: 12,
   },
   headerWrap: {

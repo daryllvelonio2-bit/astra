@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/themeContext';
+import { ownerAvatarUrl } from '../services/gitAvatarService';
 
 export interface ProjectItem {
   id: string;
@@ -11,6 +12,13 @@ export interface ProjectItem {
   lastModified: string;
   fileCount: number;
   branch: string;
+  /**
+   * Set only when the workspace's git origin points at GitHub. `gitOwner` is
+   * the account login, `gitFullName` its `owner/repo`. Absent for local
+   * projects, so the card renders exactly as before when there is no remote.
+   */
+  gitOwner?: string;
+  gitFullName?: string;
 }
 
 interface ProjectCardProps {
@@ -54,6 +62,23 @@ export const ProjectCard = React.memo(function ProjectCard({ item, onPress, onMo
         <Text style={[styles.cardDetails, { color: theme.textSecondary }]}>
           {item.template ? `${item.template} • ` : ''}{item.fileCount} file{item.fileCount > 1 ? 's' : ''} • {item.lastModified}
         </Text>
+        {item.gitOwner ? (
+          // Provenance line: only for workspaces whose git origin is on GitHub.
+          // Local projects never render this, so their card is unchanged.
+          <View style={[styles.cloneRow, { borderTopColor: theme.border }]}>
+            <Image
+              source={{ uri: ownerAvatarUrl(item.gitOwner) }}
+              style={[styles.ownerAvatar, { borderColor: theme.border, backgroundColor: theme.bgPrimary }]}
+            />
+            <Text style={[styles.cloneName, { color: theme.textSecondary }]} numberOfLines={1}>
+              {item.gitFullName || item.gitOwner}
+            </Text>
+            <View style={[styles.cloneBadge, { backgroundColor: `${theme.accent}18`, borderColor: `${theme.accent}44` }]}>
+              <Ionicons name="logo-github" size={10} color={theme.accent} />
+              <Text style={[styles.cloneBadgeText, { color: theme.accent }]}>Cloned</Text>
+            </View>
+          </View>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -100,4 +125,24 @@ const styles = StyleSheet.create({
   cardDetails: {
     fontSize: 12,
   },
+  cloneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 9,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  ownerAvatar: { width: 20, height: 20, borderRadius: 10, borderWidth: 1 },
+  cloneName: { fontSize: 11.5, fontWeight: '600', flex: 1 },
+  cloneBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderWidth: 1,
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  cloneBadgeText: { fontSize: 9.5, fontWeight: '700' },
 });

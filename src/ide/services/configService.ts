@@ -113,6 +113,8 @@ export interface AppConfig {
   githubUsername?: string;
   githubEmail?: string;
   githubAvatarUrl?: string;
+  /** Last address shown in the built-in browser, restored on cold start. */
+  browserUrl?: string;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -130,6 +132,7 @@ const DEFAULT_CONFIG: AppConfig = {
   githubUsername: "",
   githubEmail: "",
   githubAvatarUrl: "",
+  browserUrl: "",
 };
 
 export function normalizeApiKeys(keys?: string[], fallbackKey?: string): string[] {
@@ -287,4 +290,13 @@ export async function loadTerminalFontSize(): Promise<number> {
 
 export async function saveTerminalFontSize(fontSize: number): Promise<void> {
   await saveConfig({ terminalFontSize: fontSize });
+}
+
+export async function loadBrowserUrl(): Promise<string> {
+  const config = await loadConfig();
+  return typeof config.browserUrl === "string" ? config.browserUrl : "";
+}
+
+export async function saveBrowserUrl(url: string): Promise<void> {
+  await saveConfig({ browserUrl: (url || "").trim() });
 }

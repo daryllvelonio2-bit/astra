@@ -90,6 +90,18 @@ export async function fetchCommitAvatars(
 }
 
 /**
+ * Canonical avatar URL for a GitHub user or org login. GitHub redirects
+ * `<login>.png` to the account's current avatar, so nothing has to be fetched
+ * here — the <Image> that consumes this does the single HTTP request. Pure
+ * (no network, no state) so any card can call it on render.
+ */
+export function ownerAvatarUrl(login?: string | null): string {
+  const handle = (login || "").trim();
+  if (!handle) return "";
+  return `https://github.com/${encodeURIComponent(handle)}.png?size=80`;
+}
+
+/**
  * Gravatar fallback for authors GitHub can't map to an account (author is
  * null in the API when the commit email isn't linked). `d=404` makes unknown
  * emails fail cleanly so the UI falls back to initials.

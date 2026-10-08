@@ -30,6 +30,7 @@ import { useIDELayoutCallbacks, addVisitedTab } from "./useIDELayoutCallbacks";
 import { useSystemBackHandler } from "./useSystemBackHandler";
 import { useIDELayoutStyles } from "./useIDELayoutStyles";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
+import { useBrowserUrlPersistence } from "./browser/useBrowserUrlPersistence";
 import {
   BottomTabVisibility, DEFAULT_BOTTOM_TABS, firstVisibleTab,
   loadBottomTabs, normalizeBottomTabs, subscribeConfigChanges, ToggleableBottomTab,
@@ -111,7 +112,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
   const isLandscapeNavbarHiddenRef = useRef(true);
   const navbarTurnedOffReasonRef = useRef<"auto" | "manual" | null>("auto");
   const manualSidebarHiddenRef = useRef(false);
-  const [browserUrl, setBrowserUrl] = useState<string>("");
+  const [browserUrl, setBrowserUrl] = useBrowserUrlPersistence();
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isSettingsModalVisible, setSettingsModalVisible] = useState(false);
   const [isMarketplaceVisible, setMarketplaceVisible] = useState(false);
@@ -410,14 +411,15 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
               </PanelErrorBoundary>
             </View>
           )}
-          {/* Browser preview is the one tab that is NOT kept alive in the
-              background: a mounted WebView keeps its renderer resident even
-              under display:none, and this tab is the least-reused of the four.
-              It remounts (and reloads initialUrl) on return. */}
-          {bottomTab === "browser" && (
-            <View style={tabContentStyle}>
+          {/* Browser is kept alive like the others: the WebView stays mounted
+              and is only hidden (display:none), so the page, its scroll
+              position and its login session survive a tab switch instead of
+              being destroyed and reloaded. `visible` lets it quiesce media and
+              focus while hidden. */}
+          {visitedTabs.has("browser") && (
+            <View style={[tabContentStyle, bottomTab !== "browser" && styles.hiddenTab]}>
               <PanelErrorBoundary panelName="Browser" resetKey={workspace?.id}>
-              <MemoWebBrowserPreview initialUrl={browserUrl} workspaceId={workspace?.id} onUrlChange={setBrowserUrl} />
+              <MemoWebBrowserPreview initialUrl={browserUrl} workspaceId={workspace?.id} onUrlChange={setBrowserUrl} visible={bottomTab === "browser"} />
               </PanelErrorBoundary>
             </View>
           )}

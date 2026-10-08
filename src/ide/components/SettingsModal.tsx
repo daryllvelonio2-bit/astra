@@ -39,13 +39,12 @@ interface SettingsModalProps {
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
-export function SettingsModal({ visible, onClose, onSyncWorkspace, onRerunStartup }: SettingsModalProps) {
+export function SettingsModal({ visible, onClose, workspaceId, onSyncWorkspace, onRerunStartup }: SettingsModalProps) {
   const { theme, themeMode, setTheme } = useTheme();
   // The sheet's last rows must clear the system navigation bar — respect
   // the live bottom inset (3-button nav paints over a fixed 16 padding).
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
-  const [apiKeys, setApiKeys] = useState<string[]>([]);
   const [activeTheme, setActiveTheme] = useState<AppTheme>(themeMode);
   const [bottomTabs, setBottomTabs] = useState<BottomTabVisibility>({ ...DEFAULT_BOTTOM_TABS });
   const [keyboardMouseMode, setKeyboardMouseMode] = useState(false);
@@ -55,14 +54,12 @@ export function SettingsModal({ visible, onClose, onSyncWorkspace, onRerunStartu
   const dirtyRef = useRef(false);
   const skipFirstRef = useRef(true);
   const saveTimer = useRef<any>(null);
-  const draftRef = useRef({ apiKeys, activeTheme, bottomTabs, keyboardMouseMode, editorSettings });
-  draftRef.current = { apiKeys, activeTheme, bottomTabs, keyboardMouseMode, editorSettings };
+  const draftRef = useRef({ activeTheme, bottomTabs, keyboardMouseMode, editorSettings });
+  draftRef.current = { activeTheme, bottomTabs, keyboardMouseMode, editorSettings };
 
   const flushSave = async () => {
     const draft = draftRef.current;
     await saveConfig({
-      apiKeys: draft.apiKeys,
-      apiKey: draft.apiKeys[0] || "",
       selectedTheme: draft.activeTheme,
       bottomTabs: normalizeBottomTabs(draft.bottomTabs),
       keyboardMouseMode: draft.keyboardMouseMode,
@@ -79,7 +76,6 @@ export function SettingsModal({ visible, onClose, onSyncWorkspace, onRerunStartu
       dirtyRef.current = false;
       skipFirstRef.current = true;
       loadConfig().then((cfg) => {
-        setApiKeys(cfg.apiKeys || (cfg.apiKey ? [cfg.apiKey] : []));
         setActiveTheme(cfg.selectedTheme || themeMode);
         setBottomTabs(normalizeBottomTabs(cfg.bottomTabs));
         setKeyboardMouseMode(!!cfg.keyboardMouseMode);
@@ -113,7 +109,7 @@ export function SettingsModal({ visible, onClose, onSyncWorkspace, onRerunStartu
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiKeys, activeTheme, bottomTabs, keyboardMouseMode, editorSettings, loaded]);
+  }, [activeTheme, bottomTabs, keyboardMouseMode, editorSettings, loaded]);
 
   const handleSelectTheme = (mode: AppTheme) => {
     setActiveTheme(mode);
@@ -171,8 +167,6 @@ export function SettingsModal({ visible, onClose, onSyncWorkspace, onRerunStartu
                 onSelectTheme={handleSelectTheme}
                 bottomTabs={bottomTabs}
                 onChangeBottomTabs={setBottomTabs}
-                apiKeys={apiKeys}
-                onChangeApiKeys={setApiKeys}
                 theme={theme}
                 onRerunStartup={onRerunStartup}
               />
@@ -193,7 +187,7 @@ export function SettingsModal({ visible, onClose, onSyncWorkspace, onRerunStartu
               <ShortcutsSection theme={theme} />
             )}
             {activeTab === "feedback" && (
-              <FeedbackSection theme={theme} />
+              <FeedbackSection theme={theme} workspaceId={workspaceId} />
             )}
             {activeTab === "support" && (
               <SupportSection theme={theme} />

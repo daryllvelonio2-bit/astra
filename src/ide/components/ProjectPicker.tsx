@@ -10,6 +10,8 @@ import {
   deleteWorkspace,
   openExistingDirectoryAsProject,
 } from '../services/workspaceService';
+import { getGitRemoteUrl } from '../services/gitRemoteService';
+import { parseGitHubRepo } from '../services/gitRemoteRef';
 import { ProjectCard, ProjectItem } from './ProjectCard';
 import { CreateProjectModal } from './CreateProjectModal';
 import { CloneRepoModal } from './CloneRepoModal';
@@ -60,9 +62,41 @@ export function ProjectPicker({ onOpenWorkspace, onRerunStartup }: ProjectPicker
         branch: 'main',
       }));
       setProjects(loaded);
+      // Show the cards immediately; provenance fills in when the git probes land.
+      void enrichGitHubOwners(loaded);
     } catch (e) {
       console.error('Failed to load workspaces:', e);
     }
+  };
+
+  /**
+   * Attach the owning GitHub account to each card whose workspace has a GitHub
+   * `origin`. Reads the remote with the shared `getGitRemoteUrl` (the same
+   * source the Git tab uses) and parses it with the shared `parseGitHubRepo` —
+   * no second parser and no second fetch layer. Runs in parallel after the
+   * list is already visible; workspaces with no GitHub remote are left
+   * untouched, so their card is byte-for-byte as before.
+   */
+  const enrichGitHubOwners = async (items: ProjectItem[]) => {
+    const found = await Promise.all(
+      items.map(async (item) => {
+        try {
+          const ref = parseGitHubRepo(await getGitRemoteUrl(item.id));
+          return ref ? { id: item.id, gitOwner: ref.owner, gitFullName: `${ref.owner}/${ref.repo}` } : null;
+        } catch {
+          return null;
+        }
+      })
+    );
+    const byId = new Map<string, { gitOwner: string; gitFullName: string }>();
+    for (const f of found) if (f) byId.set(f.id, { gitOwner: f.gitOwner, gitFullName: f.gitFullName });
+    if (byId.size === 0) return;
+    setProjects((prev) =>
+      prev.map((p) => {
+        const g = byId.get(p.id);
+        return g ? { ...p, ...g } : p;
+      })
+    );
   };
 
   const handleCreateProject = async (name: string, customPath?: string) => {

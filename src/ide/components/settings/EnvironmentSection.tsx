@@ -17,6 +17,7 @@ import {
 import { STAGES } from "./environmentStages";
 import { EnvironmentStageCard } from "./EnvironmentStageCard";
 import { OptionalPackagesSection } from "./OptionalPackagesSection";
+import { DependenciesSection } from "./DependenciesSection";
 
 interface EnvironmentSectionProps {
   theme: ThemeColors;
@@ -370,6 +371,9 @@ export function EnvironmentSection({ theme }: EnvironmentSectionProps) {
 
       {/* 5. Optional Extras */}
       <OptionalPackagesSection theme={theme} provisioningActive={status.isProvisioning} />
+
+      {/* 6. Development Dependencies (by kind of development) */}
+      <DependenciesSection theme={theme} provisioningActive={status.isProvisioning} />
     </View>
   );
 }

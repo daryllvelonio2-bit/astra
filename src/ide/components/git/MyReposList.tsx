@@ -5,7 +5,7 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
-  ActivityIndicator,
+  Image,
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,6 +13,7 @@ import { ThemeColors } from "../../../theme/themeContext";
 import { fetchMyRepos } from "../../services/gitHubRepoService";
 import { GitHubRepo } from "../../services/gitHubTypes";
 import { loadGitHubSession } from "../../services/gitService";
+import { formatStale } from "../../services/gitHubProfileService";
 
 interface MyReposListProps {
   theme: ThemeColors;
@@ -27,6 +28,48 @@ interface MyReposListProps {
   /** Highlight the row that is currently selected. */
   selectedFullName?: string;
 }
+
+/** Owner avatar with an initials fallback so a slow/absent image never blanks the row. */
+function OwnerAvatar({ uri, login, theme }: { uri?: string; login?: string; theme: ThemeColors }) {
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={[styles.avatar, { borderColor: theme.border, backgroundColor: theme.bgTertiary }]}
+      />
+    );
+  }
+  return (
+    <View
+      style={[
+        styles.avatar,
+        styles.avatarFallback,
+        { backgroundColor: `${theme.accent}30`, borderColor: theme.border },
+      ]}
+    >
+      <Text style={[styles.avatarLetter, { color: theme.accent }]}>
+        {(login || "?").slice(0, 1).toUpperCase()}
+      </Text>
+    </View>
+  );
+}
+
+/** Placeholder row shown while the account's repos load — mirrors the real row's shape. */
+function SkeletonRow({ theme }: { theme: ThemeColors }) {
+  const block = { backgroundColor: theme.bgTertiary };
+  return (
+    <View style={[styles.row, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
+      <View style={[styles.avatar, block]} />
+      <View style={styles.rowBody}>
+        <View style={[styles.skelLine, styles.skelTitle, block]} />
+        <View style={[styles.skelLine, styles.skelMeta, block]} />
+        <View style={[styles.skelLine, styles.skelDesc, block]} />
+      </View>
+    </View>
+  );
+}
+
+const SKELETON_ROWS = [0, 1, 2, 3, 4, 5];
 
 /**
  * The signed-in account's repositories, so a clone can start from a tap instead
@@ -101,11 +144,7 @@ export function MyReposList({ theme, onPick, fill, selectedFullName }: MyReposLi
         onPress={() => onPick(item)}
         activeOpacity={0.7}
       >
-        <Ionicons
-          name={item.isPrivate ? "lock-closed" : "globe-outline"}
-          size={14}
-          color={item.isPrivate ? theme.accentGold : theme.textMuted}
-        />
+        <OwnerAvatar uri={item.ownerAvatar} login={item.owner} theme={theme} />
         <View style={styles.rowBody}>
           <View style={styles.rowTop}>
             <Text style={[styles.repoName, { color: theme.textPrimary }]} numberOfLines={1}>
@@ -113,6 +152,7 @@ export function MyReposList({ theme, onPick, fill, selectedFullName }: MyReposLi
             </Text>
             {item.isPrivate && (
               <View style={[styles.badge, { backgroundColor: `${theme.accentGold}22`, borderColor: `${theme.accentGold}55` }]}>
+                <Ionicons name="lock-closed" size={8} color={theme.accentGold} />
                 <Text style={[styles.badgeText, { color: theme.accentGold }]}>private</Text>
               </View>
             )}
@@ -123,12 +163,12 @@ export function MyReposList({ theme, onPick, fill, selectedFullName }: MyReposLi
             )}
           </View>
           <Text style={[styles.repoMeta, { color: theme.textMuted }]} numberOfLines={1}>
-            {item.owner ? `${item.owner}/` : ""}
-            {item.language ? `${item.language} · ` : ""}
-            {item.updatedAt ? `updated ${String(item.updatedAt).slice(0, 10)}` : "no date"}
+            {item.fullName}
+            {item.language ? ` · ${item.language}` : ""}
+            {item.updatedAt ? ` · updated ${formatStale(item.updatedAt)}` : ""}
           </Text>
           {!!item.description && (
-            <Text style={[styles.repoDesc, { color: theme.textSecondary }]} numberOfLines={2}>
+            <Text style={[styles.repoDesc, { color: theme.textSecondary }]} numberOfLines={1}>
               {item.description}
             </Text>
           )}
@@ -163,9 +203,13 @@ export function MyReposList({ theme, onPick, fill, selectedFullName }: MyReposLi
       </View>
 
       {loading ? (
-        <View style={stateStyle}>
-          <ActivityIndicator size="small" color={theme.accent} />
-          <Text style={[styles.stateText, { color: theme.textMuted }]}>Loading your repositories…</Text>
+        <View
+          style={styles.skeletonList}
+          accessibilityLabel="Loading your repositories"
+        >
+          {SKELETON_ROWS.map((i) => (
+            <SkeletonRow key={i} theme={theme} />
+          ))}
         </View>
       ) : error ? (
         <View style={stateStyle}>
@@ -174,8 +218,11 @@ export function MyReposList({ theme, onPick, fill, selectedFullName }: MyReposLi
         </View>
       ) : filtered.length === 0 ? (
         <View style={stateStyle}>
+          <Ionicons name="search-outline" size={18} color={theme.textMuted} />
           <Text style={[styles.stateText, { color: theme.textMuted }]}>
-            {repos.length === 0 ? "No repositories on this account." : "Nothing matches that filter."}
+            {repos.length === 0
+              ? "No repositories on this account."
+              : "No repositories found for that search."}
           </Text>
         </View>
       ) : (
@@ -221,6 +268,7 @@ const styles = StyleSheet.create({
   // Fill mode (this list IS the sheet body): take the height given and scroll.
   listFill: { flex: 1 },
   listContent: { gap: 6, paddingBottom: 8 },
+  skeletonList: { gap: 6 },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -230,13 +278,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 9,
   },
+  avatar: { width: 30, height: 30, borderRadius: 15, borderWidth: 1 },
+  avatarFallback: { alignItems: "center", justifyContent: "center" },
+  avatarLetter: { fontSize: 12, fontWeight: "800" },
   rowBody: { flex: 1, gap: 2 },
   rowTop: { flexDirection: "row", alignItems: "center", gap: 6 },
   repoName: { fontSize: 12.5, fontWeight: "700", flexShrink: 1 },
-  badge: { borderWidth: 1, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    borderWidth: 1,
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
   badgeText: { fontSize: 9.5, fontWeight: "700" },
   repoMeta: { fontSize: 10.5 },
-  repoDesc: { fontSize: 11, lineHeight: 14 },
+  repoDesc: { fontSize: 11 },
+  skelLine: { height: 8, borderRadius: 4 },
+  skelTitle: { width: "55%" },
+  skelMeta: { width: "35%", height: 7 },
+  skelDesc: { width: "80%", height: 7 },
   center: { alignItems: "center", gap: 6, paddingVertical: 22 },
   centerFill: { flex: 1, justifyContent: "center" },
   stateText: { fontSize: 11.5, lineHeight: 16, textAlign: "center" },

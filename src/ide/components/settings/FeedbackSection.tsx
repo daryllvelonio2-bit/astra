@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Platform, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { ThemeColors } from "../../../theme/themeContext";
+import { loadWorkspaceRegistry } from "../../services/workspaceService";
 import {
   FEEDBACK_MAX_CHARS,
   FEEDBACK_MAX_REPLY_TO,
@@ -14,8 +15,8 @@ import {
  * Send feedback to the developers (Settings -> Feedback).
  *
  * Two deliberate properties:
- *  - The sender is the APP, not the user's mail client. No `mailto:` handoff,
- *    so a user with no mail app configured can still report something, and the
+ *  - The sender is the APP, not the user's mail client. No mail-app handoff
+ *    URL, so a user with no mail app configured can still report something, and
  *    report is one tap instead of "compose it yourself and remember to send".
  *  - The developer addresses appear NOWHERE here. They live behind the relay
  *    (feedbackTransport.FEEDBACK_ENDPOINT), so they cannot be read out of the
@@ -33,18 +34,62 @@ type Status =
   | { kind: "sent" }
   | { kind: "error"; text: string };
 
-function diagnosticsLine(): string {
-  const version = (Constants.expoConfig as { version?: string } | null)?.version || "?";
-  return `Astra ${version} · ${Platform.OS} API ${String(Platform.Version)}`;
+/** "Android 14 (API 35)" on device; a plain label elsewhere (dev/harness). */
+function osVersionLabel(): string {
+  if (Platform.OS === "android") {
+    const c = (Platform.constants ?? {}) as { Release?: string };
+    return c.Release
+      ? `Android ${c.Release} (API ${String(Platform.Version)})`
+      : `Android API ${String(Platform.Version)}`;
+  }
+  return `${Platform.OS} ${String(Platform.Version)}`;
 }
 
-export function FeedbackSection({ theme }: { theme: ThemeColors }) {
+/** Hardware model, e.g. "Pixel 6" — straight from the runtime, no new deps. */
+function deviceModelLabel(): string {
+  const c = (Platform.constants ?? {}) as { Model?: string; Brand?: string };
+  const model = (c.Model || "").trim();
+  const brand = (c.Brand || "").trim();
+  if (!model) return brand || "unknown device";
+  if (brand && !model.toLowerCase().startsWith(brand.toLowerCase())) return `${brand} ${model}`;
+  return model;
+}
+
+/** The exact environment line attached to every report. */
+function buildDiagnostics(workspaceName: string): string {
+  const version = (Constants.expoConfig as { version?: string } | null)?.version || "?";
+  const parts = [`Astra ${version}`, osVersionLabel(), deviceModelLabel()];
+  if (workspaceName) parts.push(`workspace ${workspaceName}`);
+  return parts.join(" · ");
+}
+
+export function FeedbackSection({ theme, workspaceId }: { theme: ThemeColors; workspaceId?: string }) {
   const [message, setMessage] = useState(draftMessage);
   const [replyTo, setReplyTo] = useState(draftReplyTo);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [workspaceName, setWorkspaceName] = useState("");
+
+  // Resolve the id to the human name once, so the report says which project.
+  useEffect(() => {
+    let alive = true;
+    if (!workspaceId) {
+      setWorkspaceName("");
+      return;
+    }
+    loadWorkspaceRegistry()
+      .then((reg) => {
+        if (alive) setWorkspaceName(reg[workspaceId]?.name || workspaceId);
+      })
+      .catch(() => {
+        if (alive) setWorkspaceName(workspaceId);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [workspaceId]);
 
   const configured = isFeedbackConfigured();
-  const diagnostics = diagnosticsLine();
+  const diagnostics = buildDiagnostics(workspaceName);
   const sending = status.kind === "sending";
   const canSend = configured && !sending && message.trim().length > 0;
 
@@ -60,6 +105,7 @@ export function FeedbackSection({ theme }: { theme: ThemeColors }) {
   };
 
   const handleSend = async () => {
+    // The guard plus the disabled button: a double-tap cannot send twice.
     if (!canSend) return;
     setStatus({ kind: "sending" });
     const result = await sendFeedback({ message, replyTo, diagnostics });
@@ -151,7 +197,7 @@ export function FeedbackSection({ theme }: { theme: ThemeColors }) {
         <Text style={[styles.status, { color: theme.textMuted }]}>
           {configured
             ? "Only your message and the line above are sent."
-            : "Feedback isn't connected in this build, so sending is disabled."}
+            : "The feedback relay isn't configured in this build yet, so sending is disabled."}
         </Text>
       )}
     </View>

@@ -11,9 +11,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { AstraLogo } from "../ide/components/AstraLogo";
+import { StartupWizardHeader } from "./StartupWizardHeader";
 import { useTheme } from "../theme/themeContext";
 import { useOrientation } from "../theme/useOrientation";
+import { useAccurateKeyboard } from "../theme/useAccurateKeyboard";
 import {
   AppTheme,
   loadConfig,
@@ -44,9 +45,15 @@ export function StartupWizard({ onComplete }: StartupWizardProps) {
   const insets = useSafeAreaInsets();
   const { theme, themeMode, setTheme } = useTheme();
   const { isLandscape } = useOrientation();
+  const { isKeyboardVisible, keyboardOffset } = useAccurateKeyboard(8);
 
   const topInset = Math.max(insets.top, StatusBar.currentHeight || 0);
   const bottomInset = Math.max(insets.bottom, 12);
+  // Edge-to-edge: the OS does NOT resize the window for the soft keyboard, so
+  // KeyboardAvoidingView alone does nothing here. Retreat the whole container
+  // by the measured IME height or the focused field and the Back/Next/Skip row
+  // end up underneath the keyboard.
+  const bottomPad = isKeyboardVisible ? Math.max(bottomInset, keyboardOffset) : bottomInset;
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedTheme, setSelectedTheme] = useState<AppTheme>(themeMode);
@@ -90,29 +97,6 @@ export function StartupWizard({ onComplete }: StartupWizardProps) {
     ]).start();
   }, [currentStepIndex]);
 
-  // Gentle pulse on the active step dot
-  const dotPulse = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(dotPulse, {
-          toValue: 1.25,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(dotPulse, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, []);
-
   const handleSelectTheme = useCallback((mode: AppTheme) => {
     setSelectedTheme(mode);
     setTheme(mode); // Live preview updates UI immediately
@@ -149,7 +133,7 @@ export function StartupWizard({ onComplete }: StartupWizardProps) {
         {
           backgroundColor: theme.bgPrimary,
           paddingTop: topInset,
-          paddingBottom: bottomInset,
+          paddingBottom: bottomPad,
           paddingLeft: insets.left,
           paddingRight: insets.right,
         },
@@ -160,88 +144,22 @@ export function StartupWizard({ onComplete }: StartupWizardProps) {
         backgroundColor="transparent"
         translucent
       />
-      <View style={[styles.container, isLandscape && styles.containerLandscape]}>
-        {/* Header Bar */}
-        <View style={[styles.headerBar, { borderBottomColor: theme.border }]}>
-          <View style={styles.brandRow}>
-            <AstraLogo width={32} height={32} />
-            <View>
-              <Text style={[styles.brandTitle, { color: theme.textPrimary }]}>
-                Astra Setup
-              </Text>
-              <Text style={[styles.brandSubtitle, { color: theme.textMuted }]}>
-                Personalize your workspace
-              </Text>
-            </View>
-          </View>
+      <View style={styles.container}>
+        <StartupWizardHeader
+          steps={STEPS}
+          currentStepIndex={currentStepIndex}
+          isLandscape={isLandscape}
+        />
 
-          {/* Step Indicator Dots */}
-          <View style={styles.stepIndicatorRow}>
-            {STEPS.map((step, idx) => {
-              const isActive = idx === currentStepIndex;
-              const isPast = idx < currentStepIndex;
-              return (
-                <View key={step.id} style={styles.stepDotWrap}>
-                  <Animated.View
-                    style={[
-                      styles.stepDot,
-                      {
-                        backgroundColor: isActive
-                          ? theme.accent
-                          : isPast
-                          ? theme.accentGreen
-                          : theme.borderLight,
-                        transform: [{ scale: isActive ? dotPulse : 1 }],
-                      },
-                    ]}
-                  >
-                    {isPast ? (
-                      <Ionicons name="checkmark" size={10} color="#ffffff" />
-                    ) : (
-                      <Text
-                        style={[
-                          styles.stepNumber,
-                          { color: isActive ? theme.sendButtonIcon : theme.textMuted },
-                        ]}
-                      >
-                        {idx + 1}
-                      </Text>
-                    )}
-                  </Animated.View>
-                  {isActive && !isLandscape && (
-                    <Text
-                      style={[
-                        styles.stepDotLabel,
-                        {
-                          color: theme.textPrimary,
-                          fontWeight: "700",
-                        },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {step.label}
-                    </Text>
-                  )}
-                  {idx < STEPS.length - 1 && (
-                    <View
-                      style={[
-                        styles.stepConnector,
-                        { backgroundColor: isPast ? theme.accentGreen : theme.border },
-                      ]}
-                    />
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Step Body (scrollable so the bottom actions are always reachable) */}
+        {/* Step Body (the single scroller — each step is natural-height content
+            inside it, so tall steps scroll instead of painting over the bar) */}
         <ScrollView
-          style={styles.bodyWrap}
+          style={[styles.bodyWrap, isLandscape && styles.bodyWrapLandscape]}
           contentContainerStyle={styles.bodyContent}
           showsVerticalScrollIndicator={false}
           bounces={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           <Animated.View
             style={[
@@ -301,7 +219,10 @@ export function StartupWizard({ onComplete }: StartupWizardProps) {
               activeOpacity={0.7}
             >
               <Ionicons name="arrow-back" size={15} color={theme.textSecondary} />
-              <Text style={[styles.navBtnSecondaryText, { color: theme.textSecondary }]}>
+              <Text
+                style={[styles.navBtnSecondaryText, { color: theme.textSecondary }]}
+                numberOfLines={1}
+              >
                 Back
               </Text>
             </TouchableOpacity>
@@ -316,7 +237,10 @@ export function StartupWizard({ onComplete }: StartupWizardProps) {
                 onPress={handleFinish}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.skipBtnText, { color: theme.textMuted }]}>
+                <Text
+                  style={[styles.skipBtnText, { color: theme.textMuted }]}
+                  numberOfLines={1}
+                >
                   Skip for now
                 </Text>
               </TouchableOpacity>
@@ -330,7 +254,10 @@ export function StartupWizard({ onComplete }: StartupWizardProps) {
               onPress={handleNext}
               activeOpacity={0.8}
             >
-              <Text style={[styles.navBtnPrimaryText, { color: theme.sendButtonIcon }]}>
+              <Text
+                style={[styles.navBtnPrimaryText, { color: theme.sendButtonIcon }]}
+                numberOfLines={1}
+              >
                 {currentStepIndex === STEPS.length - 1 ? "Get Started" : "Continue"}
               </Text>
               <Ionicons
@@ -353,71 +280,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  containerLandscape: {
-    flexDirection: "column",
-  },
-  headerBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  brandTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    letterSpacing: -0.2,
-  },
-  brandSubtitle: {
-    fontSize: 10.5,
-  },
-  stepIndicatorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  stepDotWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  stepDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepNumber: {
-    fontSize: 9,
-    fontWeight: "700",
-  },
-  stepDotLabel: {
-    fontSize: 11,
-    marginRight: 4,
-  },
-  stepConnector: {
-    width: 14,
-    height: 2,
-    marginHorizontal: 4,
-    borderRadius: 1,
-  },
   bodyWrap: {
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 14,
+  },
+  bodyWrapLandscape: {
+    paddingTop: 10,
   },
   bodyContent: {
     flexGrow: 1,
     paddingBottom: 8,
   },
   bodyAnimated: {
-    flex: 1,
+    // flexGrow (not flex:1): a flex:1 child of a ScrollView is pinned to the
+    // viewport height, so tall steps overflowed and overlapped the nav bar
+    // instead of extending the scrollable content. flexGrow fills short steps
+    // but still lets tall ones grow the content and scroll.
+    flexGrow: 1,
   },
   bottomBar: {
     flexDirection: "row",
@@ -442,6 +322,7 @@ const styles = StyleSheet.create({
   navBtnSecondaryText: {
     fontSize: 13,
     fontWeight: "600",
+    flexShrink: 1,
   },
   spacer: {
     width: 60,
@@ -449,6 +330,8 @@ const styles = StyleSheet.create({
   rightActionsRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
+    flexShrink: 1,
     gap: 10,
   },
   skipBtn: {
@@ -458,6 +341,7 @@ const styles = StyleSheet.create({
   skipBtnText: {
     fontSize: 12.5,
     fontWeight: "600",
+    flexShrink: 1,
   },
   navBtnPrimary: {
     flexDirection: "row",
@@ -466,9 +350,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 10,
+    flexShrink: 0,
   },
   navBtnPrimaryText: {
     fontSize: 13,
     fontWeight: "700",
+    flexShrink: 1,
   },
 });

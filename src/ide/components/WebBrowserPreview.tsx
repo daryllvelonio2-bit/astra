@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import * as WebBrowser from "expo-web-browser";
@@ -9,13 +9,30 @@ import { useTheme } from "../../theme/themeContext";
 import { useOrientation } from "../../theme/useOrientation";
 import { Clipboard } from "../services/clipboardService";
 
+// localhost / 0.0.0.0 are not resolvable on-device; fold both to the loopback
+// IP. Single source of truth (was copy-pasted on the input and sync paths).
+const normalizeHost = (u: string): string =>
+  u.replace(/localhost/gi, "127.0.0.1").replace(/0\.0\.0\.0/g, "127.0.0.1");
+
+// Run while the pane is hidden: stop media (a hidden tab must not keep playing
+// audio the user can hear) and drop focus, so the WebView can't hold the
+// keyboard away from the pane that is actually visible.
+const QUIESCE_SCRIPT = `(function(){try{
+  document.querySelectorAll('video,audio').forEach(function(m){try{m.pause()}catch(e){} });
+  if(window.speechSynthesis){try{window.speechSynthesis.cancel()}catch(e){}}
+  var a=document.activeElement; if(a&&a.blur){try{a.blur()}catch(e){}}
+}catch(e){}})(); true;`;
+
 interface WebBrowserPreviewProps {
   initialUrl?: string;
   workspaceId?: string;
+  /** True while the Browser tab is the visible pane. False = kept mounted but
+   *  hidden (display:none), so the page, scroll position and session survive a
+   *  tab switch without a reload. */
+  visible?: boolean;
   /**
-   * Report the address upward. Browser is the one tab that remounts on return
-   * (a live WebView is expensive to keep resident), so state held only here is
-   * thrown away and the user has to retype the address every time.
+   * Report the current address upward. The caller persists it so the last URL
+   * is restored on the next cold start.
    */
   onUrlChange?: (url: string) => void;
 }
@@ -23,6 +40,7 @@ interface WebBrowserPreviewProps {
 export function WebBrowserPreview({
   initialUrl = "",
   workspaceId,
+  visible = true,
   onUrlChange,
 }: WebBrowserPreviewProps) {
   const { theme } = useTheme();
@@ -35,7 +53,15 @@ export function WebBrowserPreview({
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  // Stable source object: a fresh `{ uri }` every render is what makes a
+  // WebView reload on an unrelated re-render. Only a real url change should.
+  const source = useMemo(() => ({ uri: url }), [url]);
+
   const webViewRef = useRef<WebView>(null);
+  // URL the WebView is actually on (updated on every navigation, incl. link
+  // taps). Used to tell a real incoming initialUrl from our own report echoed
+  // back.
+  const liveUrlRef = useRef("");
 
   // Reload without remount: preserves back/forward history (key-remounts
   // destroyed it). If the page isn't mounted (error/empty view), clearing
@@ -46,18 +72,26 @@ export function WebBrowserPreview({
     setTimeout(() => webViewRef.current?.reload(), 50);
   };
 
-  // Sync when initialUrl prop changes
+  // A new initialUrl is an external "open this" request (hosting link, IDE
+  // action) or the restored address on cold start. Only point the source there
+  // when the WebView isn't already on it — otherwise the live URL we report
+  // upward would echo back and reload the page we keep alive.
   useEffect(() => {
-    if (initialUrl) {
-      const normalized = initialUrl.replace(/localhost/gi, "127.0.0.1").replace(/0\.0\.0\.0/g, "127.0.0.1");
-      if (normalized !== url) {
-        setUrl(normalized);
-        setInputUrl(normalized);
-        setHasError(false);
-        setErrorMessage("");
-      }
-    }
+    if (!initialUrl) return;
+    const normalized = normalizeHost(initialUrl);
+    if (normalized === liveUrlRef.current) return;
+    setUrl(normalized);
+    setInputUrl(normalized);
+    setHasError(false);
+    setErrorMessage("");
   }, [initialUrl]);
+
+  // Hidden pane: quiet any media/focus. Kept mounted (display:none) so the
+  // page, scroll position and session survive the switch.
+  useEffect(() => {
+    if (visible) return;
+    webViewRef.current?.injectJavaScript(QUIESCE_SCRIPT);
+  }, [visible]);
 
   const handleNavigate = (targetUrl?: string) => {
     let finalUrl = (targetUrl || inputUrl).trim();
@@ -67,7 +101,7 @@ export function WebBrowserPreview({
       finalUrl = finalUrl.replace(/^exp:\/\//i, "http://");
     }
 
-    finalUrl = finalUrl.replace(/localhost/gi, "127.0.0.1").replace(/0\.0\.0\.0/g, "127.0.0.1");
+    finalUrl = normalizeHost(finalUrl);
     onUrlChange?.(finalUrl);
 
     if (!finalUrl.startsWith("http://") && !finalUrl.startsWith("https://") && !finalUrl.startsWith("file://")) {
@@ -153,11 +187,18 @@ export function WebBrowserPreview({
         ) : (
           <WebView
             ref={webViewRef}
-            source={{ uri: url }}
+            source={source}
             style={[styles.webview, { backgroundColor: theme.bgPrimary }]}
             originWhitelist={["*"]}
             javaScriptEnabled={true}
             domStorageEnabled={true}
+            // Session persistence: keep the WebView's own cookie jar, share
+            // cookies with the app store, keep third-party cookies (logins
+            // often ride on them) and never start private.
+            incognito={false}
+            cacheEnabled={true}
+            sharedCookiesEnabled={true}
+            thirdPartyCookiesEnabled={true}
             mixedContentMode="always"
             allowsInlineMediaPlayback={true}
             allowFileAccess={true}
@@ -185,9 +226,13 @@ export function WebBrowserPreview({
             }}
             onLoadEnd={() => setLoading(false)}
             onNavigationStateChange={(navState) => {
+              // Ref FIRST: the upward report below echoes back as initialUrl,
+              // and the sync effect must see this as the current page.
+              liveUrlRef.current = navState.url;
               setCanGoBack(navState.canGoBack);
               setCanGoForward(navState.canGoForward);
               setInputUrl(navState.url);
+              onUrlChange?.(navState.url);
             }}
             onError={(e) => {
               setLoading(false);

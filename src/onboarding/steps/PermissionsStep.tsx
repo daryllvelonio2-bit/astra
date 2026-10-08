@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
   AppState,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -82,11 +81,7 @@ export function PermissionsStep({ theme, isLandscape = false }: PermissionsStepP
   };
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={[styles.content, isLandscape && styles.contentLandscape]}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={[styles.container, isLandscape && styles.containerLandscape]}>
       <View style={styles.headerWrap}>
         <Text style={[styles.stepTitle, { color: theme.textPrimary }]}>
           System Permissions
@@ -267,20 +262,15 @@ export function PermissionsStep({ theme, isLandscape = false }: PermissionsStepP
         </Text>
         <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
       </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingBottom: 24,
+  container: {
     gap: 12,
   },
-  contentLandscape: {
-    paddingBottom: 16,
+  containerLandscape: {
     gap: 8,
   },
   headerWrap: {
@@ -298,7 +288,7 @@ const styles = StyleSheet.create({
   },
   card: {
     padding: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     gap: 12,
   },

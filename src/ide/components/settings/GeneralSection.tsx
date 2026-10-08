@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Switch, DevSettings, NativeModules } from "react-native";
-import { showAppDialog } from "../../services/appDialog";
+import { View, Text, TouchableOpacity, StyleSheet, Switch, DevSettings, NativeModules } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppTheme, BottomTabVisibility, ToggleableBottomTab } from "../../services/configService";
 import { ThemeColors, THEMES } from "../../../theme/themeContext";
-import { maskApiKey, normalizeApiKeys } from "../../services/configService";
-import { useKeyboardMouseMode } from "../../context/KeyboardMouseContext";
 import {
   getInstalledThemes,
   getInstalledIconThemes,
@@ -19,8 +16,6 @@ interface GeneralSectionProps {
   onSelectTheme: (theme: AppTheme) => void;
   bottomTabs: BottomTabVisibility;
   onChangeBottomTabs: (tabs: BottomTabVisibility) => void;
-  apiKeys: string[];
-  onChangeApiKeys: (keys: string[]) => void;
   theme: ThemeColors;
   onRerunStartup?: () => void;
 }
@@ -50,14 +45,9 @@ export function GeneralSection({
   onSelectTheme,
   bottomTabs,
   onChangeBottomTabs,
-  apiKeys,
-  onChangeApiKeys,
   theme,
   onRerunStartup,
 }: GeneralSectionProps) {
-  const { keyboardMouseMode } = useKeyboardMouseMode();
-  const [newKeyInput, setNewKeyInput] = useState("");
-  const [revealedIndices, setRevealedIndices] = useState<Set<number>>(new Set());
   const [extensionThemes, setExtensionThemes] = useState<Array<{ id: string; label: string }>>([]);
   const [iconThemes, setIconThemes] = useState<Array<{ id: string; label: string }>>([]);
   const [activeIconThemeId, setActiveIconThemeId] = useState<string | undefined>(undefined);
@@ -79,45 +69,6 @@ export function GeneralSection({
 
   const handleToggleTab = (tabId: ToggleableBottomTab, value: boolean) => {
     onChangeBottomTabs({ ...bottomTabs, [tabId]: value });
-  };
-
-  const handleAddKey = () => {
-    const raw = newKeyInput.trim();
-    if (!raw) return;
-    const incoming = raw.split(/[,;\n\r]+/).map((k) => k.trim()).filter((k) => k.length > 0);
-    if (incoming.length === 0) return;
-    onChangeApiKeys(normalizeApiKeys([...apiKeys, ...incoming]));
-    setNewKeyInput("");
-  };
-
-  const handleRemoveKey = (indexToRemove: number) => {
-    showAppDialog({ title: "Remove API Key", message: `Remove Key #${indexToRemove + 1} (${maskApiKey(apiKeys[indexToRemove])})?`, buttons: [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => {
-            onChangeApiKeys(apiKeys.filter((_, idx) => idx !== indexToRemove));
-            setRevealedIndices((prev) => {
-              const updated = new Set<number>();
-              prev.forEach((i) => {
-                if (i < indexToRemove) updated.add(i);
-                else if (i > indexToRemove) updated.add(i - 1);
-              });
-              return updated;
-            });
-          },
-        },
-      ] });
-  };
-
-  const toggleReveal = (idx: number) => {
-    setRevealedIndices((prev) => {
-      const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
-      return next;
-    });
   };
 
   return (
@@ -252,68 +203,7 @@ export function GeneralSection({
         })}
       </View>
 
-      {/* 3. AI Commit Summary Key */}
-      <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>GIT AI SUMMARY KEY</Text>
-      <View style={[styles.groupedCard, { backgroundColor: theme.bgPrimary, borderColor: theme.border, padding: 12 }]}>
-        <Text style={[styles.subText, { color: theme.textSecondary }]}>
-          Google Gemini API key for generating AI commit summaries in the Git tab.
-        </Text>
-        <View style={[styles.inputRow, { backgroundColor: theme.bgInput, borderColor: theme.border }]}>
-          <TextInput
-            style={[styles.keyInput, { color: theme.textPrimary }]}
-            placeholder="Paste Gemini API Key"
-            placeholderTextColor={theme.textMuted}
-            value={newKeyInput}
-            onChangeText={setNewKeyInput}
-            autoCapitalize="none"
-            autoCorrect={false}
-            showSoftInputOnFocus={!keyboardMouseMode}
-            onSubmitEditing={handleAddKey}
-            returnKeyType="done"
-          />
-          <TouchableOpacity
-            style={[
-              styles.addKeyBtn,
-              { backgroundColor: newKeyInput.trim() ? theme.accent : theme.bgTertiary },
-            ]}
-            onPress={handleAddKey}
-            disabled={!newKeyInput.trim()}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.addKeyText, { color: newKeyInput.trim() ? theme.sendButtonIcon : theme.textMuted }]}>
-              Add
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {apiKeys.length > 0 && (
-          <View style={styles.keysList}>
-            {apiKeys.map((key, idx) => {
-              const isRevealed = revealedIndices.has(idx);
-              return (
-                <View
-                  key={`${key}-${idx}`}
-                  style={[styles.keyItem, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}
-                >
-                  <Text style={[styles.keyText, { color: theme.textPrimary }]} numberOfLines={1}>
-                    {isRevealed ? key : maskApiKey(key)}
-                  </Text>
-                  <View style={styles.keyActions}>
-                    <TouchableOpacity onPress={() => toggleReveal(idx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Ionicons name={isRevealed ? "eye-off-outline" : "eye-outline"} size={16} color={theme.textMuted} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleRemoveKey(idx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Ionicons name="trash-outline" size={16} color={theme.accentRed} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
-      </View>
-
-      {/* 4. Onboarding Action */}
+      {/* 3. Onboarding Action */}
       {onRerunStartup && (
         <View style={{ marginTop: 4 }}>
           <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>ONBOARDING</Text>
@@ -331,7 +221,7 @@ export function GeneralSection({
         </View>
       )}
 
-      {/* 5. Live Development over Wi-Fi (__DEV__ only) */}
+      {/* 4. Live Development over Wi-Fi (__DEV__ only) */}
       {__DEV__ && (
         <View style={{ marginTop: 4 }}>
           <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>DEVELOPER TOOLS</Text>
@@ -421,29 +311,4 @@ const styles = StyleSheet.create({
   },
   rowIconBox: { width: 28, height: 28, borderRadius: 6, alignItems: "center", justifyContent: "center" },
   rowLabel: { flex: 1, fontSize: 13, fontWeight: "600" },
-  subText: { fontSize: 11, lineHeight: 15, marginBottom: 8 },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingLeft: 10,
-    paddingRight: 4,
-    paddingVertical: 3,
-  },
-  keyInput: { flex: 1, fontSize: 12, paddingVertical: 5 },
-  addKeyBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 },
-  addKeyText: { fontSize: 11, fontWeight: "600" },
-  keysList: { marginTop: 8, gap: 6 },
-  keyItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  keyText: { flex: 1, fontSize: 11, fontFamily: "monospace", fontWeight: "600" },
-  keyActions: { flexDirection: "row", alignItems: "center", gap: 10, marginLeft: 8 },
 });

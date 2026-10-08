@@ -143,7 +143,6 @@ export function ThemeSelectionStep({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     gap: 16,
   },
   headerWrap: {
@@ -167,7 +166,7 @@ const styles = StyleSheet.create({
   },
   card: {
     padding: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     gap: 10,
   },
