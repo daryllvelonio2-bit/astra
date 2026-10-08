@@ -1,9 +1,10 @@
 import { executeCommand } from "../../../modules/linux-runner/src";
 
-export interface GitHubRepoRef {
-  owner: string;
-  repo: string;
-}
+// The remote parser is shared with the Collaborators feature and lives in a
+// dependency-free module so both sides reuse one implementation; re-exported
+// here so existing imports keep working unchanged.
+export { parseGitHubRepo } from "./gitRemoteRef";
+export type { GitHubRepoRef } from "./gitRemoteRef";
 
 export interface CommitAvatarMap {
   bySha: Record<string, string>;
@@ -36,19 +37,6 @@ export async function getGitHubApiToken(): Promise<string | null> {
   } catch (_) {
     return null;
   }
-}
-
-/** Extracts owner/repo from HTTPS, SSH, or shorthand GitHub remotes. */
-export function parseGitHubRepo(remoteUrl?: string | null): GitHubRepoRef | null {
-  const raw = (remoteUrl || "").trim();
-  if (!raw) return null;
-  let m = raw.match(/^https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i);
-  if (m) return { owner: m[1], repo: m[2] };
-  m = raw.match(/^(?:git@github\.com:|ssh:\/\/git@github\.com\/)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i);
-  if (m) return { owner: m[1], repo: m[2] };
-  m = raw.match(/^([\w.-]+)\/([\w.-]+)$/);
-  if (m) return { owner: m[1], repo: m[2] };
-  return null;
 }
 
 /**

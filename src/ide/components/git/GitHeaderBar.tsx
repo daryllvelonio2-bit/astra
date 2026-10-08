@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { useTheme } from "../../../theme/themeContext";
 import { useOrientation } from "../../../theme/useOrientation";
 import { GitRepoStatus } from "./types";
 import { GitHubSession } from "../../services/gitService";
+import { GitCollaboratorsModal } from "./GitCollaboratorsModal";
 
 interface GitHeaderBarProps {
   repoName: string;
@@ -47,6 +48,9 @@ export function GitHeaderBar({
 }: GitHeaderBarProps) {
   const { theme } = useTheme();
   const { isLandscape } = useOrientation();
+  // Collaborators modal lives here: this bar already receives the workspace's
+  // remote URL, so the feature needs no new prop on GitHubDesktopView.
+  const [showCollaborators, setShowCollaborators] = useState(false);
 
   const isRepo = !!status?.isRepo;
   const ahead = status?.ahead ?? 0;
@@ -179,6 +183,17 @@ export function GitHeaderBar({
               </TouchableOpacity>
             )}
           </View>
+
+          {/* People with access (opens the collaborators modal for this repo) */}
+          {remoteUrl && (
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => setShowCollaborators(true)}
+              accessibilityLabel="Collaborators"
+            >
+              <Octicons name="people" size={isLandscape ? 13 : 15} color={theme.textSecondary} />
+            </TouchableOpacity>
+          )}
         </>
       ) : (
         onInitRepo && (
@@ -215,6 +230,12 @@ export function GitHeaderBar({
           </TouchableOpacity>
         )}
       </View>
+
+      <GitCollaboratorsModal
+        visible={showCollaborators}
+        remoteUrl={remoteUrl ?? null}
+        onClose={() => setShowCollaborators(false)}
+      />
     </View>
   );
 }
