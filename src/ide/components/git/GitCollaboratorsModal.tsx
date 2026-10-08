@@ -23,7 +23,6 @@ import {
   removeCollaborator,
 } from "../../services/gitCollaboratorsApi";
 import { repoFullName } from "../../services/gitCollaboratorModel";
-import { RepoVisibilitySection } from "./RepoVisibilitySection";
 
 /**
  * Repository collaborators for the current workspace: who has access, who has
@@ -197,9 +196,6 @@ export function GitCollaboratorsModal({ visible, remoteUrl, onClose }: GitCollab
               </View>
             ) : (
               <>
-                {/* Visibility lives with the collaborators: one place for who can reach this repo */}
-                <RepoVisibilitySection visible={visible} owner={ref.owner} repo={ref.repo} fullName={fullName} />
-
                 {/* Add by username */}
                 <View style={styles.addRow}>
                   <TextInput

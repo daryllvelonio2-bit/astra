@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { showAppDialog } from "../../services/appDialog";
@@ -14,14 +14,14 @@ import { DependencyCategorySection } from "./DependencyCategorySection";
 /**
  * Dependencies, organised by KIND OF DEVELOPMENT.
  *
- * Each section is one kind of development (Laravel, React/Node, ...) with the
- * runtimes/tools it needs, whether each is installed, and one tap to install.
+ * One flat surface: a status line, then one collapsible group per kind of
+ * development (Laravel, React/Node, ...) whose rows are its runtimes/tools —
+ * whether each is installed and one tap to install. Groups are separated by a
+ * hairline rule, not nested cards. The tool rows (name + Get) are the loudest
+ * thing on screen; category titles are quiet labels.
+ *
  * Nothing installs itself: the screen only ever calls the app's existing
  * installPackages() guest installer, after the user taps Get.
- *
- * Visual language matches the settings Optional Extras list
- * (`settings/OptionalPackagesSection.tsx`) and the hosting panel: same theme
- * tokens, section headings, group cards, chips and buttons.
  */
 
 interface DependenciesScreenProps {
@@ -124,29 +124,24 @@ export function DependenciesScreen({ provisioningActive = false }: DependenciesS
 
   return (
     <View style={styles.container}>
-      <View style={styles.introRow}>
-        <View style={styles.introInfo}>
-          <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>
-            INSTALL BY KIND OF DEVELOPMENT
-          </Text>
-          <Text style={[styles.sectionSub, { color: theme.textMuted }]}>
-            {probing ? "Checking what is installed…" : `${readyTotal}/${toolTotal} tools ready`}
-            {" · every install is a manual tap"}
-          </Text>
-        </View>
+      <View style={styles.statusRow}>
+        <Text style={[styles.statusText, { color: theme.textMuted }]} numberOfLines={1}>
+          {probing ? "Checking installed tools…" : `${readyTotal}/${toolTotal} tools ready`}
+        </Text>
         <TouchableOpacity
-          style={[styles.recheckBtn, { backgroundColor: `${theme.accent}15`, borderColor: `${theme.accent}30` }]}
+          style={[styles.recheckBtn, { borderColor: theme.border }]}
           onPress={() => {
             setProbing(true);
             void refresh().finally(() => setProbing(false));
           }}
           disabled={probing}
           activeOpacity={0.7}
+          accessibilityLabel="Re-check installed tools"
         >
           {probing ? (
-            <ActivityIndicator size={12} color={theme.accent} />
+            <ActivityIndicator size={11} color={theme.accent} />
           ) : (
-            <Ionicons name="refresh-outline" size={13} color={theme.accent} />
+            <Ionicons name="refresh-outline" size={12} color={theme.accent} />
           )}
           <Text style={[styles.recheckText, { color: theme.accent }]}>Re-check</Text>
         </TouchableOpacity>
@@ -166,30 +161,22 @@ export function DependenciesScreen({ provisioningActive = false }: DependenciesS
           onInstall={handleInstall}
         />
       ))}
-
-      <Text style={[styles.footer, { color: theme.textMuted }]}>
-        Tools marked Manual cannot be installed by the app today. Everything else installs with the
-        same guest installer the rest of Astra uses — only when you tap Get.
-      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { gap: 8, paddingBottom: 24 },
-  introRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 },
-  introInfo: { flex: 1 },
-  sectionHeading: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8 },
-  sectionSub: { fontSize: 11, marginTop: 2 },
+  container: { gap: 0, paddingBottom: 16 },
+  statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingBottom: 4 },
+  statusText: { fontSize: 11, flex: 1 },
   recheckBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   recheckText: { fontSize: 11, fontWeight: "700" },
-  footer: { fontSize: 10.5, lineHeight: 15, marginTop: 4 },
 });

@@ -14,6 +14,7 @@ import { useOrientation } from "../../../theme/useOrientation";
 import { GitRepoStatus } from "./types";
 import { GitHubSession } from "../../services/gitService";
 import { GitCollaboratorsModal } from "./GitCollaboratorsModal";
+import { RepoVisibilityModal } from "./RepoVisibilityModal";
 
 interface GitHeaderBarProps {
   repoName: string;
@@ -51,6 +52,7 @@ export function GitHeaderBar({
   // Collaborators modal lives here: this bar already receives the workspace's
   // remote URL, so the feature needs no new prop on GitHubDesktopView.
   const [showCollaborators, setShowCollaborators] = useState(false);
+  const [showVisibility, setShowVisibility] = useState(false);
 
   const isRepo = !!status?.isRepo;
   const ahead = status?.ahead ?? 0;
@@ -184,15 +186,24 @@ export function GitHeaderBar({
             )}
           </View>
 
-          {/* People with access (opens the collaborators modal for this repo) */}
+          {/* People with access and repo visibility, side by side */}
           {remoteUrl && (
-            <TouchableOpacity
-              style={styles.iconBtn}
-              onPress={() => setShowCollaborators(true)}
-              accessibilityLabel="Collaborators"
-            >
-              <Octicons name="people" size={isLandscape ? 13 : 15} color={theme.textSecondary} />
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => setShowCollaborators(true)}
+                accessibilityLabel="Collaborators"
+              >
+                <Octicons name="people" size={isLandscape ? 13 : 15} color={theme.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => setShowVisibility(true)}
+                accessibilityLabel="Repository visibility"
+              >
+                <Octicons name="shield-lock" size={isLandscape ? 13 : 15} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </>
           )}
         </>
       ) : (
@@ -235,6 +246,11 @@ export function GitHeaderBar({
         visible={showCollaborators}
         remoteUrl={remoteUrl ?? null}
         onClose={() => setShowCollaborators(false)}
+      />
+      <RepoVisibilityModal
+        visible={showVisibility}
+        remoteUrl={remoteUrl ?? null}
+        onClose={() => setShowVisibility(false)}
       />
     </View>
   );

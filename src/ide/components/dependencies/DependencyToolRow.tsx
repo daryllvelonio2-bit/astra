@@ -5,9 +5,10 @@ import { ThemeColors } from "../../../theme/themeContext";
 import { DevTool, sizeLabel } from "../../services/devCategories";
 
 /**
- * One tool line inside a category card. Mirrors the row/chip/button metrics of
- * the settings Optional Extras list (`settings/OptionalPackagesSection.tsx`):
- * same chip metrics, same "Get" button, same name/description scale.
+ * One tool line — the option the user acts on. The name leads at the largest
+ * type, the size/requirement chips are quiet metadata, and the one-line note
+ * (or a manual tool's WHERE-to-get hint) sits muted below. The Get button is
+ * the accent tap target; installed tools show a green check instead.
  */
 
 interface DependencyToolRowProps {
@@ -120,7 +121,7 @@ export function DependencyToolRow({
           )}
         </View>
         {!!detail && (
-          <Text style={[styles.pkgDesc, { color: theme.textSecondary }]} numberOfLines={1}>
+          <Text style={[styles.pkgDesc, { color: theme.textMuted }]} numberOfLines={1}>
             {detail}
           </Text>
         )}
@@ -153,10 +154,10 @@ function StatusPill({
 }
 
 const styles = StyleSheet.create({
-  pkgRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  pkgInfo: { flex: 1, gap: 3 },
+  pkgRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  pkgInfo: { flex: 1, gap: 2 },
   pkgNameRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5 },
-  pkgName: { fontSize: 12.5, fontWeight: "700" },
+  pkgName: { fontSize: 13, fontWeight: "700" },
   aptChip: {
     paddingHorizontal: 5,
     paddingVertical: 1,
@@ -171,25 +172,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   heavyChipText: { fontSize: 9, fontWeight: "800" },
-  pkgDesc: { fontSize: 11, lineHeight: 15 },
-  pkgAction: { minWidth: 30, alignItems: "flex-end", justifyContent: "center", paddingTop: 2 },
+  pkgDesc: { fontSize: 11 },
+  pkgAction: { minWidth: 30, alignItems: "flex-end", justifyContent: "center" },
   installBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 6,
+    gap: 4,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 8,
     borderWidth: 1,
   },
-  installText: { fontSize: 11, fontWeight: "700" },
+  installText: { fontSize: 11.5, fontWeight: "700" },
   pill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
     borderWidth: 1,
   },
   pillText: { fontSize: 10.5, fontWeight: "700" },

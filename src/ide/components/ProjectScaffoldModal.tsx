@@ -9,6 +9,9 @@ import { scaffoldProject, cancelScaffold } from "../services/projectScaffoldServ
  * The "really create it" step: runs the selected template's non-interactive
  * scaffold commands in the project folder and shows live progress.
  *
+ * One sheet, one flat body: the title row carries the state, the log is an
+ * inset without its own border, and the buttons are the only loud elements.
+ *
  * Safe by construction:
  *  - Create already made the folder, so a failure or a cancel leaves a usable
  *    (empty) project, never a half-scaffolded folder presented as success —
@@ -114,12 +117,9 @@ export function ProjectScaffoldModal({ target, onOpenWorkspace, onDismiss }: Pro
 
           {phase === "running" && (
             <>
-              <Text style={[styles.sub, { color: theme.textMuted }]}>
-                Running the template's setup in the project folder. This can take a while.
-              </Text>
               <ScrollView
                 ref={scrollRef}
-                style={[styles.log, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}
+                style={[styles.log, { backgroundColor: theme.bgTertiary }]}
                 contentContainerStyle={styles.logContent}
               >
                 {lines.map((line, i) => (
@@ -141,26 +141,21 @@ export function ProjectScaffoldModal({ target, onOpenWorkspace, onDismiss }: Pro
           )}
 
           {phase === "done" && (
-            <>
-              <Text style={[styles.sub, { color: theme.textSecondary }]}>Project created. Opening it now…</Text>
-              <View style={styles.actions}>
-                <TouchableOpacity
-                  style={[styles.btn, { backgroundColor: theme.accent }]}
-                  onPress={() => onOpenWorkspace(target.workspaceId)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.btnText, { color: theme.sendButtonIcon }]}>Open project</Text>
-                </TouchableOpacity>
-              </View>
-            </>
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={[styles.btn, { backgroundColor: theme.accent }]}
+                onPress={() => onOpenWorkspace(target.workspaceId)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.btnText, { color: theme.sendButtonIcon }]}>Open project</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           {(phase === "error" || phase === "cancelled") && (
             <>
               <Text style={[styles.sub, { color: phase === "error" ? theme.accentRed : theme.textSecondary }]}>
-                {phase === "error"
-                  ? error
-                  : "Cancelled. The folder was created but is not scaffolded — it is still usable."}
+                {phase === "error" ? error : "Cancelled — the folder is kept but empty."}
               </Text>
               <View style={styles.actions}>
                 <TouchableOpacity
@@ -201,17 +196,17 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 20,
+    padding: 16,
     borderWidth: 1,
     maxHeight: "85%",
   },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { fontSize: 17, fontWeight: "700", flex: 1 },
-  sub: { fontSize: 12.5, lineHeight: 18, marginTop: 10 },
-  log: { marginTop: 12, borderWidth: 1, borderRadius: 8, maxHeight: 180 },
+  sub: { fontSize: 12.5, lineHeight: 16, marginTop: 8 },
+  log: { marginTop: 10, borderRadius: 8, maxHeight: 180 },
   logContent: { padding: 10, gap: 2 },
   logLine: { fontSize: 11, fontFamily: "monospace" },
-  actions: { flexDirection: "row", gap: 10, marginTop: 16 },
+  actions: { flexDirection: "row", gap: 10, marginTop: 12 },
   btn: {
     flex: 1,
     paddingVertical: 12,
