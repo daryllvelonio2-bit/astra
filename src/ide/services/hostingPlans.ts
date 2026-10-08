@@ -29,6 +29,11 @@ export const HOST_PLANS: Record<
     approxSize: string;
     defaultPort: number;
     serve: (guestDir: string, port: number, flavor?: NodeFlavor) => string;
+    /**
+     * One-time project preparation, run detached before the server. Optional:
+     * only Laravel needs it.
+     */
+    prepare?: (guestDir: string) => string;
     /** A file whose presence in the project root identifies this kind. */
     detect: (rootNames: string[], pkg: any) => boolean;
   }
@@ -56,6 +61,21 @@ export const HOST_PLANS: Record<
     defaultPort: 8000,
     serve: (dir, port) =>
       `cd ${dir} && php artisan serve --host=0.0.0.0 --port=${port}`,
+    // A Laravel app CANNOT boot without its PHP dependencies: public/index.php
+    // requires ../vendor/autoload.php, and vendor/ is gitignored, so a fresh
+    // clone never has it. artisan serve and php -S fail identically, which is
+    // exactly what "it is not hosting" looked like on the phone. Same for .env:
+    // without an APP_KEY every page is a 500. composer is pulled from apt on
+    // first use (~5 MB), then composer install fetches the app's packages.
+    prepare: (dir) =>
+      `cd ${dir}; ` +
+      `if [ ! -d vendor ]; then ` +
+      `command -v composer >/dev/null 2>&1 || apt-get install -y --no-install-recommends composer; ` +
+      `composer install --no-interaction --no-progress --prefer-dist; ` +
+      `fi; ` +
+      `if [ ! -f .env ] && [ -f .env.example ]; then cp .env.example .env; fi; ` +
+      `php artisan key:generate --force 2>/dev/null; ` +
+      `echo PREPARE_DONE`, 
     detect: (rootNames) => has(rootNames, "artisan"),
   },
   node: {

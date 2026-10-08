@@ -66,6 +66,8 @@ const HOST_LOG = "/tmp/astra-host.log";
 const HOST_PID = "/tmp/astra-host.pid";
 const TUNNEL_LOG = "/tmp/astra-tunnel.log";
 const TUNNEL_PID = "/tmp/astra-tunnel.pid";
+const PREP_LOG = "/tmp/astra-prep.log";
+const PREP_PID = "/tmp/astra-prep.pid";
 
 /**
  * Everything the guest needs before a project can be served, and the command
@@ -243,6 +245,34 @@ export async function startHosting(opts: {
     return null;
   }
 
+  // --- 0. the project itself (Laravel only) --------------------------------
+  // composer install can run for minutes, far past a one-shot command's limit,
+  // so it is detached and polled like the server is.
+  if (plan.prepare) {
+    set({
+      status: "installing",
+      step: "Installing the project's PHP dependencies — first run only, this is the slow one…",
+    });
+    pushLog("preparing the project: composer install + .env (first run only)");
+    await run(`rm -f ${PREP_LOG} ${PREP_PID}`);
+    await run(
+      `cd ${guestDir} && nohup bash -lc ${JSON.stringify(plan.prepare(guestDir))} > ${PREP_LOG} 2>&1 & echo $! > ${PREP_PID}; sleep 1; true`
+    );
+    const prepared = await waitForPrepare(guestDir, 900);
+    if (!prepared) {
+      const tail = await run(`tail -n 6 ${PREP_LOG}`);
+      tail.out.split("\n").forEach(pushLog);
+      set({
+        status: "error",
+        step: "",
+        error:
+          "Could not install the project's PHP dependencies. The last lines are below — usually no network, or composer running out of space.",
+      });
+      return null;
+    }
+    pushLog("project prepared");
+  }
+
   // --- 1. the server -------------------------------------------------------
   set({ status: "starting", step: `Starting ${plan.label} on port ${port}…` });
   const serve = plan.serve(guestDir, port, opts.nodeFlavor);
@@ -325,6 +355,23 @@ async function prepareGuest(): Promise<void> {
       "[ -e /etc/ssl/cert.pem ] || ln -sf /etc/ssl/certs/ca-certificates.crt /etc/ssl/cert.pem; " +
       "true"
   );
+}
+
+/**
+ * Wait for the project's one-time preparation to finish (Laravel: composer
+ * install + .env). Detached, so this polls instead of blocking a command, and
+ * reports the tail of the install as the current step.
+ */
+async function waitForPrepare(guestDir: string, seconds: number): Promise<boolean> {
+  for (let i = 0; i < Math.ceil(seconds / 5); i++) {
+    const done = await run(`grep -c PREPARE_DONE ${PREP_LOG} 2>/dev/null || echo 0`);
+    if (done.out.trim() !== "0") return true;
+    const last = await run(`tail -n 1 ${PREP_LOG} 2>/dev/null`);
+    const line = last.out.trim().split("\n").pop() || "";
+    if (line) set({ step: line.slice(0, 80) });
+    await sleep(5000);
+  }
+  return false;
 }
 
 /** Poll the guest's own loopback until the server answers. */
