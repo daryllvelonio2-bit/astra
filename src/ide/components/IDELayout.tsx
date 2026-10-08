@@ -458,7 +458,9 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
           compact={isLandscape}
           visibleTabs={visibleTabs}
           isLandscapeNavbarHidden={isLandscapeNavbarHidden}
-          onHideNavbar={isLandscape || keyboardMouseMode ? handleHideNavbar : undefined}
+          // Hide is available only in keyboard-and-mouse mode (orientation alone
+          // is not enough); see the rule in IDEBottomBar.
+          onHideNavbar={keyboardMouseMode ? handleHideNavbar : undefined}
           onShowNavbar={handleShowNavbar}
           keyboardMouseMode={keyboardMouseMode}
         />

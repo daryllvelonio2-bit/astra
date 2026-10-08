@@ -176,7 +176,8 @@ export async function loadOrCreateDefaultWorkspace(): Promise<Workspace> {
 
 export async function createWorkspace(
   name: string,
-  customPath?: string
+  customPath?: string,
+  template?: string
 ): Promise<Workspace> {
   await ensureWorkspacesDir();
   const folderName = name.trim().replace(/[\/\\]/g, "-");
@@ -199,6 +200,10 @@ export async function createWorkspace(
     id: workspaceId,
     name,
     dirPath: targetDir,
+    // The chosen New Project template (projectTemplates.ts id). Absent for
+    // workspaces opened from disk or created before templates existed, so the
+    // card/inspector stay exactly as before for those.
+    ...(template ? { template } : {}),
     createdAt: Date.now(),
   });
 

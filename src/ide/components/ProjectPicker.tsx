@@ -14,6 +14,8 @@ import { getGitRemoteUrl } from '../services/gitRemoteService';
 import { parseGitHubRepo } from '../services/gitRemoteRef';
 import { ProjectCard, ProjectItem } from './ProjectCard';
 import { CreateProjectModal } from './CreateProjectModal';
+import { ProjectScaffoldModal, ScaffoldTarget } from './ProjectScaffoldModal';
+import { templateById, templateName } from '../services/projectTemplates';
 import { CloneRepoModal } from './CloneRepoModal';
 import { ProjectInspectorModal } from './ProjectInspectorModal';
 import { SettingsModal } from './SettingsModal';
@@ -45,6 +47,7 @@ export function ProjectPicker({ onOpenWorkspace, onRerunStartup }: ProjectPicker
   const [isSettingsModalVisible, setSettingsModalVisible] = useState(false);
   const [isInspectorVisible, setInspectorVisible] = useState(false);
   const [selectedProject, setSelectedProject] = useState<ProjectItem | null>(null);
+  const [scaffoldTarget, setScaffoldTarget] = useState<ScaffoldTarget | null>(null);
 
   useEffect(() => {
     loadProjects();
@@ -56,6 +59,7 @@ export function ProjectPicker({ onOpenWorkspace, onRerunStartup }: ProjectPicker
       const loaded: ProjectItem[] = metas.map((meta) => ({
         id: meta.id,
         name: meta.name || meta.id,
+        template: templateName(meta.template),
         path: meta.dirPath ? formatDisplayPath(meta.dirPath) : formatDisplayPath('', meta.id),
         lastModified: 'Recently',
         fileCount: 1,
@@ -99,10 +103,18 @@ export function ProjectPicker({ onOpenWorkspace, onRerunStartup }: ProjectPicker
     );
   };
 
-  const handleCreateProject = async (name: string, customPath?: string) => {
+  const handleCreateProject = async (name: string, customPath?: string, templateId?: string) => {
     try {
-      const ws = await createWorkspace(name, customPath);
+      const ws = await createWorkspace(name, customPath, templateId);
       await loadProjects();
+      // A framework template keeps the modal open to run its setup commands
+      // with live progress; blank / static / any command-less template opens
+      // the project immediately, exactly as New Project did before.
+      const tpl = templateById(templateId);
+      if (tpl && !tpl.manual && tpl.commands.length > 0) {
+        setScaffoldTarget({ template: tpl, workspaceId: ws.id });
+        return;
+      }
       onOpenWorkspace(ws.id);
     } catch (e) {
       showAppDialog({ title: 'Error', message: 'Failed to create project workspace' });
@@ -276,6 +288,15 @@ export function ProjectPicker({ onOpenWorkspace, onRerunStartup }: ProjectPicker
         visible={isCreateModalVisible}
         onClose={() => setCreateModalVisible(false)}
         onCreateProject={handleCreateProject}
+      />
+
+      <ProjectScaffoldModal
+        target={scaffoldTarget}
+        onOpenWorkspace={(id) => {
+          setScaffoldTarget(null);
+          onOpenWorkspace(id);
+        }}
+        onDismiss={() => setScaffoldTarget(null)}
       />
 
       <CloneRepoModal

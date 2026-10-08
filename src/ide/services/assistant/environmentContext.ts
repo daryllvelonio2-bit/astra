@@ -39,7 +39,7 @@ export function buildEnvironmentSection(): string {
     "- Laravel / PHP — `php artisan serve --host=0.0.0.0 --port=8000`, falling back to `php -S 0.0.0.0:<port> -t public`. It needs vendor/ (composer install) and a .env; a MySQL-configured app cannot run here, so it is switched to sqlite.",
     "- React / Node dev server (Vite, Next, CRA or generic) — bound to 0.0.0.0 on the framework's port.",
     "- Static site (index.html) — `python3 -m http.server` on 0.0.0.0.",
-    "- A new project is created as an empty folder — the app does not scaffold or template a framework. Workspaces live under /workspaces/<folder> in the guest.",
+    "- A new project is created as an empty folder — the app can scaffold a framework on the phone (New Project templates: Blank, Static, Laravel, React/Vite, Next.js, Vue, Svelte, Node/Express, Python/Flask, Go, Rust, Ruby, Expo; Flutter is manual because its SDK cannot be installed here), and each template states the runtimes it needs before it will run. Workspaces live under /workspaces/<folder> in the guest.",
     "- The Run button executes the open file or a detected entry point (Node, Django, Go, Cargo, plain Python, HTML) inside the guest.",
     "",
     "Hosting a project on the public internet",

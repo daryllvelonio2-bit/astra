@@ -35,10 +35,13 @@ function IDEBottomBarInner({
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const isHidden = keyboardMouseMode
-    ? isLandscapeNavbarHidden
-    : (compact && isLandscapeNavbarHidden && bottomTab === "editor");
-  const canOfferHide = (compact || keyboardMouseMode) && !!onHideNavbar;
+  // Rule: the bottom bar may hide ONLY when keyboard-and-mouse mode is ON — a
+  // desktop setup with a physical keyboard + mouse, where the on-screen bar is
+  // unwanted. Orientation alone (landscape) must NOT hide it, and portrait must
+  // keep it visible. If the setting fails to load it defaults to OFF (show it).
+  const canHideNavbar = keyboardMouseMode;
+  const isHidden = canHideNavbar && isLandscapeNavbarHidden;
+  const canOfferHide = canHideNavbar && !!onHideNavbar;
   if (canOfferHide && isHidden) {
     return (
       <View style={[styles.collapsedBarContainer, { paddingBottom: Math.max(insets.bottom, 0) }]} pointerEvents="box-none">

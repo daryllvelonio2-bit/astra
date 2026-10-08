@@ -6,6 +6,15 @@ import { useTheme } from '../../theme/themeContext';
 import { useAccurateKeyboard } from '../../theme/useAccurateKeyboard';
 import { useKeyboardMouseMode } from '../context/KeyboardMouseContext';
 import { DirectoryPickerModal } from './DirectoryPickerModal';
+import { ProjectTemplatePicker } from './ProjectTemplatePicker';
+import {
+  PROJECT_TEMPLATES,
+  BLANK_TEMPLATE_ID,
+  templateById,
+  missingTemplateTools,
+} from '../services/projectTemplates';
+import { probeDependencyState, installDependency } from '../services/dependencyInstallService';
+import { toolById } from '../services/devCategories';
 import {
   formatDisplayPath,
   getCustomDirPlaceholder,
@@ -16,20 +25,62 @@ import {
 interface CreateProjectModalProps {
   visible: boolean;
   onClose: () => void;
-  onCreateProject: (name: string, customPath?: string) => void;
+  onCreateProject: (name: string, customPath?: string, templateId?: string) => void;
+  /** True while base provisioning runs — template installs are disabled. */
+  provisioningActive?: boolean;
 }
 
-export function CreateProjectModal({ visible, onClose, onCreateProject }: CreateProjectModalProps) {
+export function CreateProjectModal({ visible, onClose, onCreateProject, provisioningActive = false }: CreateProjectModalProps) {
   const { theme } = useTheme();
   const { keyboardMouseMode } = useKeyboardMouseMode();
   const [projectName, setProjectName] = useState('');
   const [useCustomDirectory, setUseCustomDirectory] = useState(false);
   const [customDirectoryPath, setCustomDirectoryPath] = useState('');
   const [isDirectoryPickerVisible, setDirectoryPickerVisible] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState(BLANK_TEMPLATE_ID);
+  const [installedTools, setInstalledTools] = useState<Record<string, boolean>>({});
+  const [installing, setInstalling] = useState<Record<string, boolean>>({});
+  const [probing, setProbing] = useState(false);
   const { keyboardOffset, isKeyboardVisible } = useAccurateKeyboard(8);
   const scrollRef = useRef<ScrollView>(null);
   const customDirInputRef = useRef<TextInput>(null);
   const fieldTops = useRef<{ name: number; custom: number }>({ name: 0, custom: 0 });
+
+  const selectedTemplate = templateById(selectedTemplateId) || PROJECT_TEMPLATES[0];
+  const missingTools = missingTemplateTools(selectedTemplate, installedTools);
+  const canCreate = !selectedTemplate.manual && missingTools.length === 0;
+
+  // Probe what is installed once per open — the same one-shot guest round-trip
+  // the Dependencies screen uses. Nothing installs here.
+  useEffect(() => {
+    if (!visible) return;
+    let alive = true;
+    setProbing(true);
+    probeDependencyState()
+      .then((state) => { if (alive) setInstalledTools((prev) => ({ ...prev, ...state.tools })); })
+      .catch(() => {})
+      .finally(() => { if (alive) setProbing(false); });
+    return () => { alive = false; };
+  }, [visible]);
+
+  const handleInstall = async (devToolId: string) => {
+    const tool = toolById(devToolId);
+    if (!tool) return;
+    setInstalling((prev) => ({ ...prev, [devToolId]: true }));
+    try {
+      const res = await installDependency(tool);
+      const state = await probeDependencyState();
+      setInstalledTools((prev) => ({ ...prev, ...state.tools }));
+      if (!res.ok) {
+        showAppDialog({
+          title: `Failed to install ${tool.name}`,
+          message: (res.output || 'Unknown error').slice(-400),
+        });
+      }
+    } finally {
+      setInstalling((prev) => ({ ...prev, [devToolId]: false }));
+    }
+  };
 
   const scrollToField = (field: 'name' | 'custom') => {
     const y = field === 'name' ? fieldTops.current.name : fieldTops.current.custom;
@@ -47,14 +98,27 @@ export function CreateProjectModal({ visible, onClose, onCreateProject }: Create
       showAppDialog({ title: 'Validation Error', message: 'Please select or enter a custom directory path.' });
       return;
     }
+    if (selectedTemplate.manual) {
+      showAppDialog({ title: `${selectedTemplate.name} is not supported here`, message: selectedTemplate.manualReason || 'This template cannot be created on the phone.' });
+      return;
+    }
+    if (missingTools.length > 0) {
+      showAppDialog({
+        title: 'Install needed tools first',
+        message: `${selectedTemplate.name} needs ${missingTools.map((t) => t.name).join(' + ')}. Tap Get above to install them, then create the project.`,
+      });
+      return;
+    }
 
     onCreateProject(
       projectName.trim(),
-      useCustomDirectory ? customDirectoryPath.trim() : undefined
+      useCustomDirectory ? customDirectoryPath.trim() : undefined,
+      selectedTemplateId
     );
     setProjectName('');
     setUseCustomDirectory(false);
     setCustomDirectoryPath('');
+    setSelectedTemplateId(BLANK_TEMPLATE_ID);
     onClose();
   };
 
@@ -208,15 +272,39 @@ export function CreateProjectModal({ visible, onClose, onCreateProject }: Create
               </View>
             )}
 
+            {/* Template Picker — 'Blank project' first and selected by default */}
+            <ProjectTemplatePicker
+              templates={PROJECT_TEMPLATES}
+              selectedId={selectedTemplateId}
+              onSelect={setSelectedTemplateId}
+              theme={theme}
+              installed={installedTools}
+              probing={probing}
+              installing={installing}
+              onInstall={handleInstall}
+              provisioningActive={provisioningActive}
+            />
+
             {/* Action Buttons */}
             <View style={styles.modalActions}>
               <TouchableOpacity style={[styles.modalButton, { backgroundColor: theme.bgTertiary }]} onPress={onClose}>
                 <Text style={[styles.buttonTextCancel, { color: theme.textSecondary }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalButton, { backgroundColor: theme.accent }]} onPress={handleSubmit}>
-                <Text style={[styles.buttonTextCreate, { color: theme.sendButtonIcon }]}>Create & Open</Text>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: theme.accent }, !canCreate && styles.createDisabled]}
+                onPress={handleSubmit}
+                disabled={!canCreate}
+              >
+                <Text style={[styles.buttonTextCreate, { color: theme.sendButtonIcon }]}>
+                  {selectedTemplate.manual ? 'Not available' : 'Create & Open'}
+                </Text>
               </TouchableOpacity>
             </View>
+            {!canCreate && !selectedTemplate.manual && (
+              <Text style={[styles.createHint, { color: theme.accentGold }]}>
+                Install the tools marked above before creating.
+              </Text>
+            )}
           </ScrollView>
 
           {/* Directory Picker Sub-modal */}
@@ -369,5 +457,14 @@ const styles = StyleSheet.create({
   buttonTextCreate: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  createDisabled: {
+    opacity: 0.45,
+  },
+  createHint: {
+    fontSize: 11,
+    marginTop: -2,
+    marginBottom: 8,
+    textAlign: 'center',
   },
 });
