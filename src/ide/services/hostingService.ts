@@ -249,26 +249,40 @@ export async function startHosting(opts: {
   // composer install can run for minutes, far past a one-shot command's limit,
   // so it is detached and polled like the server is.
   if (plan.prepare) {
-    set({
-      status: "installing",
-      step: "Installing the project's PHP dependencies — first run only, this is the slow one…",
-    });
-    pushLog("preparing the project: composer install + .env (first run only)");
-    await run(`rm -f ${PREP_LOG} ${PREP_PID}`);
-    await run(
-      `cd ${guestDir} && nohup bash -lc ${JSON.stringify(plan.prepare(guestDir))} > ${PREP_LOG} 2>&1 & echo $! > ${PREP_PID}; sleep 1; true`
-    );
-    const prepared = await waitForPrepare(guestDir, 900);
-    if (!prepared) {
-      const tail = await run(`tail -n 6 ${PREP_LOG}`);
-      tail.out.split("\n").forEach(pushLog);
-      set({
-        status: "error",
-        step: "",
-        error:
-          "Could not install the project's PHP dependencies. The last lines are below — usually no network, or composer running out of space.",
-      });
-      return null;
+    set({ status: "installing", step: "Preparing the project (first run only)…" });
+    const steps = plan.prepare(guestDir);
+    for (let i = 0; i < steps.length; i++) {
+      const st = steps[i];
+      pushLog(`prep ${i + 1}/${steps.length}: ${st.cmd.slice(0, 70)}`);
+      const res = await run(st.cmd);
+      if (st.detached) {
+        if (st.waitFor) {
+          const done = await waitForFile(st.waitFor, 1800);
+          if (!done) {
+            const tail = await run(`tail -n 8 ${PREP_LOG}`);
+            tail.out.split("\n").forEach(pushLog);
+            set({
+              status: "error",
+              step: "",
+              error:
+                "composer did not finish installing the project's dependencies. Its last lines are below.",
+            });
+            return null;
+          }
+        }
+        continue;
+      }
+      if (res.code !== 0) {
+        // A step that FAILED must never look like a step that worked. This is the
+        // bug that cost the earlier attempts: the launch failed silently.
+        pushLog(`step failed (exit ${res.code}): ${res.out.trim().slice(-160) || "(no output)"}`);
+        set({
+          status: "error",
+          step: "",
+          error: `Preparing the project failed at step ${i + 1}: ${st.cmd.slice(0, 60)}…`,
+        });
+        return null;
+      }
     }
     pushLog("project prepared");
   }
@@ -358,17 +372,16 @@ async function prepareGuest(): Promise<void> {
 }
 
 /**
- * Wait for the project's one-time preparation to finish (Laravel: composer
- * install + .env). Detached, so this polls instead of blocking a command, and
- * reports the tail of the install as the current step.
+ * Poll for the file a detached step produces, surfacing the tail of its log as
+ * the current step. A silent wait was how a 15-minute stall looked like work.
  */
-async function waitForPrepare(guestDir: string, seconds: number): Promise<boolean> {
+async function waitForFile(path: string, seconds: number): Promise<boolean> {
   for (let i = 0; i < Math.ceil(seconds / 5); i++) {
-    const done = await run(`grep -c PREPARE_DONE ${PREP_LOG} 2>/dev/null || echo 0`);
-    if (done.out.trim() !== "0") return true;
+    const res = await run(`[ -f ${path} ] && echo YES || echo NO`);
+    if (res.out.includes("YES")) return true;
     const last = await run(`tail -n 1 ${PREP_LOG} 2>/dev/null`);
-    const line = last.out.trim().split("\n").pop() || "";
-    if (line) set({ step: line.slice(0, 80) });
+    const line = last.out.trim();
+    if (line && line !== "YES" && line !== "NO") set({ step: line.slice(0, 80) });
     await sleep(5000);
   }
   return false;

@@ -20,6 +20,25 @@ export interface RuntimeInfo {
   approxSize: string;
 }
 
+/**
+ * One preparation step.
+ *
+ * WHY AN ARRAY OF ONE-LINERS: the first version inlined the whole recipe --
+ * nested quotes, sed expressions, a JSON-escaped string -- into a single
+ * `bash -lc` command sent to the guest. That command never even launched: the
+ * script's log file was never created, and because the launch's exit code was
+ * ignored, "never ran" looked identical to "still working". Each command here
+ * is deliberately trivial, and the service checks every exit code.
+ */
+export interface PrepareStep {
+  /** One simple shell command. No bash -c, no nesting, no JSON. */
+  cmd: string;
+  /** Long-running (composer): started detached, then polled for `waitFor`. */
+  detached?: boolean;
+  /** Guest path whose existence means the detached step finished. */
+  waitFor?: string;
+}
+
 export const HOST_PLANS: Record<
   HostProjectKind,
   {
@@ -29,11 +48,8 @@ export const HOST_PLANS: Record<
     approxSize: string;
     defaultPort: number;
     serve: (guestDir: string, port: number, flavor?: NodeFlavor) => string;
-    /**
-     * One-time project preparation, run detached before the server. Optional:
-     * only Laravel needs it.
-     */
-    prepare?: (guestDir: string) => string;
+    /** One-time project preparation, before the server. Optional: Laravel only. */
+    prepare?: (guestDir: string) => PrepareStep[];
     /** A file whose presence in the project root identifies this kind. */
     detect: (rootNames: string[], pkg: any) => boolean;
   }
@@ -67,44 +83,36 @@ export const HOST_PLANS: Record<
     // exactly what "it is not hosting" looked like on the phone. Same for .env:
     // without an APP_KEY every page is a 500. composer is pulled from apt on
     // first use (~5 MB), then composer install fetches the app's packages.
-    prepare: (dir) =>
-      // unset PHP_INI_SCAN_DIR: a leaked value makes PHP CLI load ZERO extensions
-      // in the guest and Laravel dies on mb_split()/PDO. Harmless when unset.
-      `unset PHP_INI_SCAN_DIR; export COMPOSER_ALLOW_SUPERUSER=1; ` +
-      `cd ${dir}; ` +
-      `if [ ! -d vendor ]; then ` +
-      // composer comes from its own installer rather than apt: apt costs a full
-      // package-list refresh (~35 MB of indices) and keeps hitting dpkg/apt locks
-      // on this device, which is the stall that made "it keeps loading". The
-      // installer is ~3 MB and needs only curl, which the toolchain already has.
-      `command -v composer >/dev/null 2>&1 || ` +
-      `{ curl -sSL https://getcomposer.org/installer -o /tmp/cs.phar && php /tmp/cs.phar --install-dir=/usr/local/bin --filename=composer >/dev/null 2>&1; } || true; ` +
-      // --no-dev: phpunit, faker, debugbar and friends are dead weight when the
-      // point is to SERVE the app, and they are roughly half the tree.
-      // --prefer-dist: tarballs, not git clones. --no-scripts: skip the app's
-      // own post-install hooks, which is faster still and cannot hang.
-      `composer install --no-interaction --no-progress --prefer-dist --no-dev --no-scripts; ` +
-      `fi; ` +
-      `if [ ! -f .env ] && [ -f .env.example ]; then cp .env.example .env; fi; ` +
-      `php artisan key:generate --force 2>/dev/null; ` +
-      // The app's own .env picks the database, and a Laravel app configured for
-      // MySQL cannot run here: the guest has PHP but no MySQL server and no
-      // pdo_mysql. The spike measured both halves -- mysql => HTTP 500 "could not
-      // find driver"; sqlite after this switch => HTTP 200 with the app's real
-      // landing page and /health ok. Only touched when the app asks for mysql.
-      `if grep -q '^DB_CONNECTION=mysql' .env 2>/dev/null; then ` +
-      `sed -i 's/^DB_CONNECTION=mysql/DB_CONNECTION=sqlite/' .env; ` +
-      `sed -i "s#^DB_DATABASE=.*#DB_DATABASE=${dir}/database/database.sqlite#" .env 2>/dev/null ` +
-      `|| echo "DB_DATABASE=${dir}/database/database.sqlite" >> .env; ` +
-      `grep -q '^DB_DATABASE=' .env || echo "DB_DATABASE=${dir}/database/database.sqlite" >> .env; ` +
-      `sed -i 's/^SESSION_DRIVER=.*/SESSION_DRIVER=file/' .env; ` +
-      `sed -i 's/^CACHE_STORE=.*/CACHE_STORE=file/' .env; ` +
-      `sed -i 's/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env; ` +
-      `mkdir -p database; : > database/database.sqlite; ` +
-      `php artisan migrate --force >/dev/null 2>&1; ` +
-      `fi; ` +
-      `echo PREPARE_DONE`, 
     detect: (rootNames) => has(rootNames, "artisan"),
+    // Each entry is one plain command. apt's composer is used because the spike
+    // MEASURED it working (Composer 2.5.5, 20 MB, ~8 s) -- my earlier theory that
+    // apt was the stall was wrong.
+    prepare: (dir) => {
+      const apt = "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; export HOME=/root; export DEBIAN_FRONTEND=noninteractive; command -v composer >/dev/null 2>&1 || apt-get install -y --no-install-recommends composer";
+      return [
+        { cmd: apt },
+        {
+          // Detached: a Laravel tree is ~34 MiB and outlives any one-shot command.
+          cmd: `cd ${dir}; COMPOSER_ALLOW_SUPERUSER=1 nohup composer install --no-interaction --no-progress --prefer-dist --no-dev > /tmp/astra-prep.log 2>&1 &`,
+          detached: true,
+          waitFor: `${dir}/vendor/autoload.php`,
+        },
+        { cmd: `[ -f ${dir}/.env ] || cp ${dir}/.env.example ${dir}/.env` },
+        { cmd: `cd ${dir} && unset PHP_INI_SCAN_DIR; php artisan key:generate --force` },
+        // The app's .env picks the database. A MySQL-configured app cannot run
+        // here (no server, no pdo_mysql) and 500s on every request; the spike
+        // measured sqlite serving it correctly.
+        { cmd: `sed -i 's/^DB_CONNECTION=mysql/DB_CONNECTION=sqlite/' ${dir}/.env` },
+        { cmd: `sed -i 's#^DB_DATABASE=.*#DB_DATABASE=${dir}/database/database.sqlite#' ${dir}/.env` },
+        { cmd: `grep -q '^DB_DATABASE=' ${dir}/.env || echo DB_DATABASE=${dir}/database/database.sqlite >> ${dir}/.env` },
+        { cmd: `sed -i 's/^SESSION_DRIVER=.*/SESSION_DRIVER=file/' ${dir}/.env` },
+        { cmd: `sed -i 's/^CACHE_STORE=.*/CACHE_STORE=file/' ${dir}/.env` },
+        { cmd: `sed -i 's/^CACHE_DRIVER=.*/CACHE_DRIVER=file/' ${dir}/.env` },
+        { cmd: `sed -i 's/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' ${dir}/.env` },
+        { cmd: `mkdir -p ${dir}/database; : > ${dir}/database/database.sqlite` },
+        { cmd: `cd ${dir} && unset PHP_INI_SCAN_DIR; php artisan migrate --force` },
+      ];
+    },
   },
   node: {
     label: "React / Node dev server",
