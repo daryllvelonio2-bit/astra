@@ -7,15 +7,23 @@ import { WebBrowserErrorView } from "./browser/WebBrowserErrorView";
 import { WebBrowserEmptyView } from "./browser/WebBrowserEmptyView";
 import { useTheme } from "../../theme/themeContext";
 import { useOrientation } from "../../theme/useOrientation";
+import { Clipboard } from "../services/clipboardService";
 
 interface WebBrowserPreviewProps {
   initialUrl?: string;
   workspaceId?: string;
+  /**
+   * Report the address upward. Browser is the one tab that remounts on return
+   * (a live WebView is expensive to keep resident), so state held only here is
+   * thrown away and the user has to retype the address every time.
+   */
+  onUrlChange?: (url: string) => void;
 }
 
 export function WebBrowserPreview({
   initialUrl = "",
   workspaceId,
+  onUrlChange,
 }: WebBrowserPreviewProps) {
   const { theme } = useTheme();
   const { isLandscape } = useOrientation();
@@ -60,6 +68,7 @@ export function WebBrowserPreview({
     }
 
     finalUrl = finalUrl.replace(/localhost/gi, "127.0.0.1").replace(/0\.0\.0\.0/g, "127.0.0.1");
+    onUrlChange?.(finalUrl);
 
     if (!finalUrl.startsWith("http://") && !finalUrl.startsWith("https://") && !finalUrl.startsWith("file://")) {
       if (/^:?\d+$/.test(finalUrl)) {
@@ -80,6 +89,17 @@ export function WebBrowserPreview({
     }
     setUrl(finalUrl);
     setInputUrl(finalUrl);
+  };
+
+  // Phone equivalent of Ctrl+V: read the system clipboard and go.
+  const handlePaste = async () => {
+    try {
+      const text = (await Clipboard.getStringAsync()) || "";
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      setInputUrl(trimmed);
+      handleNavigate(trimmed);
+    } catch (_) {}
   };
 
   const handleOpenExternal = async () => {
@@ -107,6 +127,7 @@ export function WebBrowserPreview({
           onInputChange={setInputUrl}
           onSubmit={() => handleNavigate()}
           onClearInput={() => setInputUrl("")}
+          onPaste={handlePaste}
           onOpenExternal={handleOpenExternal}
         />
       )}

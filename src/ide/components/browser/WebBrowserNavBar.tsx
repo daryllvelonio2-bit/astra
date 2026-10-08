@@ -7,6 +7,7 @@ import { useKeyboardMouseMode } from "../../context/KeyboardMouseContext";
 interface WebBrowserNavBarProps {
   url: string;
   inputUrl: string;
+  onPaste?: () => void;
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
@@ -23,6 +24,7 @@ interface WebBrowserNavBarProps {
 export function WebBrowserNavBar({
   url,
   inputUrl,
+  onPaste,
   loading,
   canGoBack,
   canGoForward,
@@ -90,6 +92,13 @@ export function WebBrowserNavBar({
           placeholderTextColor={theme.textMuted}
           selectTextOnFocus
         />
+        {/* Shown exactly when the clear button is not: an empty field is when
+            you want to paste an address, and a phone has no Ctrl+V. */}
+        {!inputUrl && onPaste ? (
+          <TouchableOpacity onPress={onPaste} style={styles.clearBtn} accessibilityLabel="Paste address">
+            <Ionicons name="clipboard-outline" size={13} color={theme.accent} />
+          </TouchableOpacity>
+        ) : null}
         {inputUrl ? (
           <TouchableOpacity onPress={onClearInput} style={styles.clearBtn}>
             <Ionicons name="close-circle" size={13} color={theme.textMuted} />

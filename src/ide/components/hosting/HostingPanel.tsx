@@ -5,11 +5,13 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Clipboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/themeContext";
 import { readFileContent } from "../../services/workspaceService";
+// The app's own native-backed clipboard. react-native's Clipboard is a stub
+// on the new architecture, so a copy that "succeeds" there copies nothing.
+import { Clipboard } from "../../services/clipboardService";
 import {
   HostProjectKind,
   HOST_PLANS,
@@ -52,14 +54,17 @@ export function HostingPanel({
   onOpenBrowser,
 }: HostingPanelProps) {
   const { theme } = useTheme();
-  const state = useMemo(() => getHostingState(), []);
+  // Deliberately NOT memoized: the subscription below re-renders us, and a
+  // cached snapshot (useMemo with []) froze the panel on its first render —
+  // which is exactly why tapping Start looked like it did nothing.
+  const state = getHostingState();
   const [, forceTick] = useState(0);
   useEffect(() => subscribeHosting(() => forceTick((t) => t + 1)), []);
 
   const [pkg, setPkg] = useState<any>(null);
   const [kind, setKind] = useState<HostProjectKind | null>(null);
   const [kindTouched, setKindTouched] = useState(false);
-  const [runtime, setRuntime] = useState<{ installed: boolean } | null>(null);
+  const [runtime, setRuntime] = useState<{ installed: boolean; checked: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -89,8 +94,14 @@ export function HostingPanel({
     let alive = true;
     (async () => {
       if (!kind || !workspaceId) return;
-      const info = await checkRuntime(kind);
-      if (alive) setRuntime({ installed: info.installed });
+      try {
+        const info = await checkRuntime(kind);
+        if (alive) setRuntime({ installed: info.installed, checked: true });
+      } catch (_) {
+        // Never leave the user staring at a button with no reason. "unknown"
+        // shows the install offer with a caveat instead of nothing.
+        if (alive) setRuntime({ installed: false, checked: false });
+      }
     })();
     return () => {
       alive = false;
@@ -107,6 +118,12 @@ export function HostingPanel({
 
   const handleStart = async () => {
     if (!workspaceId || !kind) return;
+    if (runtime && !runtime.installed) {
+      // Point at the card above rather than starting a server that cannot run.
+      setRuntime({ installed: false, checked: runtime.checked });
+      forceTick((t) => t + 1);
+      return;
+    }
     setBusy(true);
     try {
       await startHosting({
@@ -125,17 +142,21 @@ export function HostingPanel({
     setBusy(true);
     try {
       await installRuntime(kind);
-      const info = await checkRuntime(kind);
-      setRuntime({ installed: info.installed });
+      try {
+        const info = await checkRuntime(kind);
+        setRuntime({ installed: info.installed, checked: true });
+      } catch (_) {
+        setRuntime({ installed: false, checked: false });
+      }
     } finally {
       setBusy(false);
     }
   };
 
-  const copyUrl = () => {
+  const copyUrl = async () => {
     if (!state.publicUrl) return;
     try {
-      Clipboard.setString(state.publicUrl);
+      await Clipboard.setStringAsync(state.publicUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch (_) {}
@@ -201,7 +222,7 @@ export function HostingPanel({
       </View>
 
       {/* What still has to be installed */}
-      {plan && runtime && !runtime.installed && (
+      {plan && (!runtime || !runtime.installed) && (
         <View style={{ backgroundColor: `${theme.accentGold}12`, borderColor: `${theme.accentGold}55`, borderWidth: 1, borderRadius: 10, padding: 12, gap: 8 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Ionicons name="download-outline" size={16} color={theme.accentGold} />
@@ -210,8 +231,10 @@ export function HostingPanel({
             </Text>
           </View>
           <Text style={{ color: theme.textSecondary, fontSize: 11.5, lineHeight: 16 }}>
-            Hosting needs {plan.binary} inside the phone. {plan.approxSize} over your connection —
-            {" "}skip this if you are on mobile data.
+            {runtime && !runtime.checked
+              ? "Could not check what is installed yet — install and the check runs again."
+              : `Hosting needs ${plan.binary} inside the phone.`}{" "}
+            {plan.approxSize} over your connection — skip this if you are on mobile data.
           </Text>
           <TouchableOpacity
             style={{ backgroundColor: theme.accent, borderRadius: 8, paddingVertical: 10, alignItems: "center", opacity: busy ? 0.7 : 1 }}
@@ -237,7 +260,10 @@ export function HostingPanel({
           borderRadius: 10, paddingVertical: 14, opacity: busy || working ? 0.75 : 1,
         }}
         onPress={running ? () => void stopHosting() : handleStart}
-        disabled={busy || working || !kind || (!!runtime && !runtime.installed && !running)}
+        disabled={busy || working || !kind}
+        // The runtime check no longer disables this button: a disabled primary
+        // button with no explanation is what "nothing happens" was. Tapping now
+        // always produces either progress or a sentence saying why not.
       >
         {working ? (
           <>

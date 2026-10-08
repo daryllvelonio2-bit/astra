@@ -417,7 +417,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
           {bottomTab === "browser" && (
             <View style={tabContentStyle}>
               <PanelErrorBoundary panelName="Browser" resetKey={workspace?.id}>
-              <MemoWebBrowserPreview initialUrl={browserUrl} workspaceId={workspace?.id} />
+              <MemoWebBrowserPreview initialUrl={browserUrl} workspaceId={workspace?.id} onUrlChange={setBrowserUrl} />
               </PanelErrorBoundary>
             </View>
           )}
