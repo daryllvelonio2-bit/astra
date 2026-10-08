@@ -68,6 +68,9 @@ export const HOST_PLANS: Record<
     // without an APP_KEY every page is a 500. composer is pulled from apt on
     // first use (~5 MB), then composer install fetches the app's packages.
     prepare: (dir) =>
+      // unset PHP_INI_SCAN_DIR: a leaked value makes PHP CLI load ZERO extensions
+      // in the guest and Laravel dies on mb_split()/PDO. Harmless when unset.
+      `unset PHP_INI_SCAN_DIR; export COMPOSER_ALLOW_SUPERUSER=1; ` +
       `cd ${dir}; ` +
       `if [ ! -d vendor ]; then ` +
       // composer comes from its own installer rather than apt: apt costs a full
@@ -84,6 +87,22 @@ export const HOST_PLANS: Record<
       `fi; ` +
       `if [ ! -f .env ] && [ -f .env.example ]; then cp .env.example .env; fi; ` +
       `php artisan key:generate --force 2>/dev/null; ` +
+      // The app's own .env picks the database, and a Laravel app configured for
+      // MySQL cannot run here: the guest has PHP but no MySQL server and no
+      // pdo_mysql. The spike measured both halves -- mysql => HTTP 500 "could not
+      // find driver"; sqlite after this switch => HTTP 200 with the app's real
+      // landing page and /health ok. Only touched when the app asks for mysql.
+      `if grep -q '^DB_CONNECTION=mysql' .env 2>/dev/null; then ` +
+      `sed -i 's/^DB_CONNECTION=mysql/DB_CONNECTION=sqlite/' .env; ` +
+      `sed -i "s#^DB_DATABASE=.*#DB_DATABASE=${dir}/database/database.sqlite#" .env 2>/dev/null ` +
+      `|| echo "DB_DATABASE=${dir}/database/database.sqlite" >> .env; ` +
+      `grep -q '^DB_DATABASE=' .env || echo "DB_DATABASE=${dir}/database/database.sqlite" >> .env; ` +
+      `sed -i 's/^SESSION_DRIVER=.*/SESSION_DRIVER=file/' .env; ` +
+      `sed -i 's/^CACHE_STORE=.*/CACHE_STORE=file/' .env; ` +
+      `sed -i 's/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' .env; ` +
+      `mkdir -p database; : > database/database.sqlite; ` +
+      `php artisan migrate --force >/dev/null 2>&1; ` +
+      `fi; ` +
       `echo PREPARE_DONE`, 
     detect: (rootNames) => has(rootNames, "artisan"),
   },
