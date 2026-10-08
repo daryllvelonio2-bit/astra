@@ -19,11 +19,32 @@ export function getWorkspacesDir(): string {
 }
 
 /** Display-friendly version of an absolute path (strips file://). */
+/** The app's private storage root, with whatever package id it happens to use. */
+const APP_STORAGE = /^\/data\/(?:user\/\d+\/|data\/)[^/]+\/files\//;
+
+/** Middle-truncate one path segment: long project folders were eating the row. */
+function shortenSegment(seg: string): string {
+  if (seg.length <= 28) return seg;
+  return `${seg.slice(0, 15)}\u2026${seg.slice(-10)}`;
+}
+
+/**
+ * Display-only shortening. The paths under /data/user/0/<package>/files/ are the
+ * app's own plumbing -- the user never typed the package name and reading it
+ * tells them nothing, while it costs half the row. The real path on disk is
+ * untouched; every caller of this only renders text.
+ */
 export function formatDisplayPath(absolutePath: string, fallbackId = ""): string {
   const clean = stripFileScheme(absolutePath || "").trim();
-  if (clean) return clean;
-  if (fallbackId) return `workspaces/${fallbackId}/`;
-  return "workspaces/";
+  if (!clean) {
+    if (fallbackId) return "workspaces/" + fallbackId + "/";
+    return "workspaces/";
+  }
+  const shortened = clean.replace(APP_STORAGE, "~/");
+  const parts = shortened.split("/");
+  const last = parts.length - 1;
+  if (parts[last]) parts[last] = shortenSegment(parts[last]);
+  return parts.join("/");
 }
 
 /** Short preview used when no custom dir is chosen yet. */
