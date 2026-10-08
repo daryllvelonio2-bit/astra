@@ -18,6 +18,16 @@ export const terminalViewStyles = StyleSheet.create({
     minHeight: 0,
     minWidth: 0,
   },
+  /**
+   * Wraps the whole pane region (single or split). The keyboard inset is
+   * applied HERE, once, so every pane shrinks above the IME together rather
+   * than each pane padding itself against a container-wide keyboard height.
+   */
+  viewportHost: {
+    flex: 1,
+    minHeight: 0,
+    minWidth: 0,
+  },
   viewportInner: {
     flex: 1,
     minHeight: "100%",

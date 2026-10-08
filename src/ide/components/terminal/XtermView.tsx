@@ -31,6 +31,8 @@ export interface XtermViewHandle {
   focusTerminal: () => void;
   requestSelection: () => Promise<string>;
   writeText: (text: string) => void;
+  /** Re-fit xterm to the WebView's box and keep the caret in view. */
+  refit: () => void;
 }
 
 interface XtermViewProps {
@@ -186,6 +188,10 @@ export const XtermView = memo(
       if (!text) return;
       enqueue(utf8ToB64(text));
       flushQueue();
+    },
+    refit: () => {
+      if (!readyRef.current) return;
+      webRef.current?.injectJavaScript("window.__astraResize&&window.__astraResize();true;");
     },
   }));
 

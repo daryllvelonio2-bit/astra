@@ -95,7 +95,7 @@ export function useTerminalKeyboardPad(visible = true) {
             closedPortraitHeightRef.current = Math.max(closedPortraitHeightRef.current, h);
           }
         }
-        setContainerHeight(h);
+        setContainerHeight((prev) => (Math.abs(prev - h) < 1 ? prev : h));
       }
     },
   };
