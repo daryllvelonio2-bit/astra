@@ -93,12 +93,12 @@ export const HOST_PLANS: Record<
         { cmd: apt },
         {
           // Detached: a Laravel tree is ~34 MiB and outlives any one-shot command.
-          cmd: `cd ${dir}; COMPOSER_ALLOW_SUPERUSER=1 nohup composer install --no-interaction --no-progress --prefer-dist --no-dev > /tmp/astra-prep.log 2>&1 &`,
+          cmd: `cd ${dir} && COMPOSER_ALLOW_SUPERUSER=1 nohup composer install --no-interaction --no-progress --prefer-dist --no-dev > /tmp/astra-prep.log 2>&1 &`,
           detached: true,
           waitFor: `${dir}/vendor/autoload.php`,
         },
         { cmd: `[ -f ${dir}/.env ] || cp ${dir}/.env.example ${dir}/.env` },
-        { cmd: `cd ${dir} && unset PHP_INI_SCAN_DIR; php artisan key:generate --force` },
+        { cmd: `cd ${dir} && unset PHP_INI_SCAN_DIR && php artisan key:generate --force` },
         // The app's .env picks the database. A MySQL-configured app cannot run
         // here (no server, no pdo_mysql) and 500s on every request; the spike
         // measured sqlite serving it correctly.
@@ -110,7 +110,7 @@ export const HOST_PLANS: Record<
         { cmd: `sed -i 's/^CACHE_DRIVER=.*/CACHE_DRIVER=file/' ${dir}/.env` },
         { cmd: `sed -i 's/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=sync/' ${dir}/.env` },
         { cmd: `mkdir -p ${dir}/database; : > ${dir}/database/database.sqlite` },
-        { cmd: `cd ${dir} && unset PHP_INI_SCAN_DIR; php artisan migrate --force` },
+        { cmd: `cd ${dir} && unset PHP_INI_SCAN_DIR && php artisan migrate --force` },
       ];
     },
   },

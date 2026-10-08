@@ -29,6 +29,7 @@ import {
   executeCommand,
   isEnvironmentReady,
 } from "../../../modules/linux-runner/src";
+import { getWorkspaceDirPath } from "./workspaceService";
 import {
   HostProjectKind,
   HOST_PLANS,
@@ -208,7 +209,16 @@ export async function startHosting(opts: {
   const { workspaceId, projectName, kind } = opts;
   const plan = HOST_PLANS[kind];
   const port = plan.defaultPort;
-  const guestDir = `/workspaces/${workspaceId}`;
+  // NOT /workspaces/<id>: the registry id is a slug while the folder on disk
+  // keeps its own name (the same id-vs-folder trap that produced duplicate
+  // workspace cards). getWorkspaceDirPath returns the real folder, and the
+  // guest sees it under /workspaces, so take the last path segment.
+  let guestDir = `/workspaces/${workspaceId}`;
+  try {
+    const hostDir = String(await getWorkspaceDirPath(workspaceId)).replace(/\/+$/, "");
+    const folder = hostDir.split("/").pop();
+    if (folder) guestDir = `/workspaces/${folder}`;
+  } catch (_) {}
 
   await stopHosting();
   set({
