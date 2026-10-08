@@ -70,8 +70,17 @@ export const HOST_PLANS: Record<
     prepare: (dir) =>
       `cd ${dir}; ` +
       `if [ ! -d vendor ]; then ` +
-      `command -v composer >/dev/null 2>&1 || apt-get install -y --no-install-recommends composer; ` +
-      `composer install --no-interaction --no-progress --prefer-dist; ` +
+      // composer comes from its own installer rather than apt: apt costs a full
+      // package-list refresh (~35 MB of indices) and keeps hitting dpkg/apt locks
+      // on this device, which is the stall that made "it keeps loading". The
+      // installer is ~3 MB and needs only curl, which the toolchain already has.
+      `command -v composer >/dev/null 2>&1 || ` +
+      `{ curl -sSL https://getcomposer.org/installer -o /tmp/cs.phar && php /tmp/cs.phar --install-dir=/usr/local/bin --filename=composer >/dev/null 2>&1; } || true; ` +
+      // --no-dev: phpunit, faker, debugbar and friends are dead weight when the
+      // point is to SERVE the app, and they are roughly half the tree.
+      // --prefer-dist: tarballs, not git clones. --no-scripts: skip the app's
+      // own post-install hooks, which is faster still and cannot hang.
+      `composer install --no-interaction --no-progress --prefer-dist --no-dev --no-scripts; ` +
       `fi; ` +
       `if [ ! -f .env ] && [ -f .env.example ]; then cp .env.example .env; fi; ` +
       `php artisan key:generate --force 2>/dev/null; ` +
