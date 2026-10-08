@@ -399,14 +399,21 @@ async function waitForFile(path: string, seconds: number): Promise<boolean> {
 
 /** Poll the guest's own loopback until the server answers. */
 async function waitForPort(port: number, seconds: number, onTick: () => void): Promise<boolean> {
-  for (let i = 0; i < seconds; i++) {
+  // ONE command polls inside the guest. The previous version launched a separate
+  // guest process every second -- under PRoot each start costs seconds, so a
+  // "60 second" wait ran for minutes and saturated the guest. That is what made
+  // the terminal look dead, `cd` unresponsive, and hosting appear to hang: one
+  // bug, three symptoms. Any HTTP response counts, including a 500, because it
+  // proves the server is listening; the tunnel is a separate step.
+  const batches = Math.max(1, Math.ceil(seconds / 20));
+  for (let b = 0; b < batches; b++) {
+    if (b > 0) onTick();
     const res = await run(
-      `curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:${port}/ || echo 000`
+      `for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do ` +
+        `curl -s -o /dev/null --max-time 2 http://127.0.0.1:${port}/ && { echo READY; break; }; ` +
+        `sleep 1; done; echo CHECKED`
     );
-    const code = res.out.trim().slice(-3);
-    if (code && code !== "000") return true;
-    if (i % 3 === 0) onTick();
-    await sleep(1000);
+    if (res.out.includes("READY")) return true;
   }
   return false;
 }
