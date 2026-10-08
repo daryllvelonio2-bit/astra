@@ -267,6 +267,13 @@ export async function startHosting(opts: {
       const res = await run(st.cmd);
       if (st.detached) {
         if (st.waitFor) {
+          // vendor/ is already on disk from a previous run: redoing the install
+          // costs minutes for no change. The artifact IS the readiness signal.
+          const already = await run(`[ -f ${st.waitFor} ] && echo YES || echo NO`);
+          if (already.out.includes("YES")) {
+            pushLog("already installed — skipping the dependency step");
+            continue;
+          }
           const done = await waitForFile(st.waitFor, 1800);
           if (!done) {
             const tail = await run(`tail -n 8 ${PREP_LOG}`);
@@ -387,12 +394,16 @@ async function prepareGuest(): Promise<void> {
  */
 async function waitForFile(path: string, seconds: number): Promise<boolean> {
   for (let i = 0; i < Math.ceil(seconds / 5); i++) {
-    const res = await run(`[ -f ${path} ] && echo YES || echo NO`);
+    // ONE command per batch, not two per iteration: spawning a guest process is
+    // the expensive part under PRoot, and doing it every five seconds is what
+    // made a wait look like a loop.
+    const res = await run(
+      `for i in 1 2 3 4 5 6 7 8 9 10; do [ -f ${path} ] && { echo YES; break; }; sleep 5; done`
+    );
     if (res.out.includes("YES")) return true;
     const last = await run(`tail -n 1 ${PREP_LOG} 2>/dev/null`);
     const line = last.out.trim();
     if (line && line !== "YES" && line !== "NO") set({ step: line.slice(0, 80) });
-    await sleep(5000);
   }
   return false;
 }
@@ -407,6 +418,7 @@ async function waitForPort(port: number, seconds: number, onTick: () => void): P
   // proves the server is listening; the tunnel is a separate step.
   const batches = Math.max(1, Math.ceil(seconds / 20));
   for (let b = 0; b < batches; b++) {
+    if (hostCancelled) return false;
     if (b > 0) onTick();
     const res = await run(
       `for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do ` +
@@ -414,6 +426,10 @@ async function waitForPort(port: number, seconds: number, onTick: () => void): P
         `sleep 1; done; echo CHECKED`
     );
     if (res.out.includes("READY")) return true;
+    // The server's own words, so a failure names itself instead of spinning.
+    const tail = await run(`tail -n 2 ${HOST_LOG} 2>/dev/null`);
+    const line = tail.out.trim().split("\n").pop() || "";
+    if (line && !line.includes("READY")) pushLog(line.slice(0, 120));
   }
   return false;
 }
@@ -465,16 +481,19 @@ async function openTunnel(port: number): Promise<string | null> {
 
 /** Drain a log file looking for the tunnel's public URL. */
 async function waitForUrl(logFile: string, pattern: RegExp, seconds: number): Promise<string | null> {
-  for (let i = 0; i < seconds; i++) {
-    const res = await run(`cat ${logFile} 2>/dev/null | tail -n 25`);
+  const batches = Math.max(1, Math.ceil(seconds / 20));
+  for (let b = 0; b < batches; b++) {
+    // Same lesson as the port check: one in-guest command that loops, instead of
+    // a fresh guest process every second.
+    const res = await run(
+      `for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do ` +
+        `grep -oE 'https://[a-z0-9.-]+' ${logFile} 2>/dev/null | head -1 && break; sleep 1; done; ` +
+        `tail -n 2 ${logFile} 2>/dev/null`
+    );
     const match = res.out.match(pattern);
     if (match) return match[0];
-    if (res.out.trim()) {
-      // Surface progress; the tunnel prints a few configuration lines first.
-      const last = res.out.trim().split("\n").pop() || "";
-      if (last && !/^#/.test(last)) set({ step: last.slice(0, 90) });
-    }
-    await sleep(1000);
+    const last = res.out.trim().split("\n").pop() || "";
+    if (last && !/^#/.test(last)) set({ step: last.slice(0, 90) });
   }
   const tail = await run(`tail -n 6 ${logFile} 2>/dev/null`);
   tail.out.split("\n").forEach(pushLog);
@@ -482,7 +501,11 @@ async function waitForUrl(logFile: string, pattern: RegExp, seconds: number): Pr
 }
 
 /** Stop the server and the tunnel. Safe to call when nothing is running. */
+/** Set when the user cancels, so the wait loops stop instead of running out. */
+let hostCancelled = false;
+
 export async function stopHosting(): Promise<void> {
+  hostCancelled = true;
   await run(
     `for f in ${HOST_PID} ${TUNNEL_PID}; do ` +
       `if [ -f $f ]; then kill $(cat $f) 2>/dev/null; rm -f $f; fi; done; ` +

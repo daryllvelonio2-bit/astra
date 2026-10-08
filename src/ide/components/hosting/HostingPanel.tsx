@@ -259,8 +259,10 @@ export function HostingPanel({
           backgroundColor: running ? theme.accentRed : theme.accent,
           borderRadius: 10, paddingVertical: 14, opacity: busy || working ? 0.75 : 1,
         }}
-        onPress={running ? () => void stopHosting() : handleStart}
-        disabled={busy || working || !kind}
+        // Running OR working both cancel: being unable to stop a run in progress
+        // is what left Jay watching a spinner with no way out.
+        onPress={running || working ? () => void stopHosting() : handleStart}
+        disabled={busy || !kind}
         // The runtime check no longer disables this button: a disabled primary
         // button with no explanation is what "nothing happens" was. Tapping now
         // always produces either progress or a sentence saying why not.
@@ -268,7 +270,7 @@ export function HostingPanel({
         {working ? (
           <>
             <ActivityIndicator size="small" color="#fff" />
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Working…</Text>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Cancel</Text>
           </>
         ) : (
           <>
