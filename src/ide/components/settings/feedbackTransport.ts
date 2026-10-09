@@ -20,12 +20,12 @@
  *
  * Its plain form is `https://formsubmit.co/<address>`, which would put a
  * developer address in this file and on the wire. Its **invisible-email
- * alias** avoids exactly that: FormSubmit swaps the address for a random string, and its AJAX endpoint returns the JSON this
- * module parses (the plain endpoint answers with HTML). Activation is PER DESTINATION: the first
- * submission emails an "Activate Form" link, and until it is clicked every send is refused with
- * success:false. The alias comes from that same form email. To CC a second inbox, add it in
- * FormSubmit's own form settings rather than here.
- * string (`<hash>`), so the endpoint below names nobody.
+ * alias** avoids exactly that: FormSubmit swaps the address for a random
+ * string, and its AJAX endpoint returns the JSON this module parses (the plain
+ * endpoint answers with HTML). Activation is PER DESTINATION: the first
+ * submission emails an "Activate Form" link, and until it is clicked every send
+ * is refused with success:false. The alias comes from that same form email. To
+ * CC a second inbox, add it in FormSubmit's own form settings rather than here.
  *
  * WHERE THE HASH COMES FROM (one human step, outside the app):
  *   1. Submit the form once to the plain endpoint for the developer inbox —
@@ -42,8 +42,8 @@
  * (the `_cc` field) when activating. This constant, this file and the whole
  * app never name either address.
  *
- * While this is empty the screen shows an honest "relay not configured yet"
- * state instead of pretending to send.
+ * While this is empty the send path reports the honest `unconfigured` reason;
+ * the screen no longer advertises that state with a standing banner.
  */
 export const FEEDBACK_ENDPOINT = "";
 
@@ -66,23 +66,54 @@ export const FEEDBACK_MAX_CHARS = 4000;
 /** Matches the reply-to input's maxLength. */
 export const FEEDBACK_MAX_REPLY_TO = 120;
 
-/** Longest subject we will build, so a pasted blob cannot become the subject. */
-const MAX_SUBJECT_CHARS = 120;
+/**
+ * The five report categories, in the order the picker shows them. This is the
+ * single source of truth: the subject is built from one of these, validation
+ * accepts only one of these, and the picker renders them in this order.
+ */
+export const FEEDBACK_CATEGORIES = [
+  "Bug Report",
+  "Feature Request",
+  "UI/UX Suggestion",
+  "Performance Issue",
+  "General Feedback",
+] as const;
+
+export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
+
+/** Pre-selected so a report is always valid without an extra tap. */
+export const DEFAULT_FEEDBACK_CATEGORY: FeedbackCategory = "General Feedback";
+
+/** True only for one of the five known categories. */
+export function isFeedbackCategory(value: unknown): value is FeedbackCategory {
+  return typeof value === "string" && (FEEDBACK_CATEGORIES as readonly string[]).includes(value);
+}
 
 export interface FeedbackInput {
+  /** One of FEEDBACK_CATEGORIES. */
+  category: FeedbackCategory;
   /** What the user typed. */
   message: string;
   /** Optional address the developer should reply to (the user's own). */
   replyTo?: string;
-  /** One-line environment summary, e.g. "Astra 1.0.0 · Android 14 · Pixel 6". */
-  diagnostics?: string;
+  /** Platform line the app can read, e.g. "Android 14 (API 35) · Pixel 6". */
+  platform?: string;
+  /** App version, e.g. "1.0.0". */
+  appVersion?: string;
+  /** ISO 8601 local timestamp; defaults to "now" when omitted. */
+  submittedAt?: string;
+  /** Free-form origin tag; defaults to "astra-android". */
+  source?: string;
 }
 
 export interface FeedbackPayload {
   subject: string;
+  category: FeedbackCategory;
   message: string;
   replyTo: string;
-  diagnostics: string;
+  submittedAt: string;
+  platform: string;
+  appVersion: string;
   source: string;
 }
 
@@ -116,18 +147,36 @@ export function isFeedbackConfigured(endpoint: string = FEEDBACK_ENDPOINT): bool
   return /^https:\/\/\S+$/i.test(e);
 }
 
-export function buildFeedbackSubject(message: string): string {
-  const firstLine = (message || "").split(/\r?\n/).find((l) => l.trim().length > 0) || "";
-  const subject = firstLine.trim().slice(0, MAX_SUBJECT_CHARS);
-  return subject ? `Astra feedback: ${subject}` : "Astra feedback";
+/** `[ASTRA Feedback] - {category}` — bounded, so a pasted blob can't leak in. */
+export function buildFeedbackSubject(category: FeedbackCategory): string {
+  const safe = isFeedbackCategory(category) ? category : DEFAULT_FEEDBACK_CATEGORY;
+  return `[ASTRA Feedback] - ${safe}`;
+}
+
+/**
+ * Local wall-clock time as ISO 8601 with offset (e.g. "2026-10-10T14:23:05+08:00").
+ * Timezone-aware so the team can read when the report was written; the app sends
+ * its own clock, which is all a client can honestly do.
+ */
+export function localIsoTimestamp(date: Date = new Date()): string {
+  const pad = (n: number) => String(Math.abs(n)).padStart(2, "0");
+  const offsetMin = -date.getTimezoneOffset();
+  const sign = offsetMin >= 0 ? "+" : "-";
+  const ymd = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const hms = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  const zone = `${sign}${pad(Math.floor(Math.abs(offsetMin) / 60))}:${pad(Math.abs(offsetMin) % 60)}`;
+  return `${ymd}T${hms}${zone}`;
 }
 
 /**
  * Validates the user's input. Returns a message to show the user, or null when
- * it is fine. Deliberately loose on the address: many valid addresses fail
- * clever regexes, and a wrong address is a nuisance, not a security problem.
+ * it is fine. Runs BEFORE any request, so an empty/oversized report or a
+ * malformed address never reaches the relay at all. Deliberately loose on the
+ * address: many valid addresses fail clever regexes, and a wrong address is a
+ * nuisance, not a security problem — it is only checked when non-empty.
  */
 export function validateFeedbackInput(input: FeedbackInput): string | null {
+  if (!isFeedbackCategory(input.category)) return "Choose a category first.";
   const message = (input.message || "").trim();
   if (!message) return "Write a message first.";
   if (message.length > FEEDBACK_MAX_CHARS) {
@@ -143,31 +192,39 @@ export function validateFeedbackInput(input: FeedbackInput): string | null {
 
 /** The logical report. Contains no developer address. */
 export function buildFeedbackPayload(input: FeedbackInput): FeedbackPayload {
+  const category = isFeedbackCategory(input.category) ? input.category : DEFAULT_FEEDBACK_CATEGORY;
   return {
-    subject: buildFeedbackSubject(input.message),
+    subject: buildFeedbackSubject(category),
+    category,
     message: (input.message || "").trim(),
     replyTo: (input.replyTo || "").trim(),
-    diagnostics: (input.diagnostics || "").trim(),
-    source: "astra-android",
+    submittedAt: (input.submittedAt || "").trim() || localIsoTimestamp(),
+    platform: (input.platform || "").trim(),
+    appVersion: (input.appVersion || "").trim(),
+    source: (input.source || "").trim() || "astra-android",
   };
 }
 
 /**
  * Encodes the report as the `application/x-www-form-urlencoded` body FormSubmit
- * reads — named form fields, exactly what a FormSubmit form posts. Hand-rolled
- * with `encodeURIComponent` rather than `URLSearchParams` so it depends on
- * nothing the JS runtime might not ship.
+ * reads — named form fields, exactly what a FormSubmit form posts. The `_subject`,
+ * `_template` and `_captcha` names are the relay's own conventions; `email` is its
+ * reply-to field. Hand-rolled with `encodeURIComponent` rather than
+ * `URLSearchParams` so it depends on nothing the JS runtime might not ship.
  */
 export function encodeFeedbackForm(payload: FeedbackPayload): string {
   const fields: Array<[string, string]> = [
     ["_subject", payload.subject],
     ["_template", "table"],
     ["_captcha", "false"],
+    ["category", payload.category],
     ["message", payload.message],
-    ["source", payload.source],
   ];
   if (payload.replyTo) fields.push(["email", payload.replyTo]);
-  if (payload.diagnostics) fields.push(["diagnostics", payload.diagnostics]);
+  if (payload.submittedAt) fields.push(["submitted_at", payload.submittedAt]);
+  if (payload.platform) fields.push(["platform", payload.platform]);
+  if (payload.appVersion) fields.push(["app_version", payload.appVersion]);
+  if (payload.source) fields.push(["source", payload.source]);
   return fields
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
     .join("&");
