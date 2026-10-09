@@ -10,10 +10,12 @@ import { RepoVisibilitySection } from "./RepoVisibilitySection";
  * Repository visibility (public / private) for the current workspace's repo —
  * its own modal and its own trigger in the Git header, beside Collaborators.
  *
- * This file supplies only the shared modal shell (backdrop, header, title +
- * repo subtitle, close control) that GitCollaboratorsModal also uses; the flat
- * feature UI lives in RepoVisibilitySection, rendered as the body. One
- * container level: the card, a hairline under the header, then flat content.
+ * The shell is deliberately the SAME as GitCollaboratorsModal: identical
+ * backdrop, card radius/max width, header row (icon + title + close), the
+ * pinned repo bar under the header, and the same body padding/gap. The two
+ * modals open from adjacent icons, so they must read as one product. The
+ * feature UI lives in RepoVisibilitySection, rendered as the body — its rows
+ * use the collaborators modal's own row metrics.
  *
  * owner/repo come from the workspace's git origin — the same remoteUrl
  * GitHeaderBar already holds — parsed with the shared helper.
@@ -35,18 +37,21 @@ export function RepoVisibilityModal({ visible, remoteUrl, onClose }: RepoVisibil
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
         <View style={[styles.modalCard, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
-          {/* Header */}
+          {/* Header — same row as the collaborators modal */}
           <View style={[styles.header, { borderBottomColor: theme.border }]}>
             <Octicons name="shield-lock" size={16} color={theme.accent} />
-            <View style={styles.titleBlock}>
-              <Text style={[styles.title, { color: theme.textPrimary }]}>Repository visibility</Text>
-              <Text style={[styles.subtitle, { color: theme.textMuted }]} numberOfLines={1}>
-                {ref ? fullName : "No GitHub remote for this workspace"}
-              </Text>
-            </View>
+            <Text style={[styles.title, { color: theme.textPrimary }]}>Repository visibility</Text>
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} accessibilityLabel="Close">
               <Ionicons name="close" size={20} color={theme.textMuted} />
             </TouchableOpacity>
+          </View>
+
+          {/* Acting repo — pinned, exactly like the collaborators modal */}
+          <View style={[styles.repoBar, { backgroundColor: theme.bgTertiary, borderBottomColor: theme.border }]}>
+            <Ionicons name="git-branch-outline" size={12} color={theme.textMuted} />
+            <Text style={[styles.repoText, { color: theme.textSecondary }]} numberOfLines={1}>
+              {ref ? fullName : "No GitHub remote for this workspace"}
+            </Text>
           </View>
 
           <View style={styles.body}>
@@ -90,11 +95,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: 8,
   },
-  titleBlock: { flex: 1, gap: 1 },
-  title: { fontSize: 14, fontWeight: "700" },
-  subtitle: { fontSize: 11 },
+  title: { fontSize: 14, fontWeight: "700", flex: 1 },
   closeBtn: { padding: 2 },
-  body: { padding: 14, gap: 12 },
-  stateBox: { alignItems: "center", gap: 8, paddingVertical: 24, paddingHorizontal: 8 },
+  repoBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  repoText: { fontSize: 12, fontWeight: "600", flex: 1 },
+  body: { padding: 14, gap: 10 },
+  stateBox: { alignItems: "center", gap: 7, paddingVertical: 24, paddingHorizontal: 8 },
   stateText: { fontSize: 11.5, lineHeight: 16, textAlign: "center" },
 });

@@ -15,13 +15,15 @@ import {
 } from "../../services/gitRepoVisibilityModel";
 
 /**
- * Repository visibility (public / private) for the current workspace's repo,
- * rendered as flat body content inside RepoVisibilityModal (this file is the
- * feature's UI; the modal provides only the shared shell).
+ * Repository visibility (public / private) body inside RepoVisibilityModal.
  *
- * Flat by design: no bordered card inside the modal shell and no second
- * heading — the modal header is the only title. The current state and the one
- * change action carry the visual weight; descriptions stay muted and short.
+ * Styled to the collaborators modal — NOT to the settings cards. The current
+ * state is a row with the SAME anatomy as a collaborator row (leading
+ * circular icon in the avatar slot, a bold name line, a muted secondary line,
+ * and a trailing badge), the change control uses the collaborators "Add"
+ * button metrics, and the states/notices reuse the collaborators
+ * error/empty/refresh treatments. Nothing new is invented: the pieces are the
+ * sibling modal's own pieces.
  *
  * It shows the current state at all times, offers the switch only to
  * admin/owner accounts (per the API's own `permissions` block), and gates the
@@ -133,23 +135,37 @@ export function RepoVisibilitySection({ visible, owner, repo, fullName }: RepoVi
 
   return (
     <View style={styles.root}>
-      {/* Current state — what it is, right now: the strongest element */}
-      <View style={styles.stateBlock}>
-        <Ionicons name={info.isPrivate ? "lock-closed" : "globe-outline"} size={28} color={accentFor} />
-        <View style={styles.stateBody}>
-          <Text style={[styles.stateBadge, { color: accentFor }]}>{visibilityLabel(info.isPrivate)}</Text>
-          <Text style={[styles.stateDesc, { color: theme.textSecondary }]}>
+      {/* Same muted count line the collaborators list sits under */}
+      <Text style={[styles.countLine, { color: theme.textMuted }]}>Who can reach this repository</Text>
+
+      {/* Current state — what it is, right now: the strongest element, shaped
+          exactly like one collaborator row (leading icon, name, secondary
+          line, trailing badge). */}
+      <View style={[styles.row, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
+        <View
+          style={[styles.avatar, styles.stateIcon, { backgroundColor: `${accentFor}22`, borderColor: `${accentFor}55` }]}
+        >
+          <Ionicons name={info.isPrivate ? "lock-closed" : "globe-outline"} size={15} color={accentFor} />
+        </View>
+        <View style={styles.rowBody}>
+          <Text style={[styles.name, { color: theme.textPrimary }]} numberOfLines={1}>
+            {info.isPrivate ? "Private" : "Public"}
+          </Text>
+          <Text style={[styles.hint, { color: theme.textMuted }]} numberOfLines={2}>
             {visibilityDescription(info.isPrivate)}
           </Text>
         </View>
+        <View style={[styles.badge, { backgroundColor: `${accentFor}22`, borderColor: `${accentFor}55` }]}>
+          <Text style={[styles.badgeText, { color: accentFor }]}>{visibilityLabel(info.isPrivate)}</Text>
+        </View>
       </View>
 
-      {/* The one change action — admins/owners only */}
+      {/* The one change action — admins/owners only, same button metrics as Add */}
       {info.canManage ? (
         <TouchableOpacity
           style={[
             styles.actionBtn,
-            { borderColor: accentFor, backgroundColor: `${accentFor}18` },
+            { backgroundColor: accentFor, borderColor: accentFor },
             busy && { opacity: 0.6 },
           ]}
           onPress={() => confirmChange(!info.isPrivate)}
@@ -157,34 +173,31 @@ export function RepoVisibilitySection({ visible, owner, repo, fullName }: RepoVi
           activeOpacity={0.8}
         >
           {busy ? (
-            <ActivityIndicator size="small" color={accentFor} />
+            <ActivityIndicator size="small" color={theme.sendButtonIcon} />
           ) : (
-            <Ionicons name={info.isPrivate ? "globe-outline" : "lock-closed"} size={16} color={accentFor} />
+            <Ionicons name={info.isPrivate ? "globe-outline" : "lock-closed"} size={14} color={theme.sendButtonIcon} />
           )}
-          <Text style={[styles.actionText, { color: accentFor }]}>
+          <Text style={[styles.actionText, { color: theme.sendButtonIcon }]}>
             {info.isPrivate ? "Make public" : "Make private"}
           </Text>
         </TouchableOpacity>
       ) : (
-        <View style={styles.inlineNote}>
+        <View style={styles.noteRow}>
           <Ionicons name="lock-closed-outline" size={14} color={theme.textMuted} />
-          <Text style={[styles.inlineNoteText, { color: theme.textMuted }]}>
+          <Text style={[styles.hint, styles.noteText, { color: theme.textMuted }]}>
             {visibilityPermissionNote(info.canManage)}
           </Text>
         </View>
       )}
 
       {!!error && (
-        <View style={styles.inlineNote}>
+        <View style={[styles.errorBox, { backgroundColor: `${theme.accentRed}14`, borderColor: `${theme.accentRed}44` }]}>
           <Ionicons name="alert-circle-outline" size={14} color={theme.accentRed} />
-          <Text style={[styles.inlineNoteText, { color: theme.accentRed }]}>{error}</Text>
+          <Text style={[styles.errorText, { color: theme.accentRed }]}>{error}</Text>
         </View>
       )}
       {!!notice && !error && (
-        <View style={styles.inlineNote}>
-          <Ionicons name="checkmark-circle-outline" size={14} color={theme.accentGreen} />
-          <Text style={[styles.inlineNoteText, { color: theme.accentGreen }]}>{notice}</Text>
-        </View>
+        <Text style={[styles.notice, { color: theme.accentGreen }]}>{notice}</Text>
       )}
 
       {!busy && (
@@ -197,26 +210,55 @@ export function RepoVisibilitySection({ visible, owner, repo, fullName }: RepoVi
   );
 }
 
+// Metrics below are copied from GitCollaboratorsModal's own styles so the two
+// modals share one visual language (row, avatar, badge, button, error/empty,
+// refresh). They are mirrored, not imported, because that file's styles are
+// module-private to a different feature.
 const styles = StyleSheet.create({
-  root: { gap: 12 },
-  stateBlock: { flexDirection: "row", alignItems: "center", gap: 12 },
-  stateBody: { flex: 1, gap: 2 },
-  stateBadge: { fontSize: 20, fontWeight: "800", letterSpacing: 0.5 },
-  stateDesc: { fontSize: 11.5, lineHeight: 15 },
+  root: { gap: 10 },
+  countLine: { fontSize: 10.5 },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  avatar: { width: 30, height: 30, borderRadius: 15, borderWidth: 1 },
+  stateIcon: { alignItems: "center", justifyContent: "center" },
+  rowBody: { flex: 1, gap: 3 },
+  name: { fontSize: 12.5, fontWeight: "700" },
+  hint: { fontSize: 10.5, lineHeight: 14 },
+  badge: { borderWidth: 1, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1 },
+  badgeText: { fontSize: 9.5, fontWeight: "700" },
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    height: 44,
+    gap: 6,
+    height: 36,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 6,
+    paddingHorizontal: 12,
   },
-  actionText: { fontSize: 14, fontWeight: "800" },
-  inlineNote: { flexDirection: "row", alignItems: "center", gap: 7 },
-  inlineNoteText: { fontSize: 11.5, flex: 1, lineHeight: 15 },
-  stateBox: { alignItems: "center", gap: 8, paddingVertical: 20, paddingHorizontal: 8 },
+  actionText: { fontSize: 12.5, fontWeight: "700" },
+  noteRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  noteText: { fontSize: 11.5, lineHeight: 15, flex: 1 },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderWidth: 1,
+    borderRadius: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  errorText: { fontSize: 11.5, flex: 1, lineHeight: 15 },
+  notice: { fontSize: 11.5, fontWeight: "600" },
+  stateBox: { alignItems: "center", gap: 7, paddingVertical: 24, paddingHorizontal: 8 },
   stateText: { fontSize: 11.5, lineHeight: 16, textAlign: "center" },
-  refreshRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 2 },
+  refreshRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 4 },
   refreshText: { fontSize: 11.5, fontWeight: "600" },
 });
