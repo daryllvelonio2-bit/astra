@@ -29,7 +29,7 @@ import {
   executeCommand,
   isEnvironmentReady,
 } from "../../../modules/linux-runner/src";
-import { getWorkspaceDirPath } from "./workspaceService";
+import { resolveGuestProjectDir } from "./hostingProjectDir";
 import {
   HostProjectKind,
   HOST_PLANS,
@@ -213,34 +213,7 @@ export async function startHosting(opts: {
   // keeps its own name (the same id-vs-folder trap that produced duplicate
   // workspace cards). getWorkspaceDirPath returns the real folder, and the
   // guest sees it under /workspaces, so take the last path segment.
-  let guestDir = `/workspaces/${workspaceId}`;
-  try {
-    const hostDir = String(await getWorkspaceDirPath(workspaceId)).replace(/\/+$/, "");
-    const folder = hostDir.split("/").pop();
-    if (folder) guestDir = `/workspaces/${folder}`;
-
-    // Do NOT trust the resolved path. The registry id is a slug while the folder on disk
-    // keeps its own name, and a project can sit in a custom parent outside the app's
-    // private workspaces dir, in which case the guest never sees it under /workspaces and
-    // composer runs in an empty directory ("please create a composer.json file"). Discover
-    // the project in the guest instead: the resolved folder first, then by folder name
-    // anywhere, then any project marker under /workspaces as a last resort.
-    const has = await run(`[ -f ${guestDir}/composer.json ] && echo YES || echo NO`);
-    if (!has.out.includes("YES")) {
-      if (folder) {
-        const byName = await run(
-          `find / -maxdepth 5 -type d -name ${folder} 2>/dev/null | head -1`
-        );
-        const hit = byName.out.trim().split("\n").pop()?.trim() || "";
-        if (hit && !hit.startsWith("/proc")) guestDir = hit;
-      }
-      const marker = await run(
-        `find /workspaces -maxdepth 3 -name composer.json -print -quit 2>/dev/null`
-      );
-      const m = marker.out.trim().split("\n")[0]?.trim() || "";
-      if (m.endsWith("/composer.json")) guestDir = m.replace(/\/composer\.json$/, "");
-    }
-  } catch (_) {}
+  const guestDir = await resolveGuestProjectDir(workspaceId, run);
 
   await stopHosting();
   set({
