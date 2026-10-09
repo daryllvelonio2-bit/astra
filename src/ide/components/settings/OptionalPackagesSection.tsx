@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { showAppDialog } from "../../services/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
@@ -13,16 +13,6 @@ import {
   OptionalGroup,
   OptionalPackage,
 } from "../../services/optionalPackages";
-import { OptionalPackageGroup } from "./OptionalPackageGroup";
-
-/**
- * Toolchain Downloads — ONE rounded container holding the whole block.
- *
- * The title row at the top is the container's heading; every group and every
- * package below it is visible straight away (nothing is tucked behind a tap).
- * The groups are flat sections separated by hairline rules and the package rows
- * are flat too — no per-group card, no card inside a card.
- */
 
 interface OptionalPackagesSectionProps {
   theme: ThemeColors;
@@ -70,7 +60,170 @@ function isDetected(pkg: OptionalPackage, result: ProbeResult): boolean | undefi
   return pkg.bin in result.bins ? result.bins[pkg.bin] : undefined;
 }
 
+interface GroupCardProps {
+  group: OptionalGroup;
+  theme: ThemeColors;
+  installed: Record<string, boolean>;
+  busy: Record<string, boolean>;
+  groupBusy: boolean;
+  probing: boolean;
+  provisioningActive: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  onInstallOne: (pkg: OptionalPackage) => void;
+  onInstallGroup: (group: OptionalGroup) => void;
+}
+
+function PackageGroupCard({
+  group,
+  theme,
+  installed,
+  busy,
+  groupBusy,
+  probing,
+  provisioningActive,
+  expanded,
+  onToggle,
+  onInstallOne,
+  onInstallGroup,
+}: GroupCardProps) {
+  const doneCount = group.packages.filter((p) => installed[p.id]).length;
+  const allDone = doneCount === group.packages.length;
+  return (
+    <View
+      style={[
+        styles.groupCard,
+        {
+          backgroundColor: theme.bgSecondary,
+          borderColor: allDone ? `${theme.accentGreen}40` : theme.border,
+        },
+      ]}
+    >
+      <TouchableOpacity style={styles.groupHeader} onPress={onToggle} activeOpacity={0.7}>
+        <View style={styles.groupLeft}>
+          <View style={[styles.groupBadge, { backgroundColor: `${theme.accent}18` }]}>
+            <Ionicons name={group.icon as any} size={15} color={theme.accent} />
+          </View>
+          <View style={styles.titleCol}>
+            <Text style={[styles.groupTitle, { color: theme.textPrimary }]}>
+              {group.title}
+            </Text>
+            <Text style={[styles.groupDesc, { color: theme.textMuted }]} numberOfLines={1}>
+              {group.blurb}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.groupRight}>
+          {probing ? (
+            <ActivityIndicator size={12} color={theme.textMuted} />
+          ) : (
+            <Text
+              style={[
+                styles.groupCount,
+                { color: allDone ? theme.accentGreen : theme.textMuted },
+              ]}
+            >
+              {allDone ? "All installed" : `${doneCount}/${group.packages.length}`}
+            </Text>
+          )}
+          <Ionicons
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={14}
+            color={theme.textMuted}
+          />
+        </View>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={[styles.packageList, { borderTopColor: theme.border }]}>
+          {group.packages.map((pkg) => {
+            const isInstalled = !!installed[pkg.id];
+            const isBusy = !!busy[pkg.id];
+            return (
+              <View key={pkg.id} style={styles.pkgRow}>
+                <View style={styles.pkgInfo}>
+                  <View style={styles.pkgNameRow}>
+                    <Text style={[styles.pkgName, { color: theme.textPrimary }]}>
+                      {pkg.name}
+                    </Text>
+                    <View style={[styles.aptChip, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}>
+                      <Text style={[styles.aptChipText, { color: theme.textSecondary }]}>
+                        {pkg.apt.join(" ")}
+                      </Text>
+                    </View>
+                    {pkg.heavy && (
+                      <View style={[styles.heavyChip, { backgroundColor: `${theme.accentGold}18`, borderColor: `${theme.accentGold}40` }]}>
+                        <Text style={[styles.heavyChipText, { color: theme.accentGold }]}>
+                          LARGE
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.pkgDesc, { color: theme.textSecondary }]}>
+                    {pkg.desc}
+                  </Text>
+                </View>
+                <View style={styles.pkgAction}>
+                  {isBusy || groupBusy ? (
+                    <ActivityIndicator size={14} color={theme.accent} />
+                  ) : isInstalled ? (
+                    <Ionicons name="checkmark-circle" size={20} color={theme.accentGreen} />
+                  ) : (
+                    <TouchableOpacity
+                      style={[
+                        styles.installBtn,
+                        {
+                          backgroundColor: `${theme.accent}15`,
+                          borderColor: `${theme.accent}40`,
+                          opacity: provisioningActive ? 0.4 : 1,
+                        },
+                      ]}
+                      onPress={() => onInstallOne(pkg)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="download-outline" size={13} color={theme.accent} />
+                      <Text style={[styles.installText, { color: theme.accent }]}>
+                        Get
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+
+          {!allDone && !probing && (
+            <TouchableOpacity
+              style={[
+                styles.installAllBtn,
+                {
+                  backgroundColor: `${theme.accent}12`,
+                  borderColor: `${theme.accent}30`,
+                  opacity: provisioningActive || groupBusy ? 0.5 : 1,
+                },
+              ]}
+              onPress={() => onInstallGroup(group)}
+              disabled={provisioningActive || groupBusy}
+              activeOpacity={0.7}
+            >
+              {groupBusy ? (
+                <ActivityIndicator size={13} color={theme.accent} />
+              ) : (
+                <Ionicons name="albums-outline" size={13} color={theme.accent} />
+              )}
+              <Text style={[styles.installAllText, { color: theme.accent }]}>
+                Install all missing ({group.packages.length - doneCount})
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
 export function OptionalPackagesSection({ theme, provisioningActive }: OptionalPackagesSectionProps) {
+  const [expandedGroup, setExpandedGroup] = useState<string | null>("req-core");
   const [installed, setInstalled] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [groupBusy, setGroupBusy] = useState<Record<string, boolean>>({});
@@ -193,8 +346,8 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
     showAppDialog({ title: `Install ${missing.length} missing package${missing.length > 1 ? "s" : ""}?`, message: `${missing.map((p) => p.name).join(", ")}${heavyOnes.length > 0 ? "\n\nIncludes large download(s): " + heavyOnes.map((p) => p.name).join(", ") + ". Check free storage first." : ""}`, buttons: [{ text: "Cancel", style: "cancel" }, { text: "Install All", onPress: run }] });
   };
 
-  const renderGroup = (group: OptionalGroup, isFirst: boolean) => (
-    <OptionalPackageGroup
+  const renderGroup = (group: OptionalGroup) => (
+    <PackageGroupCard
       key={group.id}
       group={group}
       theme={theme}
@@ -203,55 +356,98 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
       groupBusy={!!groupBusy[group.id]}
       probing={probing}
       provisioningActive={provisioningActive}
-      isFirst={isFirst}
+      expanded={expandedGroup === group.id}
+      onToggle={() => setExpandedGroup(expandedGroup === group.id ? null : group.id)}
       onInstallOne={handleInstallOne}
       onInstallGroup={handleInstallGroup}
     />
   );
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
-      {/* Title row — the container's heading. Always on screen, no tap needed. */}
-      <View style={styles.headerRow}>
-        <View style={[styles.iconTile, { backgroundColor: `${theme.accent}18`, borderColor: `${theme.accent}2E` }]}>
-          <Ionicons name="download-outline" size={16} color={theme.accent} />
-        </View>
-        <View style={styles.titleCol}>
-          <Text style={[styles.rowTitle, { color: theme.textPrimary }]} numberOfLines={1}>
-            Toolchain Downloads
-          </Text>
-          <Text style={[styles.rowMeta, { color: theme.textMuted }]} numberOfLines={1}>
-            Base runtimes and optional tools — install what you need
-          </Text>
-        </View>
-      </View>
-
+    <View style={styles.container}>
       <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>
         CORE RUNTIME PACKAGES
       </Text>
       <Text style={[styles.sectionSub, { color: theme.textMuted }]}>
         Essential developer utilities and compilers for the Linux environment. Auto-installed during setup unless disabled above.
       </Text>
-      {REQUIRED_GROUPS.map((group, i) => renderGroup(group, i === 0))}
+      {REQUIRED_GROUPS.map(renderGroup)}
 
-      <Text style={[styles.sectionHeading, { color: theme.textMuted, marginTop: 16 }]}>
+      <Text style={[styles.sectionHeading, { color: theme.textMuted, marginTop: 12 }]}>
         OPTIONAL TOOLS & RUNTIMES
       </Text>
       <Text style={[styles.sectionSub, { color: theme.textMuted }]}>
         On-demand developer toolchains installed outside the base environment.
       </Text>
-      {OPTIONAL_GROUPS.map((group, i) => renderGroup(group, i === 0))}
+      {OPTIONAL_GROUPS.map(renderGroup)}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 2 },
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 6 },
-  iconTile: { width: 34, height: 34, borderRadius: 9, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  container: { gap: 8 },
+  sectionHeading: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginTop: 4 },
+  sectionSub: { fontSize: 11, marginTop: -4 },
+  groupCard: { borderRadius: 10, borderWidth: 1, overflow: "hidden" },
+  groupHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 10,
+  },
+  groupLeft: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
+  groupBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   titleCol: { flex: 1 },
-  rowTitle: { fontSize: 13, fontWeight: "700" },
-  rowMeta: { fontSize: 11, marginTop: 1 },
-  sectionHeading: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginTop: 12 },
-  sectionSub: { fontSize: 11, marginTop: 1 },
+  groupTitle: { fontSize: 13, fontWeight: "700" },
+  groupDesc: { fontSize: 10, marginTop: 1 },
+  groupRight: { flexDirection: "row", alignItems: "center", gap: 4 },
+  groupCount: { fontSize: 11, fontWeight: "600" },
+  packageList: { borderTopWidth: 1, padding: 10, gap: 10 },
+  pkgRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  pkgInfo: { flex: 1, gap: 3 },
+  pkgNameRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5 },
+  pkgName: { fontSize: 12.5, fontWeight: "700" },
+  aptChip: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  aptChipText: { fontSize: 9.5, fontFamily: "monospace" },
+  heavyChip: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  heavyChipText: { fontSize: 9, fontWeight: "800" },
+  pkgDesc: { fontSize: 11, lineHeight: 15 },
+  pkgAction: { minWidth: 30, alignItems: "flex-end", justifyContent: "center", paddingTop: 2 },
+  installBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  installText: { fontSize: 11, fontWeight: "700" },
+  installAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 7,
+    borderRadius: 7,
+    borderWidth: 1,
+    marginTop: 2,
+  },
+  installAllText: { fontSize: 12, fontWeight: "700" },
 });
