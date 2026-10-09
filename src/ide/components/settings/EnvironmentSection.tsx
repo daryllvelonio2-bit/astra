@@ -28,8 +28,6 @@ interface EnvironmentSectionProps {
 export function EnvironmentSection({ theme }: EnvironmentSectionProps) {
   const [status, setStatus] = useState<ProvisioningStatus>(DEFAULT_PROVISIONING_STATUS);
   const [logs, setLogs] = useState<string[]>([]);
-  const [showLogs, setShowLogs] = useState(false);
-  const [expandedStage, setExpandedStage] = useState<number | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [autoDownload, setAutoDownload] = useState(false);
   const pollTimerRef = useRef<any>(null);
@@ -308,44 +306,36 @@ export function EnvironmentSection({ theme }: EnvironmentSectionProps) {
         subtitle="The four stages of the base environment setup."
       />
 
-      {STAGES.map((st) => (
-        <EnvironmentStageCard
-          key={st.index}
-          st={st}
-          status={status}
-          isExpanded={expandedStage === st.index}
-          onToggle={() => setExpandedStage(expandedStage === st.index ? null : st.index)}
-          theme={theme}
-        />
-      ))}
+      {/* ONE container for the stages block: flat stage rows divided by
+          hairlines. Every stage is expanded — nothing is hidden behind a tap. */}
+      <View style={[styles.stagesCard, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
+        {STAGES.map((st, i) => (
+          <EnvironmentStageCard
+            key={st.index}
+            st={st}
+            status={status}
+            theme={theme}
+            isFirst={i === 0}
+          />
+        ))}
+      </View>
 
-      {/* 3. Live Log Drawer (Collapsible) */}
+      {/* 3. Live Terminal Output — ONE container, always visible (no tap). */}
       {logs.length > 0 && (
-        <View style={styles.logSection}>
-          <TouchableOpacity
-            style={[styles.logToggleHeader, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}
-            onPress={() => setShowLogs(!showLogs)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.logToggleLeft}>
-              <Ionicons name="terminal-outline" size={14} color={theme.textMuted} />
-              <Text style={[styles.logToggleTitle, { color: theme.textSecondary }]}>
-                Recent Terminal Output ({logs.length})
+        <View style={[styles.logCard, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
+          <View style={styles.logHeader}>
+            <Ionicons name="terminal-outline" size={14} color={theme.textMuted} />
+            <Text style={[styles.logTitle, { color: theme.textSecondary }]}>
+              Recent Terminal Output ({logs.length})
+            </Text>
+          </View>
+          <ScrollView style={styles.logScroll} nestedScrollEnabled>
+            {logs.slice(-10).map((line, idx) => (
+              <Text key={idx} style={[styles.logLine, { color: theme.textSecondary }]} numberOfLines={2}>
+                {line}
               </Text>
-            </View>
-            <Ionicons name={showLogs ? "chevron-up" : "chevron-down"} size={14} color={theme.textMuted} />
-          </TouchableOpacity>
-          {showLogs && (
-            <View style={[styles.logConsole, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
-              <ScrollView style={styles.logScroll} nestedScrollEnabled>
-                {logs.slice(-10).map((line, idx) => (
-                  <Text key={idx} style={[styles.logLine, { color: theme.textSecondary }]} numberOfLines={2}>
-                    {line}
-                  </Text>
-                ))}
-              </ScrollView>
-            </View>
-          )}
+            ))}
+          </ScrollView>
         </View>
       )}
 
@@ -407,26 +397,17 @@ const styles = StyleSheet.create({
   buttonRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   smallBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
   btnText: { fontSize: 11, fontWeight: "600" },
-  logSection: { gap: 4 },
-  logToggleHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  logToggleLeft: {
+  stagesCard: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 4 },
+  logCard: { borderRadius: 14, borderWidth: 1, padding: 12, gap: 8 },
+  logHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  logToggleTitle: {
+  logTitle: {
     fontSize: 11,
     fontWeight: "600",
   },
-  logConsole: { borderRadius: 8, borderWidth: 1, padding: 8, marginTop: 4 },
   logScroll: { maxHeight: 100 },
   logLine: { fontFamily: "monospace", fontSize: 10, lineHeight: 14 },
   diagBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingVertical: 8, borderRadius: 8, borderWidth: 1 },

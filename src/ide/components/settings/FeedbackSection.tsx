@@ -8,7 +8,6 @@ import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import {
   FEEDBACK_MAX_CHARS,
   FEEDBACK_MAX_REPLY_TO,
-  isFeedbackConfigured,
   sendFeedback,
 } from "./feedbackTransport";
 
@@ -33,7 +32,9 @@ type Status =
   | { kind: "idle" }
   | { kind: "sending" }
   | { kind: "sent" }
-  | { kind: "error"; text: string };
+  // `neutral` marks a non-failure refusal (the relay isn't configured yet):
+  // it is a plain line in the screen's muted status style, not a red error.
+  | { kind: "error"; text: string; neutral?: boolean };
 
 /** "Android 14 (API 35)" on device; a plain label elsewhere (dev/harness). */
 function osVersionLabel(): string {
@@ -89,10 +90,9 @@ export function FeedbackSection({ theme, workspaceId }: { theme: ThemeColors; wo
     };
   }, [workspaceId]);
 
-  const configured = isFeedbackConfigured();
   const diagnostics = buildDiagnostics(workspaceName);
   const sending = status.kind === "sending";
-  const canSend = configured && !sending && message.trim().length > 0;
+  const canSend = !sending && message.trim().length > 0;
 
   const onChangeMessage = (t: string) => {
     draftMessage = t;
@@ -116,7 +116,11 @@ export function FeedbackSection({ theme, workspaceId }: { theme: ThemeColors; wo
       setMessage("");
       setStatus({ kind: "sent" });
     } else {
-      setStatus({ kind: "error", text: result.error || "Couldn't send the report." });
+      setStatus({
+        kind: "error",
+        text: result.error || "Couldn't send the report.",
+        neutral: result.reason === "unconfigured",
+      });
     }
   };
 
@@ -192,18 +196,17 @@ export function FeedbackSection({ theme, workspaceId }: { theme: ThemeColors; wo
         </Text>
       </TouchableOpacity>
 
-      {status.kind === "error" && (
-        <Text style={[styles.status, { color: theme.accentRed }]}>{status.text}</Text>
-      )}
-      {status.kind === "error" ? null : status.kind === "sent" ? (
+      {status.kind === "error" ? (
+        <Text style={[styles.status, { color: status.neutral ? theme.textMuted : theme.accentRed }]}>
+          {status.text}
+        </Text>
+      ) : status.kind === "sent" ? (
         <Text style={[styles.status, { color: theme.accentGreen }]}>
           Thanks — that reached us. We read every report.
         </Text>
       ) : (
         <Text style={[styles.status, { color: theme.textMuted }]}>
-          {configured
-            ? "Only your message and the line above are sent."
-            : "The feedback relay isn't configured in this build yet, so sending is disabled."}
+          Only your message and the line above are sent.
         </Text>
       )}
     </View>

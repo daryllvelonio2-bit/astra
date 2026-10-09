@@ -1,15 +1,15 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
 import { DevCategory, DevTool, readyCount } from "../../services/devCategories";
 import { DependencyToolRow } from "./DependencyToolRow";
 
 /**
- * One kind of development as a flat, collapsible group: a quiet title row
- * (icon · name · ready count · chevron) over its tool rows. No card, no badge
- * box — groups are divided by a hairline rule and spacing so the tool rows
- * stay the loudest thing on the screen.
+ * One kind of development as a flat group inside the parent's single container:
+ * a quiet title row (icon · name · ready count) over its tool rows, separated
+ * from the next group by a hairline rule. No card, no badge box, no collapse —
+ * the tool rows stay the loudest thing on the screen and are always visible.
  */
 
 interface DependencyCategorySectionProps {
@@ -19,8 +19,6 @@ interface DependencyCategorySectionProps {
   busy: Record<string, boolean>;
   probing: boolean;
   provisioningActive: boolean;
-  expanded: boolean;
-  onToggle: () => void;
   onInstall: (tool: DevTool) => void;
 }
 
@@ -31,8 +29,6 @@ export function DependencyCategorySection({
   busy,
   probing,
   provisioningActive,
-  expanded,
-  onToggle,
   onInstall,
 }: DependencyCategorySectionProps) {
   const total = category.tools.length;
@@ -41,13 +37,7 @@ export function DependencyCategorySection({
 
   return (
     <View style={[styles.section, { borderTopColor: theme.border }]}>
-      <TouchableOpacity
-        style={styles.header}
-        onPress={onToggle}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-      >
+      <View style={styles.header}>
         <Ionicons name={category.icon as any} size={14} color={theme.textMuted} />
         <Text style={[styles.title, { color: theme.textMuted }]} numberOfLines={1}>
           {category.name}
@@ -60,30 +50,27 @@ export function DependencyCategorySection({
             {allDone ? "Ready" : `${ready}/${total}`}
           </Text>
         )}
-        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={14} color={theme.textMuted} />
-      </TouchableOpacity>
+      </View>
 
-      {expanded && (
-        <View style={styles.toolList}>
-          {category.tools.map((tool) => (
-            <DependencyToolRow
-              key={tool.id}
-              tool={tool}
-              theme={theme}
-              installed={installed[tool.id]}
-              busy={!!busy[tool.id]}
-              provisioningDisabled={provisioningActive}
-              onInstall={onInstall}
-            />
-          ))}
-        </View>
-      )}
+      <View style={styles.toolList}>
+        {category.tools.map((tool) => (
+          <DependencyToolRow
+            key={tool.id}
+            tool={tool}
+            theme={theme}
+            installed={installed[tool.id]}
+            busy={!!busy[tool.id]}
+            provisioningDisabled={provisioningActive}
+            onInstall={onInstall}
+          />
+        ))}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 6 },
+  section: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8 },
   header: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
   title: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
   spacer: { flex: 1 },

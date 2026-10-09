@@ -14,11 +14,12 @@ import { DependencyCategorySection } from "./DependencyCategorySection";
 /**
  * Dependencies, organised by KIND OF DEVELOPMENT.
  *
- * One flat surface: a status line, then one collapsible group per kind of
- * development (Laravel, React/Node, ...) whose rows are its runtimes/tools —
- * whether each is installed and one tap to install. Groups are separated by a
- * hairline rule, not nested cards. The tool rows (name + Get) are the loudest
- * thing on screen; category titles are quiet labels.
+ * One flat surface inside the parent's single container: a status line, then one
+ * group per kind of development (Laravel, React/Node, ...) — each group is a
+ * quiet title row over its tool rows, separated by a hairline rule rather than a
+ * nested card. Everything is visible at once; a group cannot be collapsed away.
+ * The tool rows (name + Get) are the loudest thing on screen; category titles
+ * are quiet labels.
  *
  * Nothing installs itself: the screen only ever calls the app's existing
  * installPackages() guest installer, after the user taps Get.
@@ -34,9 +35,6 @@ export function DependenciesScreen({ provisioningActive = false }: DependenciesS
   const [installed, setInstalled] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [probing, setProbing] = useState(true);
-  // Empty map => every category's `collapsed[id]` is undefined => expanded.
-  // All sections start EXPANDED; a header tap can only hide one by choice.
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const refresh = useCallback(async () => {
     const state = await probeDependencyState();
@@ -122,8 +120,6 @@ export function DependenciesScreen({ provisioningActive = false }: DependenciesS
     return { readyTotal: ready, toolTotal: total };
   }, [installed]);
 
-  const toggle = (id: string) => setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
-
   return (
     <View style={styles.container}>
       <View style={styles.statusRow}>
@@ -158,8 +154,6 @@ export function DependenciesScreen({ provisioningActive = false }: DependenciesS
           busy={busy}
           probing={probing}
           provisioningActive={provisioningActive}
-          expanded={!collapsed[category.id]}
-          onToggle={() => toggle(category.id)}
           onInstall={handleInstall}
         />
       ))}
@@ -168,7 +162,7 @@ export function DependenciesScreen({ provisioningActive = false }: DependenciesS
 }
 
 const styles = StyleSheet.create({
-  container: { gap: 0, paddingBottom: 16 },
+  container: { gap: 0 },
   statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingBottom: 4 },
   statusText: { fontSize: 11, flex: 1 },
   recheckBtn: {

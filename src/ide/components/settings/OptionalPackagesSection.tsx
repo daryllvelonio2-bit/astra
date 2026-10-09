@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { showAppDialog } from "../../services/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
@@ -13,6 +13,16 @@ import {
   OptionalGroup,
   OptionalPackage,
 } from "../../services/optionalPackages";
+import { OptionalPackageGroup } from "./OptionalPackageGroup";
+
+/**
+ * Toolchain Downloads — ONE rounded container holding the whole block.
+ *
+ * The title row at the top is the container's heading; every group and every
+ * package below it is visible straight away (nothing is tucked behind a tap).
+ * The groups are flat sections separated by hairline rules and the package rows
+ * are flat too — no per-group card, no card inside a card.
+ */
 
 interface OptionalPackagesSectionProps {
   theme: ThemeColors;
@@ -60,172 +70,11 @@ function isDetected(pkg: OptionalPackage, result: ProbeResult): boolean | undefi
   return pkg.bin in result.bins ? result.bins[pkg.bin] : undefined;
 }
 
-interface GroupCardProps {
-  group: OptionalGroup;
-  theme: ThemeColors;
-  installed: Record<string, boolean>;
-  busy: Record<string, boolean>;
-  groupBusy: boolean;
-  probing: boolean;
-  provisioningActive: boolean;
-  expanded: boolean;
-  onToggle: () => void;
-  onInstallOne: (pkg: OptionalPackage) => void;
-  onInstallGroup: (group: OptionalGroup) => void;
-}
-
-function PackageGroupCard({
-  group,
-  theme,
-  installed,
-  busy,
-  groupBusy,
-  probing,
-  provisioningActive,
-  expanded,
-  onToggle,
-  onInstallOne,
-  onInstallGroup,
-}: GroupCardProps) {
-  const doneCount = group.packages.filter((p) => installed[p.id]).length;
-  const allDone = doneCount === group.packages.length;
-  return (
-    <View
-      style={[
-        styles.groupCard,
-        {
-          backgroundColor: theme.bgSecondary,
-          borderColor: allDone ? `${theme.accentGreen}40` : theme.border,
-        },
-      ]}
-    >
-      <TouchableOpacity style={styles.groupHeader} onPress={onToggle} activeOpacity={0.7}>
-        <View style={styles.groupLeft}>
-          <View style={[styles.groupBadge, { backgroundColor: `${theme.accent}18` }]}>
-            <Ionicons name={group.icon as any} size={15} color={theme.accent} />
-          </View>
-          <View style={styles.titleCol}>
-            <Text style={[styles.groupTitle, { color: theme.textPrimary }]}>
-              {group.title}
-            </Text>
-            <Text style={[styles.groupDesc, { color: theme.textMuted }]} numberOfLines={1}>
-              {group.blurb}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.groupRight}>
-          {probing ? (
-            <ActivityIndicator size={12} color={theme.textMuted} />
-          ) : (
-            <Text
-              style={[
-                styles.groupCount,
-                { color: allDone ? theme.accentGreen : theme.textMuted },
-              ]}
-            >
-              {allDone ? "All installed" : `${doneCount}/${group.packages.length}`}
-            </Text>
-          )}
-          <Ionicons
-            name={expanded ? "chevron-up" : "chevron-down"}
-            size={14}
-            color={theme.textMuted}
-          />
-        </View>
-      </TouchableOpacity>
-
-      {expanded && (
-        <View style={[styles.packageList, { borderTopColor: theme.border }]}>
-          {group.packages.map((pkg) => {
-            const isInstalled = !!installed[pkg.id];
-            const isBusy = !!busy[pkg.id];
-            // Same chip treatment as the dependencies list: the package names,
-            // the large-download flag and the installed state are folded into
-            // one plain-text muted line instead of three separate pills.
-            const meta = [pkg.apt.join(" "), pkg.heavy ? "large download" : null, isInstalled ? "installed" : null]
-              .filter((part): part is string => !!part)
-              .join(" · ");
-            return (
-              <View key={pkg.id} style={styles.pkgRow}>
-                <View style={styles.pkgInfo}>
-                  <Text style={[styles.pkgName, { color: theme.textPrimary }]} numberOfLines={1}>
-                    {pkg.name}
-                  </Text>
-                  <Text style={[styles.pkgDesc, { color: theme.textSecondary }]} numberOfLines={2}>
-                    {meta} — {pkg.desc}
-                  </Text>
-                </View>
-                <View style={styles.pkgAction}>
-                  {isBusy || groupBusy ? (
-                    <ActivityIndicator size={14} color={theme.accent} />
-                  ) : isInstalled ? (
-                    // Reads "installed" on the muted line — the green check that
-                    // used to sit here is gone.
-                    null
-                  ) : (
-                    <TouchableOpacity
-                      style={[
-                        styles.installBtn,
-                        {
-                          backgroundColor: `${theme.accent}15`,
-                          borderColor: `${theme.accent}40`,
-                          opacity: provisioningActive ? 0.4 : 1,
-                        },
-                      ]}
-                      onPress={() => onInstallOne(pkg)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="download-outline" size={13} color={theme.accent} />
-                      <Text style={[styles.installText, { color: theme.accent }]}>
-                        Get
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            );
-          })}
-
-          {!allDone && !probing && (
-            <TouchableOpacity
-              style={[
-                styles.installAllBtn,
-                {
-                  backgroundColor: `${theme.accent}12`,
-                  borderColor: `${theme.accent}30`,
-                  opacity: provisioningActive || groupBusy ? 0.5 : 1,
-                },
-              ]}
-              onPress={() => onInstallGroup(group)}
-              disabled={provisioningActive || groupBusy}
-              activeOpacity={0.7}
-            >
-              {groupBusy ? (
-                <ActivityIndicator size={13} color={theme.accent} />
-              ) : (
-                <Ionicons name="albums-outline" size={13} color={theme.accent} />
-              )}
-              <Text style={[styles.installAllText, { color: theme.accent }]}>
-                Install all missing ({group.packages.length - doneCount})
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-    </View>
-  );
-}
-
 export function OptionalPackagesSection({ theme, provisioningActive }: OptionalPackagesSectionProps) {
-  const [expandedGroup, setExpandedGroup] = useState<string | null>("req-core");
   const [installed, setInstalled] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [groupBusy, setGroupBusy] = useState<Record<string, boolean>>({});
   const [probing, setProbing] = useState(true);
-  // The downloads are a deliberate reveal: the whole list starts tucked away
-  // behind a single row, so the settings tab stays short and nothing downloads
-  // (or is even scrolled past) until the user opens it.
-  const [open, setOpen] = useState(false);
 
   const refresh = useCallback(async (pkgs?: OptionalPackage[]) => {
     const targets = pkgs ?? ALL_PACKAGES;
@@ -344,8 +193,8 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
     showAppDialog({ title: `Install ${missing.length} missing package${missing.length > 1 ? "s" : ""}?`, message: `${missing.map((p) => p.name).join(", ")}${heavyOnes.length > 0 ? "\n\nIncludes large download(s): " + heavyOnes.map((p) => p.name).join(", ") + ". Check free storage first." : ""}`, buttons: [{ text: "Cancel", style: "cancel" }, { text: "Install All", onPress: run }] });
   };
 
-  const renderGroup = (group: OptionalGroup) => (
-    <PackageGroupCard
+  const renderGroup = (group: OptionalGroup, isFirst: boolean) => (
+    <OptionalPackageGroup
       key={group.id}
       group={group}
       theme={theme}
@@ -354,24 +203,16 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
       groupBusy={!!groupBusy[group.id]}
       probing={probing}
       provisioningActive={provisioningActive}
-      expanded={expandedGroup === group.id}
-      onToggle={() => setExpandedGroup(expandedGroup === group.id ? null : group.id)}
+      isFirst={isFirst}
       onInstallOne={handleInstallOne}
       onInstallGroup={handleInstallGroup}
     />
   );
 
   return (
-    <View style={styles.container}>
-      {/* One collapsed row, opened deliberately — the row says what it is. */}
-      <TouchableOpacity
-        style={[styles.row, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}
-        onPress={() => setOpen((v) => !v)}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Toolchain downloads"
-        accessibilityState={{ expanded: open }}
-      >
+    <View style={[styles.card, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
+      {/* Title row — the container's heading. Always on screen, no tap needed. */}
+      <View style={styles.headerRow}>
         <View style={[styles.iconTile, { backgroundColor: `${theme.accent}18`, borderColor: `${theme.accent}2E` }]}>
           <Ionicons name="download-outline" size={16} color={theme.accent} />
         </View>
@@ -380,97 +221,37 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
             Toolchain Downloads
           </Text>
           <Text style={[styles.rowMeta, { color: theme.textMuted }]} numberOfLines={1}>
-            Base runtimes and optional tools — tap to install
+            Base runtimes and optional tools — install what you need
           </Text>
         </View>
-        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={14} color={theme.textMuted} />
-      </TouchableOpacity>
+      </View>
 
-      {open && (
-        <View style={styles.downloadsBody}>
-          <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>
-            CORE RUNTIME PACKAGES
-          </Text>
-          <Text style={[styles.sectionSub, { color: theme.textMuted }]}>
-            Essential developer utilities and compilers for the Linux environment. Auto-installed during setup unless disabled above.
-          </Text>
-          {REQUIRED_GROUPS.map(renderGroup)}
+      <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>
+        CORE RUNTIME PACKAGES
+      </Text>
+      <Text style={[styles.sectionSub, { color: theme.textMuted }]}>
+        Essential developer utilities and compilers for the Linux environment. Auto-installed during setup unless disabled above.
+      </Text>
+      {REQUIRED_GROUPS.map((group, i) => renderGroup(group, i === 0))}
 
-          <Text style={[styles.sectionHeading, { color: theme.textMuted, marginTop: 12 }]}>
-            OPTIONAL TOOLS & RUNTIMES
-          </Text>
-          <Text style={[styles.sectionSub, { color: theme.textMuted }]}>
-            On-demand developer toolchains installed outside the base environment.
-          </Text>
-          {OPTIONAL_GROUPS.map(renderGroup)}
-        </View>
-      )}
+      <Text style={[styles.sectionHeading, { color: theme.textMuted, marginTop: 16 }]}>
+        OPTIONAL TOOLS & RUNTIMES
+      </Text>
+      <Text style={[styles.sectionSub, { color: theme.textMuted }]}>
+        On-demand developer toolchains installed outside the base environment.
+      </Text>
+      {OPTIONAL_GROUPS.map((group, i) => renderGroup(group, i === 0))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { gap: 8 },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
+  card: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 2 },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 6 },
   iconTile: { width: 34, height: 34, borderRadius: 9, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  titleCol: { flex: 1 },
   rowTitle: { fontSize: 13, fontWeight: "700" },
   rowMeta: { fontSize: 11, marginTop: 1 },
-  downloadsBody: { gap: 8 },
-  sectionHeading: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginTop: 4 },
-  sectionSub: { fontSize: 11, marginTop: -4 },
-  groupCard: { borderRadius: 10, borderWidth: 1, overflow: "hidden" },
-  groupHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 10,
-  },
-  groupLeft: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
-  groupBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  titleCol: { flex: 1 },
-  groupTitle: { fontSize: 13, fontWeight: "700" },
-  groupDesc: { fontSize: 10, marginTop: 1 },
-  groupRight: { flexDirection: "row", alignItems: "center", gap: 4 },
-  groupCount: { fontSize: 11, fontWeight: "600" },
-  packageList: { borderTopWidth: 1, padding: 10, gap: 10 },
-  pkgRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  pkgInfo: { flex: 1, gap: 3 },
-  pkgName: { fontSize: 12.5, fontWeight: "700" },
-  pkgDesc: { fontSize: 11, lineHeight: 15 },
-  pkgAction: { minWidth: 30, alignItems: "flex-end", justifyContent: "center", paddingTop: 2 },
-  installBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  installText: { fontSize: 11, fontWeight: "700" },
-  installAllBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    paddingVertical: 7,
-    borderRadius: 7,
-    borderWidth: 1,
-    marginTop: 2,
-  },
-  installAllText: { fontSize: 12, fontWeight: "700" },
+  sectionHeading: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginTop: 12 },
+  sectionSub: { fontSize: 11, marginTop: 1 },
 });
