@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import {
   GCASH_LABEL,
   GCASH_NUMBER,
@@ -92,7 +93,12 @@ export function SupportSection({ theme }: { theme: ThemeColors }) {
 
   return (
     <View>
-      <Text style={[styles.heading, { color: theme.textMuted }]}>SUPPORT THE PROJECT</Text>
+      <SettingsSectionHeader
+        theme={theme}
+        icon="heart-outline"
+        title="Support the Project"
+        subtitle="Keep the project going with a donation."
+      />
 
       <View style={[styles.card, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
         <View style={[styles.iconBox, { backgroundColor: `${theme.accentGold}1F` }]}>
@@ -174,13 +180,13 @@ export function SupportSection({ theme }: { theme: ThemeColors }) {
 }
 
 const styles = StyleSheet.create({
-  heading: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginTop: 6, marginBottom: 6 },
   card: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
+    marginTop: 4,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },

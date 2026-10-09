@@ -1,5 +1,5 @@
 import React from "react";
-import { View, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
 
@@ -7,11 +7,12 @@ export type SettingsTabId = "general" | "editor" | "environment" | "shortcuts" |
 
 interface SettingsTab {
   id: SettingsTabId;
-  /** Label kept for accessibility only — the bar renders icons, no text. */
+  /** Label shown under the icon — also the accessibility name. */
   title: string;
   icon: any;
 }
 
+// Same ids, order and icons as before — only the presentation changed.
 const TABS: SettingsTab[] = [
   { id: "general", title: "General", icon: "options-outline" },
   { id: "editor", title: "Editor", icon: "code-slash-outline" },
@@ -27,6 +28,12 @@ interface SettingsTabBarProps {
   theme: ThemeColors;
 }
 
+/**
+ * Reference tab row: icon with its label beneath it, the active tab tinted with
+ * the accent. Six fixed columns at flex:1; each label is a single clipped line
+ * (ellipsizeMode "tail") so a long one truncates inside its own column instead
+ * of pushing the row off the edge on a narrow screen.
+ */
 export function SettingsTabBar({ activeTab, onSelectTab, theme }: SettingsTabBarProps) {
   return (
     <View style={[styles.tabBar, { borderColor: theme.border }]}>
@@ -35,24 +42,24 @@ export function SettingsTabBar({ activeTab, onSelectTab, theme }: SettingsTabBar
         return (
           <TouchableOpacity
             key={tab.id}
-            style={[
-              styles.tab,
-              isActive && {
-                backgroundColor: `${theme.accent}22`,
-                borderColor: `${theme.accent}55`,
-              },
-            ]}
+            style={styles.tab}
             onPress={() => onSelectTab(tab.id)}
             activeOpacity={0.7}
             accessibilityRole="tab"
             accessibilityLabel={tab.title}
             accessibilityState={{ selected: isActive }}
           >
-            <Ionicons
-              name={tab.icon}
-              size={21}
-              color={isActive ? theme.accent : theme.textMuted}
-            />
+            <View style={[styles.iconWrap, isActive && { backgroundColor: `${theme.accent}1F` }]}>
+              <Ionicons name={tab.icon} size={20} color={isActive ? theme.accent : theme.textMuted} />
+            </View>
+            <Text
+              style={[styles.label, { color: isActive ? theme.accent : theme.textMuted }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {tab.title}
+            </Text>
+            {isActive && <View style={[styles.underline, { backgroundColor: theme.accent }]} />}
           </TouchableOpacity>
         );
       })}
@@ -63,19 +70,34 @@ export function SettingsTabBar({ activeTab, onSelectTab, theme }: SettingsTabBar
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
-    // 6 tabs at flex:1 — a tighter gap keeps each touch target as wide as
-    // possible inside the sheet's 20pt horizontal padding.
-    gap: 4,
-    paddingVertical: 6,
     borderBottomWidth: 1,
+    paddingTop: 4,
+    gap: 4,
   },
   tab: {
     flex: 1,
-    height: 42,
+    alignItems: "center",
+    paddingBottom: 8,
+    gap: 3,
+  },
+  iconWrap: {
+    width: 38,
+    height: 34,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "transparent",
+  },
+  label: {
+    fontSize: 10,
+    fontWeight: "600",
+    maxWidth: "100%",
+  },
+  underline: {
+    position: "absolute",
+    left: 10,
+    right: 10,
+    bottom: 0,
+    height: 2,
+    borderRadius: 1,
   },
 });

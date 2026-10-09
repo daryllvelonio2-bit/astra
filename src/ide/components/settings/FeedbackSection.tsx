@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { ThemeColors } from "../../../theme/themeContext";
 import { loadWorkspaceRegistry } from "../../services/workspaceService";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import {
   FEEDBACK_MAX_CHARS,
   FEEDBACK_MAX_REPLY_TO,
@@ -123,7 +124,12 @@ export function FeedbackSection({ theme, workspaceId }: { theme: ThemeColors; wo
 
   return (
     <View>
-      <Text style={[styles.heading, { color: theme.textMuted }]}>SEND FEEDBACK</Text>
+      <SettingsSectionHeader
+        theme={theme}
+        icon="chatbubble-ellipses-outline"
+        title="Send Feedback"
+        subtitle="Report bugs or suggest improvements."
+      />
 
       <View style={[styles.card, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
         <TextInput
@@ -205,8 +211,7 @@ export function FeedbackSection({ theme, workspaceId }: { theme: ThemeColors; wo
 }
 
 const styles = StyleSheet.create({
-  heading: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginTop: 6, marginBottom: 6 },
-  card: { borderRadius: 10, borderWidth: 1, padding: 10, gap: 8 },
+  card: { borderRadius: 12, borderWidth: 1, padding: 10, gap: 8, marginTop: 4 },
   messageInput: {
     minHeight: 120,
     borderRadius: 8,

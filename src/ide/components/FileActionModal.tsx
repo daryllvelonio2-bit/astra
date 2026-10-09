@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, useWindowDimensions } from "react-native";
 import { FileNode } from "../types";
 import { useTheme } from "../../theme/themeContext";
 import { useAccurateKeyboard } from "../../theme/useAccurateKeyboard";
@@ -20,6 +20,10 @@ interface FileActionModalProps {
   onBackToOptions: () => void;
 }
 
+const EDGE = 12; // minimum clearance kept from every screen edge
+const OPTIONS_WIDTH = 170;
+const OPTIONS_HEIGHT_FALLBACK = 160; // first frame, before onLayout measures it
+
 export function FileActionModal({
   modalMode,
   selectedNode,
@@ -37,9 +41,22 @@ export function FileActionModal({
   const { theme } = useTheme();
   const { keyboardMouseMode } = useKeyboardMouseMode();
   const { keyboardOffset } = useAccurateKeyboard(16);
+  const { width: winW, height: winH } = useWindowDimensions();
+  // Measured size of the anchored options menu, so the clamp uses its real
+  // height instead of a guess. Seeded with the card's fixed width.
+  const [optionsSize, setOptionsSize] = React.useState({ w: OPTIONS_WIDTH, h: OPTIONS_HEIGHT_FALLBACK });
   if (modalMode === "none") return null;
 
   const isInputMode = modalMode === "rename" || modalMode === "add";
+
+  // The long-press options menu is anchored at the press point; clamp it
+  // inside the live window on BOTH axes so it can never be cut by the status
+  // bar or an edge — a landscape phone is short enough to push a hardcoded
+  // top clamp off the bottom of the screen.
+  const optionsW = optionsSize.w || OPTIONS_WIDTH;
+  const optionsH = optionsSize.h || OPTIONS_HEIGHT_FALLBACK;
+  const optionsLeft = Math.min(Math.max(menuPosition.x, EDGE), Math.max(winW - optionsW - EDGE, EDGE));
+  const optionsTop = Math.min(Math.max(menuPosition.y, EDGE), Math.max(winH - optionsH - EDGE, EDGE));
 
   return (
     <View
@@ -58,8 +75,18 @@ export function FileActionModal({
           styles.modalCard,
           isInputMode
             ? [styles.inputCard, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]
-            : { backgroundColor: theme.bgSecondary, borderColor: theme.border, top: menuPosition.y, left: menuPosition.x },
+            : { backgroundColor: theme.bgSecondary, borderColor: theme.border, top: optionsTop, left: optionsLeft },
         ]}
+        onLayout={
+          isInputMode
+            ? undefined
+            : (e) => {
+                const { width, height } = e.nativeEvent.layout;
+                setOptionsSize((prev) =>
+                  prev.w === width && prev.h === height ? prev : { w: width, h: height }
+                );
+              }
+        }
       >
         {modalMode === "options" && (
           <>

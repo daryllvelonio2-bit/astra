@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Switch, DevSettings, NativeModules } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, DevSettings, NativeModules } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppTheme, BottomTabVisibility, ToggleableBottomTab } from "../../services/configService";
 import { ThemeColors, THEMES } from "../../../theme/themeContext";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
+import { SettingsOptionCard } from "./SettingsOptionCard";
 import {
   getInstalledThemes,
   getInstalledIconThemes,
@@ -74,7 +76,12 @@ export function GeneralSection({
   return (
     <View style={styles.container}>
       {/* 1. Theme Palette */}
-      <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>THEME & PALETTE</Text>
+      <SettingsSectionHeader
+        theme={theme}
+        icon="color-palette-outline"
+        title="Theme & Palette"
+        subtitle="Choose your preferred visual style."
+      />
       <View style={styles.themeGrid}>
         {THEME_OPTIONS.map((t) => {
           const isSelected = activeTheme === t.id;
@@ -83,21 +90,35 @@ export function GeneralSection({
             <TouchableOpacity
               key={t.id}
               style={[
-                styles.themeButton,
+                styles.themeCard,
                 {
                   backgroundColor: theme.bgPrimary,
                   borderColor: isSelected ? accentColor : theme.border,
                 },
-                isSelected && { borderWidth: 1.5 },
               ]}
               onPress={() => onSelectTheme(t.id)}
               activeOpacity={0.7}
             >
-              <View style={[styles.themeIconBox, { backgroundColor: `${accentColor}20` }]}>
-                <Ionicons name={t.icon} size={15} color={accentColor} />
+              <View
+                style={[
+                  styles.themePreview,
+                  { backgroundColor: `${accentColor}18`, borderColor: `${accentColor}33` },
+                ]}
+              >
+                <Ionicons name={t.icon} size={20} color={accentColor} />
               </View>
-              <Text style={[styles.themeBtnText, { color: theme.textPrimary }]}>{t.title}</Text>
-              {isSelected && <Ionicons name="checkmark-circle" size={14} color={accentColor} />}
+              <View style={styles.themeFooter}>
+                <Text style={[styles.themeName, { color: theme.textPrimary }]} numberOfLines={1}>
+                  {t.title}
+                </Text>
+                {isSelected ? (
+                  <View style={[styles.checkDot, { backgroundColor: accentColor }]}>
+                    <Ionicons name="checkmark" size={11} color={theme.sendButtonIcon} />
+                  </View>
+                ) : (
+                  <View style={[styles.radioDot, { borderColor: theme.borderLight }]} />
+                )}
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -105,139 +126,139 @@ export function GeneralSection({
 
       {/* Installed Extension Themes */}
       {extensionThemes.length > 0 && (
-        <View style={[styles.groupedCard, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
-          {extensionThemes.map((ext, idx) => {
-            const isSelected = activeTheme === ext.id;
-            return (
-              <TouchableOpacity
-                key={ext.id}
-                style={[
-                  styles.listRow,
-                  idx > 0 && { borderTopWidth: 1, borderTopColor: theme.border },
-                ]}
-                onPress={() => onSelectTheme(ext.id)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.rowIconBox, { backgroundColor: `${theme.accent}18` }]}>
-                  <Ionicons name="color-palette-outline" size={15} color={theme.accent} />
-                </View>
-                <Text style={[styles.rowLabel, { color: theme.textPrimary }]} numberOfLines={1}>
-                  {ext.label}
-                </Text>
-                {isSelected && <Ionicons name="checkmark-circle" size={16} color={theme.accent} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <>
+          <SettingsSectionHeader
+            theme={theme}
+            icon="extension-puzzle-outline"
+            title="Installed Themes"
+            subtitle="Extra themes added from extensions."
+          />
+          <View style={styles.stack}>
+            {extensionThemes.map((ext) => {
+              const isSelected = activeTheme === ext.id;
+              return (
+                <SettingsOptionCard
+                  key={ext.id}
+                  theme={theme}
+                  icon="color-palette-outline"
+                  title={ext.label}
+                  control={isSelected ? "check" : "radio"}
+                  selected={isSelected}
+                  onPress={() => onSelectTheme(ext.id)}
+                />
+              );
+            })}
+          </View>
+        </>
       )}
 
       {/* File Icon Themes */}
-      <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>FILE ICONS</Text>
-      <View style={[styles.groupedCard, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
-        <TouchableOpacity
-          style={styles.listRow}
+      <SettingsSectionHeader
+        theme={theme}
+        icon="folder-open-outline"
+        title="File Icons"
+        subtitle="Select the icon theme for your files and folders."
+      />
+      <View style={styles.stack}>
+        <SettingsOptionCard
+          theme={theme}
+          icon="images-outline"
+          title="Default Language Icons"
+          subtitle="Built-in icons for common file types."
+          control={!activeIconThemeId ? "check" : "radio"}
+          selected={!activeIconThemeId}
           onPress={async () => {
             await setActiveIconTheme(undefined);
             setActiveIconThemeId(undefined);
           }}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.rowIconBox, { backgroundColor: `${theme.accent}18` }]}>
-            <Ionicons name="images-outline" size={15} color={theme.accent} />
-          </View>
-          <Text style={[styles.rowLabel, { color: theme.textPrimary }]}>Default Language Icons</Text>
-          {!activeIconThemeId && <Ionicons name="checkmark-circle" size={16} color={theme.accent} />}
-        </TouchableOpacity>
-
+        />
         {iconThemes.map((it) => {
           const isSelected = activeIconThemeId === it.id;
           return (
-            <TouchableOpacity
+            <SettingsOptionCard
               key={it.id}
-              style={[styles.listRow, { borderTopWidth: 1, borderTopColor: theme.border }]}
+              theme={theme}
+              icon="sparkles-outline"
+              title={it.label}
+              subtitle="Installed icon theme"
+              control={isSelected ? "check" : "radio"}
+              selected={isSelected}
               onPress={async () => {
                 await setActiveIconTheme(it.id);
                 setActiveIconThemeId(it.id);
               }}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.rowIconBox, { backgroundColor: `${theme.accent}18` }]}>
-                <Ionicons name="sparkles-outline" size={15} color={theme.accent} />
-              </View>
-              <Text style={[styles.rowLabel, { color: theme.textPrimary }]} numberOfLines={1}>
-                {it.label}
-              </Text>
-              {isSelected && <Ionicons name="checkmark-circle" size={16} color={theme.accent} />}
-            </TouchableOpacity>
+            />
           );
         })}
       </View>
 
       {/* 2. Bottom Navigation Group */}
-      <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>BOTTOM BAR NAVIGATION</Text>
-      <View style={[styles.groupedCard, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
-        {TAB_ROWS.map((row, idx) => {
+      <SettingsSectionHeader
+        theme={theme}
+        icon="apps-outline"
+        title="Bottom Bar Navigation"
+        subtitle="Choose which tabs appear in the bottom bar."
+      />
+      <View style={styles.stack}>
+        {TAB_ROWS.map((row) => {
           const enabled = bottomTabs[row.id];
           const isLastOn = enabled && TAB_ROWS.filter((r) => bottomTabs[r.id]).length <= 1;
           return (
-            <View
+            <SettingsOptionCard
               key={row.id}
-              style={[
-                styles.listRow,
-                idx > 0 && { borderTopWidth: 1, borderTopColor: theme.border },
-              ]}
-            >
-              <View style={[styles.rowIconBox, { backgroundColor: `${theme.accent}18` }]}>
-                <Ionicons name={row.icon} size={15} color={theme.accent} />
-              </View>
-              <Text style={[styles.rowLabel, { color: theme.textPrimary }]}>{row.title}</Text>
-              <Switch
-                value={enabled}
-                onValueChange={(v) => handleToggleTab(row.id, v)}
-                disabled={isLastOn}
-                trackColor={{ false: theme.bgTertiary, true: theme.accent }}
-                thumbColor={enabled ? theme.sendButtonIcon : theme.textMuted}
-              />
-            </View>
+              theme={theme}
+              icon={row.icon}
+              title={row.title}
+              subtitle={`Show ${row.title} in the bottom bar.`}
+              control="switch"
+              switchValue={enabled}
+              switchDisabled={isLastOn}
+              onSwitchChange={(v) => handleToggleTab(row.id, v)}
+            />
           );
         })}
       </View>
 
       {/* 3. Onboarding Action */}
       {onRerunStartup && (
-        <View style={{ marginTop: 4 }}>
-          <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>ONBOARDING</Text>
-          <TouchableOpacity
-            style={[styles.groupedCard, styles.listRow, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}
+        <>
+          <SettingsSectionHeader
+            theme={theme}
+            icon="sparkles-outline"
+            title="Onboarding"
+            subtitle="Replay the first-run setup."
+          />
+          <SettingsOptionCard
+            theme={theme}
+            icon="sparkles-outline"
+            title="Re-run Setup Wizard"
+            subtitle="Walk through setup again from the beginning."
+            control="chevron"
             onPress={onRerunStartup}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.rowIconBox, { backgroundColor: `${theme.accent}18` }]}>
-              <Ionicons name="sparkles-outline" size={15} color={theme.accent} />
-            </View>
-            <Text style={[styles.rowLabel, { color: theme.textPrimary }]}>Re-run Setup Wizard</Text>
-            <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
-          </TouchableOpacity>
-        </View>
+          />
+        </>
       )}
 
       {/* 4. Live Development over Wi-Fi (__DEV__ only) */}
       {__DEV__ && (
-        <View style={{ marginTop: 4 }}>
-          <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>DEVELOPER TOOLS</Text>
-          <View style={[styles.groupedCard, { backgroundColor: theme.bgPrimary, borderColor: theme.border, padding: 12, gap: 10 }]}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View style={[styles.rowIconBox, { backgroundColor: `${theme.accent}18` }]}>
+        <>
+          <SettingsSectionHeader
+            theme={theme}
+            icon="construct-outline"
+            title="Developer Tools"
+            subtitle="Debug helpers for development builds."
+          />
+          <View style={[styles.devCard, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
+            <View style={styles.devHeader}>
+              <View style={[styles.iconTile, { backgroundColor: `${theme.accent}18`, borderColor: `${theme.accent}2E` }]}>
                 <Ionicons name="wifi-outline" size={16} color={theme.accent} />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={styles.devTextCol}>
                 <Text style={[styles.rowLabel, { color: theme.textPrimary }]}>Wi-Fi Fast Refresh</Text>
-                <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>
-                  Host IP: 192.168.43.106:8081
-                </Text>
+                <Text style={[styles.rowSub, { color: theme.textMuted }]}>Host IP: 192.168.43.106:8081</Text>
               </View>
             </View>
-            <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={styles.devButtons}>
               <TouchableOpacity
                 style={[styles.devBtn, { backgroundColor: `${theme.accent}18`, borderColor: `${theme.accent}40` }]}
                 onPress={() => {
@@ -264,7 +285,7 @@ export function GeneralSection({
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </>
       )}
     </View>
   );
@@ -272,6 +293,46 @@ export function GeneralSection({
 
 const styles = StyleSheet.create({
   container: { gap: 8, paddingBottom: 24 },
+  stack: { gap: 8 },
+  themeGrid: { flexDirection: "row", gap: 8 },
+  themeCard: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 8,
+    gap: 8,
+  },
+  themePreview: {
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  themeFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 4,
+    paddingHorizontal: 2,
+  },
+  themeName: { flex: 1, fontSize: 12, fontWeight: "700" },
+  checkDot: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  radioDot: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5 },
+  iconTile: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  devCard: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 10 },
+  devHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  devTextCol: { flex: 1 },
+  rowLabel: { fontSize: 13, fontWeight: "700" },
+  rowSub: { fontSize: 11, marginTop: 1 },
+  devButtons: { flexDirection: "row", gap: 8 },
   devBtn: {
     flex: 1,
     flexDirection: "row",
@@ -282,33 +343,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-  devBtnText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  sectionHeading: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginTop: 6, marginBottom: 2 },
-  themeGrid: { flexDirection: "row", gap: 8 },
-  themeButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  themeIconBox: { width: 24, height: 24, borderRadius: 6, alignItems: "center", justifyContent: "center" },
-  themeBtnText: { fontSize: 12, fontWeight: "600" },
-  groupedCard: { borderRadius: 10, borderWidth: 1, overflow: "hidden" },
-  listRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 10,
-  },
-  rowIconBox: { width: 28, height: 28, borderRadius: 6, alignItems: "center", justifyContent: "center" },
-  rowLabel: { flex: 1, fontSize: 13, fontWeight: "600" },
+  devBtnText: { fontSize: 12, fontWeight: "600" },
 });

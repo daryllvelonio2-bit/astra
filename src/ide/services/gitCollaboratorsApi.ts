@@ -1,5 +1,11 @@
 import { getGitHubToken } from "./gitHubApi";
-import { formatPermissionLabel, humanMessageForStatus } from "./gitCollaboratorModel";
+import {
+  acceptedCollaboratorRow,
+  humanMessageForInvitationStatus,
+  humanMessageForStatus,
+  pendingInvitationRow,
+  type AccessRow,
+} from "./gitCollaboratorModel";
 import {
   canManageVisibility,
   humanMessageForVisibilityStatus,
@@ -26,17 +32,12 @@ export type { GitHubRepoRef } from "./gitRemoteRef";
 const API_BASE = "https://api.github.com";
 const API_VERSION = "2022-11-28";
 
-export interface CollaboratorRow {
-  login: string;
-  avatarUrl: string;
-  /** GitHub role key: admin | maintain | write | push | triage | read | pull. */
-  permissionKey: string;
-  /** Display label, e.g. "Write". */
-  permissionLabel: string;
-  /** True for a pending (not yet accepted) invitation. */
-  isPending: boolean;
-  invitationId: number | null;
-}
+/**
+ * One list row: an accepted collaborator or a pending invitation. The shape
+ * (and the kind discriminator + invitation id it needs) is owned by the pure
+ * model so it is unit-testable without the network.
+ */
+export type CollaboratorRow = AccessRow;
 
 export interface AccessResult {
   ok: boolean;
@@ -110,42 +111,6 @@ async function ghRequest(method: string, path: string, body?: unknown): Promise<
   }
 }
 
-function permissionKeyFor(json: any): string {
-  if (typeof json?.role_name === "string" && json.role_name) return json.role_name;
-  if (typeof json?.permissions === "string" && json.permissions) return json.permissions;
-  const p = json?.permissions || {};
-  if (p.admin) return "admin";
-  if (p.maintain) return "maintain";
-  if (p.push) return "write";
-  if (p.triage) return "triage";
-  if (p.pull) return "read";
-  return "read";
-}
-
-function mapCollaborator(json: any): CollaboratorRow {
-  const key = permissionKeyFor(json);
-  return {
-    login: json?.login || "",
-    avatarUrl: json?.avatar_url || "",
-    permissionKey: key,
-    permissionLabel: formatPermissionLabel(key),
-    isPending: false,
-    invitationId: null,
-  };
-}
-
-function mapInvitation(json: any): CollaboratorRow {
-  const key = permissionKeyFor(json);
-  return {
-    login: json?.invitee?.login || "",
-    avatarUrl: json?.invitee?.avatar_url || "",
-    permissionKey: key,
-    permissionLabel: formatPermissionLabel(key),
-    isPending: true,
-    invitationId: typeof json?.id === "number" ? json.id : null,
-  };
-}
-
 /** People with direct access to the repo. */
 export async function listCollaborators(
   owner: string,
@@ -157,7 +122,7 @@ export async function listCollaborators(
   );
   if (!res.ok) return { ok: false, data: [], error: humanMessageForStatus(res.status) };
   const list = Array.isArray(res.json) ? res.json : [];
-  return { ok: true, data: list.map(mapCollaborator) };
+  return { ok: true, data: list.map(acceptedCollaboratorRow) };
 }
 
 /** Pending invitations that have not been accepted yet. */
@@ -168,7 +133,7 @@ export async function listInvitations(
   const res = await ghRequest("GET", `${ownerRepoPath(owner, repo)}/invitations`);
   if (!res.ok) return { ok: false, data: [], error: humanMessageForStatus(res.status) };
   const list = Array.isArray(res.json) ? res.json : [];
-  return { ok: true, data: list.map(mapInvitation) };
+  return { ok: true, data: list.map(pendingInvitationRow) };
 }
 
 /**
@@ -209,11 +174,10 @@ export async function addCollaborator(
 }
 
 /**
- * Remove a collaborator's access. Success is 204. The same call is used for a
- * pending-invite row (the collaborators endpoint is the one this feature
- * defines); if GitHub rejects it for a not-yet-accepted invite, the mapped
- * human error is shown — cancelling an invitation has its own endpoint and is
- * outside this feature's scope.
+ * Remove an ACCEPTED collaborator's access. Success is 204. Only valid for a
+ * user who already accepted — a pending invitee is not a collaborator yet, so
+ * this endpoint does not act on them; cancel an invitation with
+ * cancelInvitation below instead.
  */
 export async function removeCollaborator(owner: string, repo: string, username: string): Promise<MutationResult> {
   const user = (username || "").trim().replace(/^@/, "");
@@ -221,6 +185,25 @@ export async function removeCollaborator(owner: string, repo: string, username: 
   const res = await ghRequest("DELETE", `${ownerRepoPath(owner, repo)}/collaborators/${encodeURIComponent(user)}`);
   if (res.ok) return { ok: true, status: res.status };
   return { ok: false, status: res.status, error: humanMessageForStatus(res.status) };
+}
+
+/**
+ * Cancel a PENDING invitation. Success is 204. Takes the invitation's own
+ * numeric id (from listInvitations) — a login cannot identify an invitation,
+ * so the id is what the row must carry. A failure is one human sentence for
+ * the invitations endpoint; a raw JSON error body never leaves this module.
+ */
+export async function cancelInvitation(
+  owner: string,
+  repo: string,
+  invitationId: number
+): Promise<MutationResult> {
+  if (!Number.isInteger(invitationId) || invitationId <= 0) {
+    return { ok: false, status: -1, error: "This invitation has no id, so it cannot be cancelled." };
+  }
+  const res = await ghRequest("DELETE", `${ownerRepoPath(owner, repo)}/invitations/${invitationId}`);
+  if (res.ok) return { ok: true, status: res.status };
+  return { ok: false, status: res.status, error: humanMessageForInvitationStatus(res.status) };
 }
 
 /**

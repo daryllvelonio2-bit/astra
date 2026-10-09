@@ -11,6 +11,7 @@ import { useKeyboardMouseMode } from "../context/KeyboardMouseContext";
 import { FileExplorerRow } from "./FileExplorerRow";
 import { useVisibleExplorerRows, VisibleExplorerRow } from "./useVisibleExplorerRows";
 import { useLazyExplorerTree } from "./useLazyExplorerTree";
+import { FileExplorerAddMenu } from "./FileExplorerAddMenu";
 
 interface FileExplorerProps {
   projectName?: string;
@@ -57,6 +58,22 @@ function FileExplorerInner({
   // "name/" suffix convention, which nothing on screen explained.
   const [createKind, setCreateKind] = React.useState<"file" | "folder">("file");
   const [newMenu, setNewMenu] = React.useState(false);
+  const addBtnRef = React.useRef<View>(null);
+  const [addAnchor, setAddAnchor] = React.useState<{ x: number; y: number; width: number; height: number } | null>(null);
+
+  // The + menu now lives in a screen-level Modal (FileExplorerAddMenu), so it
+  // escapes the sidebar's overflow:hidden wrapper. Measure the button in window
+  // coordinates so the menu can anchor to it and clamp itself onto the screen.
+  const openAddMenu = React.useCallback(() => {
+    if (newMenu) {
+      setNewMenu(false);
+      return;
+    }
+    addBtnRef.current?.measureInWindow((x, y, width, height) => {
+      setAddAnchor({ x, y, width, height });
+      setNewMenu(true);
+    });
+  }, [newMenu]);
 
   // Lazy tree (own hook): shallow base + fetch-on-expand overlays.
   const { mergedFiles, expandFolder } = useLazyExplorerTree(
@@ -268,38 +285,22 @@ function FileExplorerInner({
             on the list background, which is why "i cant make a .env file here"
             happened at all. */}
         <TouchableOpacity
+          ref={addBtnRef}
           style={{ width: 26, height: 26, alignItems: "center", justifyContent: "center" }}
-          onPress={() => setNewMenu((v) => !v)}
+          onPress={openAddMenu}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityLabel="New file or folder"
         >
           <Ionicons name="add" size={19} color={newMenu ? theme.accent : theme.textSecondary} />
         </TouchableOpacity>
       </View>
-      {newMenu && (
-        <View
-          style={{
-            position: "absolute", top: 28, right: 8, zIndex: 60, elevation: 9,
-            minWidth: 156, borderRadius: 8, borderWidth: 1, overflow: "hidden",
-            backgroundColor: theme.bgSecondary, borderColor: theme.border,
-          }}
-        >
-          <TouchableOpacity
-            style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 11 }}
-            onPress={() => { setCreateKind("file"); setInlineName(""); setNewMenu(false); setIsCreating(true); }}
-          >
-            <Ionicons name="document-text-outline" size={15} color={theme.accent} />
-            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textPrimary }}>New file</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderTopWidth: 1, borderTopColor: theme.border }}
-            onPress={() => { setCreateKind("folder"); setInlineName(""); setNewMenu(false); setIsCreating(true); }}
-          >
-            <Ionicons name="folder-outline" size={15} color={theme.accentGold} />
-            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textPrimary }}>New folder</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <FileExplorerAddMenu
+        visible={newMenu}
+        anchor={addAnchor}
+        onClose={() => setNewMenu(false)}
+        onSelectFile={() => { setCreateKind("file"); setInlineName(""); setIsCreating(true); }}
+        onSelectFolder={() => { setCreateKind("folder"); setInlineName(""); setIsCreating(true); }}
+      />
       {isCreating && (
         <View style={[styles.inlineCreateRow, { backgroundColor: theme.bgInput, borderColor: theme.accent }]}>
           <Ionicons

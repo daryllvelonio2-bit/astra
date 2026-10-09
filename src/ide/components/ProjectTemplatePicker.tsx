@@ -143,7 +143,7 @@ export function ProjectTemplatePicker({
                   {t.name}
                 </Text>
                 <Text style={[styles.rowDesc, { color: theme.textMuted }]} numberOfLines={1}>
-                  {t.description}
+                  {t.description ? t.description : null}
                 </Text>
                 {disabled && (
                   <View style={styles.manualRow}>
@@ -162,7 +162,7 @@ export function ProjectTemplatePicker({
       {/* Selected template summary — reads the same single selection as before. */}
       <View style={[styles.summary, { borderTopColor: theme.border }]}>
         <Text style={[styles.desc, { color: theme.textSecondary }]} numberOfLines={1}>
-          {selected.description}
+          {selected.description ? selected.description : null}
         </Text>
 
         {selected.manual ? (

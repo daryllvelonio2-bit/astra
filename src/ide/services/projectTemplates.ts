@@ -89,7 +89,7 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
   {
     id: BLANK_TEMPLATE_ID,
     name: "Blank project",
-    description: "An empty folder — no files, nothing installed, one tap.",
+    description: "",
     group: "None",
     tools: [],
     commands: [],

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { showAppDialog } from "../../services/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { AstraLogo } from "../AstraLogo";
@@ -14,6 +14,8 @@ import {
   ProvisioningStatus,
   DEFAULT_PROVISIONING_STATUS,
 } from "../../../../modules/linux-runner/src";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
+import { SettingsOptionCard } from "./SettingsOptionCard";
 import { STAGES } from "./environmentStages";
 import { EnvironmentStageCard } from "./EnvironmentStageCard";
 import { OptionalPackagesSection } from "./OptionalPackagesSection";
@@ -119,26 +121,29 @@ export function EnvironmentSection({ theme }: EnvironmentSectionProps) {
   return (
     <View style={styles.container}>
       {/* 0. Auto-download toggle */}
-      <View style={[styles.autoRow, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}>
-        <View style={styles.autoInfo}>
-          <Text style={[styles.autoTitle, { color: theme.textPrimary }]}>
-            Auto-download toolchain
-          </Text>
-          <Text style={[styles.autoDesc, { color: theme.textSecondary }]}>
-            {autoDownload
-              ? "Base packages download on launch"
-              : "Off — you install from the lists below"}
-          </Text>
-        </View>
-        <Switch
-          value={autoDownload}
-          onValueChange={handleToggleAutoDownload}
-          trackColor={{ false: theme.border, true: `${theme.accentGreen}80` }}
-          thumbColor={autoDownload ? theme.accentGreen : theme.textMuted}
-        />
-      </View>
+      <SettingsSectionHeader
+        theme={theme}
+        icon="cloud-download-outline"
+        title="Toolchain Downloads"
+        subtitle="Control how the Linux base packages are fetched."
+      />
+      <SettingsOptionCard
+        theme={theme}
+        icon="cloud-download-outline"
+        title="Auto-download toolchain"
+        subtitle={autoDownload ? "Base packages download on launch" : "Off — you install from the lists below"}
+        control="switch"
+        switchValue={autoDownload}
+        onSwitchChange={handleToggleAutoDownload}
+      />
 
       {/* 1. Main Status Banner */}
+      <SettingsSectionHeader
+        theme={theme}
+        icon="server-outline"
+        title="Environment Status"
+        subtitle="Live state of the Linux sandbox."
+      />
       <View
         style={[
           styles.card,
@@ -269,12 +274,12 @@ export function EnvironmentSection({ theme }: EnvironmentSectionProps) {
           <View style={styles.buttonRow}>
             {status.isProvisioning && (
               <TouchableOpacity
-                style={[styles.smallBtn, { backgroundColor: "#ef444420", borderColor: "#ef444440" }]}
+                style={[styles.smallBtn, { backgroundColor: `${theme.accentRed}20`, borderColor: `${theme.accentRed}40` }]}
                 onPress={handleCancel}
                 disabled={isBusy}
               >
-                <Ionicons name="stop-circle-outline" size={14} color="#f87171" />
-                <Text style={[styles.btnText, { color: "#f87171" }]}>Stop</Text>
+                <Ionicons name="stop-circle-outline" size={14} color={theme.accentRed} />
+                <Text style={[styles.btnText, { color: theme.accentRed }]}>Stop</Text>
               </TouchableOpacity>
             )}
 
@@ -296,9 +301,12 @@ export function EnvironmentSection({ theme }: EnvironmentSectionProps) {
       </View>
 
       {/* 2. Four Provisioning Stages */}
-      <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>
-        PROVISIONING STAGES
-      </Text>
+      <SettingsSectionHeader
+        theme={theme}
+        icon="list-outline"
+        title="Provisioning Stages"
+        subtitle="The four stages of the base environment setup."
+      />
 
       {STAGES.map((st) => (
         <EnvironmentStageCard
@@ -328,10 +336,10 @@ export function EnvironmentSection({ theme }: EnvironmentSectionProps) {
             <Ionicons name={showLogs ? "chevron-up" : "chevron-down"} size={14} color={theme.textMuted} />
           </TouchableOpacity>
           {showLogs && (
-            <View style={[styles.logConsole, { backgroundColor: "#090a0d", borderColor: theme.border }]}>
+            <View style={[styles.logConsole, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}>
               <ScrollView style={styles.logScroll} nestedScrollEnabled>
                 {logs.slice(-10).map((line, idx) => (
-                  <Text key={idx} style={styles.logLine} numberOfLines={2}>
+                  <Text key={idx} style={[styles.logLine, { color: theme.textSecondary }]} numberOfLines={2}>
                     {line}
                   </Text>
                 ))}
@@ -380,18 +388,6 @@ export function EnvironmentSection({ theme }: EnvironmentSectionProps) {
 
 const styles = StyleSheet.create({
   container: { gap: 12, paddingBottom: 24 },
-  autoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  autoInfo: { flex: 1, paddingRight: 8 },
-  autoTitle: { fontSize: 13, fontWeight: "700" },
-  autoDesc: { fontSize: 11, marginTop: 1 },
   card: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 10 },
   statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   statusLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
@@ -411,7 +407,6 @@ const styles = StyleSheet.create({
   buttonRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   smallBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
   btnText: { fontSize: 11, fontWeight: "600" },
-  sectionHeading: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginTop: 4 },
   logSection: { gap: 4 },
   logToggleHeader: {
     flexDirection: "row",
@@ -433,7 +428,7 @@ const styles = StyleSheet.create({
   },
   logConsole: { borderRadius: 8, borderWidth: 1, padding: 8, marginTop: 4 },
   logScroll: { maxHeight: 100 },
-  logLine: { fontFamily: "monospace", fontSize: 10, color: "#94a3b8", lineHeight: 14 },
+  logLine: { fontFamily: "monospace", fontSize: 10, lineHeight: 14 },
   diagBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
   diagItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   diagText: { fontSize: 11, fontWeight: "500" },

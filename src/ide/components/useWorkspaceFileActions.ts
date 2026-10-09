@@ -52,10 +52,10 @@ export function useWorkspaceFileActions({
 
   const handleLongPressNode = useCallback((node: FileNode, coords: { x: number; y: number }) => {
     setSelectedNode(node);
-    setMenuPosition({
-      x: Math.min(Math.max(coords.x, 10), 180),
-      y: Math.min(coords.y, 450),
-    });
+    // Store the raw press point; FileActionModal clamps it against the live
+    // window. The old hardcoded 180/450 offsets knew nothing about the actual
+    // display and let the menu drift off the bottom of a short landscape screen.
+    setMenuPosition({ x: coords.x, y: coords.y });
     setModalMode("options");
   }, []);
 

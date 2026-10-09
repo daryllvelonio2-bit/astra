@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "rea
 import { showAppDialog } from "../../services/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import {
   executeCommand,
   installPackages,
@@ -365,20 +366,21 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>
-        CORE RUNTIME PACKAGES
-      </Text>
-      <Text style={[styles.sectionSub, { color: theme.textMuted }]}>
-        Essential developer utilities and compilers for the Linux environment. Auto-installed during setup unless disabled above.
-      </Text>
+      <SettingsSectionHeader
+        theme={theme}
+        icon="cube-outline"
+        title="Core Runtime Packages"
+        subtitle="Essential compilers and utilities for the Linux environment."
+      />
       {REQUIRED_GROUPS.map(renderGroup)}
 
-      <Text style={[styles.sectionHeading, { color: theme.textMuted, marginTop: 12 }]}>
-        OPTIONAL TOOLS & RUNTIMES
-      </Text>
-      <Text style={[styles.sectionSub, { color: theme.textMuted }]}>
-        On-demand developer toolchains installed outside the base environment.
-      </Text>
+      <SettingsSectionHeader
+        theme={theme}
+        icon="download-outline"
+        title="Optional Tools & Runtimes"
+        subtitle="On-demand toolchains installed outside the base environment."
+        style={styles.spacedHeader}
+      />
       {OPTIONAL_GROUPS.map(renderGroup)}
     </View>
   );
@@ -386,8 +388,7 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
 
 const styles = StyleSheet.create({
   container: { gap: 8 },
-  sectionHeading: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginTop: 4 },
-  sectionSub: { fontSize: 11, marginTop: -4 },
+  spacedHeader: { marginTop: 12 },
   groupCard: { borderRadius: 10, borderWidth: 1, overflow: "hidden" },
   groupHeader: {
     flexDirection: "row",

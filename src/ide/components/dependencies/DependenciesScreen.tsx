@@ -34,6 +34,8 @@ export function DependenciesScreen({ provisioningActive = false }: DependenciesS
   const [installed, setInstalled] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [probing, setProbing] = useState(true);
+  // Empty map => every category's `collapsed[id]` is undefined => expanded.
+  // All sections start EXPANDED; a header tap can only hide one by choice.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const refresh = useCallback(async () => {

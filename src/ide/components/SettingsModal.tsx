@@ -133,7 +133,9 @@ export function SettingsModal({ visible, onClose, workspaceId, onSyncWorkspace, 
           </View>
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <Ionicons name="settings-sharp" size={20} color={theme.accent} />
+              <View style={[styles.headerIcon, { backgroundColor: theme.accent }]}>
+                <Ionicons name="settings-sharp" size={16} color={theme.sendButtonIcon} />
+              </View>
               <Text style={[styles.title, { color: theme.textPrimary }]}>Settings</Text>
             </View>
             <View style={styles.headerRight}>
@@ -229,6 +231,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerIcon: { width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 10 },
   title: { fontSize: 17, fontWeight: "700" },
   savedHint: { flexDirection: "row", alignItems: "center", gap: 3 },

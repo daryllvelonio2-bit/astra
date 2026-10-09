@@ -12,9 +12,13 @@ import { DependenciesScreen } from "../dependencies/DependenciesScreen";
  * what the app can install for it. No section heading above it: the row's own
  * title is the only heading, and it sits flat against the settings list.
  *
- * The screen is mounted only while the row is open: opening starts its own
- * one-shot probe, closing unmounts it and discards that state — so nothing is
- * left running and nothing installs on its own.
+ * It starts EXPANDED, so the tools are on screen the moment the settings tab
+ * lands — nothing is hidden behind a tap. The header row stays as a collapse
+ * control for when the user is done with the (long) list.
+ *
+ * Mounting the screen starts its own one-shot probe; collapsing unmounts it and
+ * discards that state — so nothing is left running and nothing installs on its
+ * own.
  */
 
 interface DependenciesSectionProps {
@@ -24,7 +28,9 @@ interface DependenciesSectionProps {
 }
 
 export function DependenciesSection({ theme, provisioningActive }: DependenciesSectionProps) {
-  const [open, setOpen] = useState(false);
+  // Open on land: the dependencies are visible without a tap. The row remains a
+  // collapse control so a user who is finished can tuck the long list away.
+  const [open, setOpen] = useState(true);
 
   return (
     <View style={styles.container}>
@@ -36,7 +42,9 @@ export function DependenciesSection({ theme, provisioningActive }: DependenciesS
         accessibilityLabel="Development dependencies"
         accessibilityState={{ expanded: open }}
       >
-        <Ionicons name="cube-outline" size={16} color={theme.accent} />
+        <View style={[styles.iconTile, { backgroundColor: `${theme.accent}18`, borderColor: `${theme.accent}2E` }]}>
+          <Ionicons name="cube-outline" size={16} color={theme.accent} />
+        </View>
         <View style={styles.titleCol}>
           <Text style={[styles.title, { color: theme.textPrimary }]} numberOfLines={1}>
             Development Dependencies
@@ -58,11 +66,19 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    borderRadius: 8,
+    gap: 10,
+    borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  iconTile: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   titleCol: { flex: 1 },
   title: { fontSize: 13, fontWeight: "700" },

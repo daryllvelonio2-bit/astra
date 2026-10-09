@@ -18,11 +18,12 @@ import { showAppDialog } from "../../services/appDialog";
 import {
   CollaboratorRow,
   addCollaborator,
+  cancelInvitation,
   listRepoAccess,
   parseRepoFullName,
   removeCollaborator,
 } from "../../services/gitCollaboratorsApi";
-import { repoFullName } from "../../services/gitCollaboratorModel";
+import { canRemoveRow, isPendingRow, repoFullName } from "../../services/gitCollaboratorModel";
 
 /**
  * Repository collaborators for the current workspace: who has access, who has
@@ -99,27 +100,36 @@ export function GitCollaboratorsModal({ visible, remoteUrl, onClose }: GitCollab
     setBusy(true);
     setError("");
     setNotice("");
-    const res = await removeCollaborator(ref.owner, ref.repo, row.login);
+    // Route by row kind: a pending invitee is not a collaborator yet, so the
+    // collaborators DELETE does nothing for them — cancelling needs the
+    // invitations endpoint with the row's own invitation id.
+    const pending = isPendingRow(row);
+    const res = pending
+      ? await cancelInvitation(ref.owner, ref.repo, row.invitationId as number)
+      : await removeCollaborator(ref.owner, ref.repo, row.login);
     if (!res.ok) {
       setBusy(false);
-      setError(res.error || "Could not remove that collaborator.");
+      setError(res.error || (pending ? "Could not cancel that invitation." : "Could not remove that collaborator."));
       return;
     }
+    // Re-read from the server so the list shown is provably the live state,
+    // not just the row we guessed we removed.
     await load();
     setBusy(false);
-    setNotice(row.isPending ? `Invitation for ${row.login} cancelled.` : `${row.login} removed.`);
+    setNotice(pending ? `Invitation for ${row.login} cancelled.` : `${row.login} removed.`);
   };
 
   const confirmRemove = (row: CollaboratorRow) => {
+    const pending = isPendingRow(row);
     showAppDialog({
-      title: row.isPending ? "Cancel invitation?" : `Remove ${row.login}?`,
-      message: row.isPending
+      title: pending ? "Cancel invitation?" : `Remove ${row.login}?`,
+      message: pending
         ? `${row.login} will no longer be invited to ${fullName}.`
         : `${row.login} will lose access to ${fullName}.`,
       buttons: [
         { text: "Cancel", style: "cancel" },
         {
-          text: row.isPending ? "Cancel invite" : "Remove",
+          text: pending ? "Cancel invite" : "Remove",
           style: "destructive",
           onPress: () => void doRemove(row),
         },
@@ -146,21 +156,24 @@ export function GitCollaboratorsModal({ visible, remoteUrl, onClose }: GitCollab
           <View style={[styles.badge, { backgroundColor: `${theme.accent}22`, borderColor: `${theme.accent}55` }]}>
             <Text style={[styles.badgeText, { color: theme.accent }]}>{item.permissionLabel}</Text>
           </View>
-          {item.isPending && (
+          {isPendingRow(item) && (
             <View style={[styles.badge, { backgroundColor: `${theme.accentGold}22`, borderColor: `${theme.accentGold}55` }]}>
               <Text style={[styles.badgeText, { color: theme.accentGold }]}>pending invite</Text>
             </View>
           )}
         </View>
       </View>
-      <TouchableOpacity
-        style={styles.removeBtn}
-        onPress={() => confirmRemove(item)}
-        disabled={busy}
-        accessibilityLabel={`Remove ${item.login}`}
-      >
-        <Octicons name="trash" size={14} color={theme.accentRed} />
-      </TouchableOpacity>
+      {/* No removal unless it can actually work: a pending row with no id cannot be cancelled. */}
+      {canRemoveRow(item) && (
+        <TouchableOpacity
+          style={styles.removeBtn}
+          onPress={() => confirmRemove(item)}
+          disabled={busy}
+          accessibilityLabel={isPendingRow(item) ? `Cancel invitation for ${item.login}` : `Remove ${item.login}`}
+        >
+          <Octicons name="trash" size={14} color={theme.accentRed} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -265,7 +278,7 @@ export function GitCollaboratorsModal({ visible, remoteUrl, onClose }: GitCollab
                     </Text>
                     <FlatList
                       data={rows}
-                      keyExtractor={(item) => `${item.isPending ? "inv" : "col"}:${item.login}:${item.invitationId ?? ""}`}
+                      keyExtractor={(item) => `${item.kind}:${item.login}:${item.invitationId ?? ""}`}
                       renderItem={renderRow}
                       keyboardShouldPersistTaps="handled"
                       nestedScrollEnabled

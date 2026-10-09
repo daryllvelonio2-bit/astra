@@ -60,7 +60,11 @@ export const ProjectCard = React.memo(function ProjectCard({ item, onPress, onMo
           </Text>
         </View>
         <Text style={[styles.cardDetails, { color: theme.textSecondary }]}>
-          {item.template ? `${item.template} • ` : ''}{item.fileCount} file{item.fileCount > 1 ? 's' : ''} • {item.lastModified}
+          {item.template ? `${item.template} • ` : ''}
+          {/* File-count tagline is omitted when there is nothing to count, so a
+              fresh workspace does not advertise itself. The recency label stays. */}
+          {item.fileCount > 0 ? `${item.fileCount} file${item.fileCount > 1 ? 's' : ''} • ` : ''}
+          {item.lastModified}
         </Text>
         {item.gitOwner ? (
           // Provenance line: only for workspaces whose git origin is on GitHub.
