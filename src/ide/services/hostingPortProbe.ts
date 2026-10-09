@@ -43,11 +43,7 @@ export function portAnswerCheck(port: number, logFile: string): string {
   // (TCP_LISTEN). Each file is read only if it exists — awk returns 2 (and
   // would mask a real match) if handed a missing file, so it is never handed
   // one. awk splits field 2, so an IPv6 address is handled the same way.
-  const listening =
-    `listen=0; for f in /proc/net/tcp /proc/net/tcp6; do [ -r "$f" ] || continue; ` +
-    `awk -v p=$(printf '%04X' ${port}) ` +
-    `'split($2,a,\":\") && toupper(a[length(a)])==p && $4==\"0A\"{x=1} END{exit x?0:1}' "$f" 2>/dev/null ` +
-    `&& listen=1; done; [ "$listen" = 1 ]`;
+  const listening = procListenerCheck(port);
   // Secondary — a bare TCP connect. php is guaranteed (the plan installs it
   // before serving) and is invoked the plan's way, with PHP_INI_SCAN_DIR
   // dropped so the CLI cannot be made to load zero extensions; perl is in the
@@ -55,6 +51,16 @@ export function portAnswerCheck(port: number, logFile: string): string {
   const php = `command -v php >/dev/null 2>&1 && env -u PHP_INI_SCAN_DIR php -r 'exit(@fsockopen("127.0.0.1",${port},$e,$m,2)?0:1);'`;
   const perl = `command -v perl >/dev/null 2>&1 && perl -MIO::Socket::INET -e 'exit(IO::Socket::INET->new(PeerAddr=>"127.0.0.1",PeerPort=>${port},Timeout=>2)?0:1);'`;
   return `{ { ${announced}; } && { ${listening}; }; } || { ${php}; } || { ${perl}; }`;
+}
+
+/** The kernel-only LISTEN check: exit 0 when /proc shows a socket listening. */
+export function procListenerCheck(port: number): string {
+  return (
+    `listen=0; for f in /proc/net/tcp /proc/net/tcp6; do [ -r "$f" ] || continue; ` +
+    `awk -v p=$(printf '%04X' ${port}) ` +
+    `'split($2,a,\":\") && toupper(a[length(a)])==p && $4==\"0A\"{x=1} END{exit x?0:1}' "$f" 2>/dev/null ` +
+    `&& listen=1; done; [ "$listen" = 1 ]`
+  );
 }
 
 /**
@@ -65,5 +71,22 @@ export function portAnswerCheck(port: number, logFile: string): string {
  */
 export function portReadinessCommand(port: number, logFile: string, ticks = 20): string {
   const list = Array.from({ length: ticks }, (_, i) => i + 1).join(" ");
-  return `for i in ${list}; do { ${portAnswerCheck(port, logFile)}; } && { echo READY; break; }; sleep 1; done; echo CHECKED`;
+  return (
+    `for i in ${list}; do { ${portAnswerCheck(port, logFile)}; } && { echo READY; break; }; sleep 1; done; ` +
+    `echo CHECKED; ${portProbeDiagnostics(port, logFile)}`
+  );
+}
+
+/**
+ * The extra lines the readiness command appends AFTER READY/CHECKED, so ONE
+ * guest invocation also carries the on-device evidence the trace needs: does
+ * the server's log file exist and what are its last three lines, and does the
+ * kernel show a LISTEN socket on the port. A handful of short lines, no client.
+ */
+export function portProbeDiagnostics(port: number, logFile: string): string {
+  return (
+    `if [ -f ${logFile} ]; then echo DIAG_LOG:EXISTS; tail -n 3 ${logFile} 2>/dev/null | sed 's/^/DIAG_L:/'; ` +
+    `else echo DIAG_LOG:NOEXIST; fi; ` +
+    `{ ${procListenerCheck(port)}; } && echo DIAG_LISTEN:YES || echo DIAG_LISTEN:NO`
+  );
 }

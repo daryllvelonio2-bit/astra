@@ -32,6 +32,8 @@ import {
 import { resolveGuestProjectDir } from "./hostingProjectDir";
 import { prepareProject } from "./hostingPrepare";
 import { portReadinessCommand } from "./hostingPortProbe";
+import { GUEST_TIMEOUT_MS, runBounded } from "./hostingTimeout";
+import { parseProbeDiag, recordProbe } from "./hostingTrace";
 import { isTransientHostStatus, killStaleGuestProcesses } from "./hostingStale";
 import {
   HostProjectKind,
@@ -115,13 +117,18 @@ function pushLog(line: string): void {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** The native runner normalised to {code,out}. It never throws. */
+const rawGuestCall = async (c: string) => {
+  const x: any = await executeCommand(c);
+  return { code: x?.exitCode ?? 0, out: String(x?.stdout ?? "") };
+};
+
+/** One guest call — always bounded + traced (see hostingTimeout.ts for why). */
 async function run(command: string): Promise<{ code: number; out: string }> {
-  try {
-    const res: any = await executeCommand(command);
-    return { code: res?.exitCode ?? 0, out: String(res?.stdout ?? "") };
-  } catch (e: any) {
-    return { code: 1, out: String(e?.message || e || "") };
-  }
+  const r = await runBounded(rawGuestCall, command);
+  if (r.timedOut) pushLog(`guest call timed out after ${GUEST_TIMEOUT_MS / 1000}s: ${command.replace(/\s+/g, " ").slice(0, 50)}`);
+  recordProbe({ command, timedOut: r.timedOut, code: r.code, out: r.out });
+  return { code: r.code, out: r.out };
 }
 
 // ---------------------------------------------------------------------------
@@ -369,11 +376,11 @@ async function waitForPort(port: number, seconds: number, onTick: () => void): P
     if (hostCancelled) return false;
     if (b > 0) onTick();
     const res = await run(portReadinessCommand(port, HOST_LOG));
-    if (res.out.includes("READY")) return true;
-    // The server's own words, so a failure names itself instead of spinning.
-    const tail = await run(`tail -n 2 ${HOST_LOG} 2>/dev/null`);
-    const line = tail.out.trim().split("\n").pop() || "";
-    if (line && !line.includes("READY")) pushLog(line.slice(0, 120));
+    if (res.out.split("\n").some((l) => l.trim() === "READY")) return true;
+    // The server's own words ride in the SAME probe output (its DIAG_L: lines) — no second call.
+    const diag = parseProbeDiag(res.out);
+    const line = diag.logTail[diag.logTail.length - 1] || "";
+    if (line) pushLog(line.slice(0, 120));
   }
   return false;
 }
