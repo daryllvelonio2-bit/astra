@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   badgeText: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: "700",
     letterSpacing: 0.3,
   },
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   smallBtnText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "600",
   },
   segmentedControl: {
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   segmentText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "700",
   },
 });

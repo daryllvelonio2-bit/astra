@@ -37,6 +37,14 @@ export interface TerminalTab {
 
 interface UseTerminalSessionProps {
   workspaceId?: string;
+  /**
+   * Native shell id this hook owns. Defaults to "session-1" (what the Terminal
+   * tab has always used). The Host tab's embedded terminal passes its own id so
+   * it never aliases the Terminal tab's PTY — distinct ids are already the
+   * app's design (`run-session` does the same) and keep each mount's teardown
+   * scoped to its own shell.
+   */
+  initialSessionId?: string;
 }
 
 const getBanner = (workspaceId?: string) => getBannerPath(workspaceId);
@@ -55,14 +63,17 @@ async function startShellSession(sessionId: string, workspaceId?: string) {
   }
 }
 
-export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
+export function useTerminalSession({
+  workspaceId,
+  initialSessionId = "session-1",
+}: UseTerminalSessionProps) {
   const { theme: appTheme } = useTheme();
   const [sessions, setSessions] = useState<TerminalTab[]>([
-    { id: "session-1", name: "1: sh" },
+    { id: initialSessionId, name: "1: sh" },
   ]);
-  const [activeSessionId, setActiveSessionId] = useState<string>("session-1");
+  const [activeSessionId, setActiveSessionId] = useState<string>(initialSessionId);
   const [sessionOutputs, setSessionOutputs] = useState<Record<string, string>>({
-    "session-1": getBanner(workspaceId),
+    [initialSessionId]: getBanner(workspaceId),
   });
   const [isCtrlActive, setIsCtrlActive] = useState<boolean>(false);
   const [isAltActive, setIsAltActive] = useState<boolean>(false);
@@ -91,7 +102,7 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
   // Shell (non-task) session ids alive in this mount. Native start is a
   // no-op for a running id, so these must be stopped when the workspace
   // changes — otherwise terminals keep the old workspace cwd and binds.
-  const shellIdsRef = useRef<string[]>(["session-1"]);
+  const shellIdsRef = useRef<string[]>([initialSessionId]);
   // Last COLORFGBG pushed per shell session; avoids re-export spam.
   const exportedFgBgRef = useRef<Record<string, string>>({});
   // Legacy pipe mode: strip run markers and raise notifications there too.
@@ -149,11 +160,11 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
       await initializeEnvironment();
       if (!mounted) return;
       setIsReady(true);
-      await startShellSession("session-1", workspaceId);
+      await startShellSession(initialSessionId, workspaceId);
       syncThemeEnv(appTheme.isDark);
-      const hist = await getSessionHistory("session-1");
+      const hist = await getSessionHistory(initialSessionId);
       if (hist && mounted) {
-        foldNativeHistory("session-1", hist);
+        foldNativeHistory(initialSessionId, hist);
       }
     };
     init();
@@ -164,10 +175,10 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
           stopTerminalSession(id);
         } catch (_) {}
       });
-      shellIdsRef.current = ["session-1"];
+      shellIdsRef.current = [initialSessionId];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId]);
+  }, [workspaceId, initialSessionId]);
 
   // Live global theme → shell hint: when user flips Light/Dark, sync to /root/.theme_env
   // silently so current and future shell sessions pick it up without leaking text.
@@ -338,7 +349,7 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
       delete exportedFgBgRef.current[idToClose];
 
       if (activeSessionId === idToClose) {
-        setActiveSessionId(remaining[0]?.id || "session-1");
+        setActiveSessionId(remaining[0]?.id || initialSessionId);
       }
     },
     [sessions, activeSessionId, dropTracked]
@@ -395,4 +406,3 @@ export function useTerminalSession({ workspaceId }: UseTerminalSessionProps) {
     clearActiveSession,
   };
 }
-

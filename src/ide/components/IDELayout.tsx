@@ -442,6 +442,7 @@ export function IDELayout({ workspaceId, onBackToPicker, isActive = true }: IDEL
                   projectName={workspace?.name}
                   rootNames={(workspace?.root?.children || []).map((n) => n.name)}
                   onOpenBrowser={handleOpenInBrowser}
+                  visible={bottomTab === "host"}
                 />
               </PanelErrorBoundary>
             </View>

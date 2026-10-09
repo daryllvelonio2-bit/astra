@@ -33,11 +33,17 @@ import { useOrientation } from "../../theme/useOrientation";
 
 interface TerminalViewProps {
   workspaceId?: string;
+  /**
+   * Native shell id this instance owns. Defaults to "session-1" (the Terminal
+   * tab). The Host tab's embedded terminal passes its own id so it cannot alias
+   * the Terminal tab's PTY. See useTerminalSession.
+   */
+  initialSessionId?: string;
   /** Hidden tab: pause xterm bridge flush until visible. Sessions keep running. */
   visible?: boolean;
 }
 
-export function TerminalView({ workspaceId, visible = true }: TerminalViewProps) {
+export function TerminalView({ workspaceId, initialSessionId, visible = true }: TerminalViewProps) {
   const {
     sessions,
     activeSessionId,
@@ -66,6 +72,7 @@ export function TerminalView({ workspaceId, visible = true }: TerminalViewProps)
     setIsAltActive,
   } = useTerminalSession({
     workspaceId,
+    initialSessionId,
   });
   const isTaskTab = !!sessions.find((s) => s.id === activeSessionId)?.isTask;
   const isXterm = PTY_XTERM_ENABLED && !isTaskTab;

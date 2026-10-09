@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 2,
   },
-  themeName: { flex: 1, fontSize: 12, fontWeight: "700" },
+  themeName: { flex: 1, fontSize: 11.5, fontWeight: "700" },
   checkDot: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   radioDot: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5 },
   iconTile: {
@@ -330,8 +330,8 @@ const styles = StyleSheet.create({
   devCard: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 10 },
   devHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   devTextCol: { flex: 1 },
-  rowLabel: { fontSize: 13, fontWeight: "700" },
-  rowSub: { fontSize: 11, marginTop: 1 },
+  rowLabel: { fontSize: 12, fontWeight: "700" },
+  rowSub: { fontSize: 10.5, marginTop: 1 },
   devButtons: { flexDirection: "row", gap: 8 },
   devBtn: {
     flex: 1,
@@ -343,5 +343,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-  devBtnText: { fontSize: 12, fontWeight: "600" },
+  devBtnText: { fontSize: 11.5, fontWeight: "600" },
 });

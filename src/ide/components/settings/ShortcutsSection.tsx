@@ -86,7 +86,7 @@ export function ShortcutsSection({ theme }: ShortcutsSectionProps) {
 
 const styles = StyleSheet.create({
   container: { paddingBottom: 12, gap: 4 },
-  note: { fontSize: 12, lineHeight: 17, marginBottom: 4 },
+  note: { fontSize: 11.5, lineHeight: 16, marginBottom: 4 },
   group: { marginTop: 4 },
   card: { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
   row: {
@@ -104,9 +104,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 6,
   },
-  keyText: { fontSize: 12, fontWeight: "700" },
-  plus: { fontSize: 12, marginHorizontal: 3 },
+  keyText: { fontSize: 11.5, fontWeight: "700" },
+  plus: { fontSize: 11.5, marginHorizontal: 3 },
   actionCol: { flex: 1 },
-  action: { fontSize: 13, fontWeight: "600" },
-  touch: { fontSize: 11, marginTop: 1 },
+  action: { fontSize: 12, fontWeight: "600" },
+  touch: { fontSize: 10.5, marginTop: 1 },
 });

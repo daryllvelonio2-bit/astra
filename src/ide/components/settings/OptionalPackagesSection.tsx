@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "rea
 import { showAppDialog } from "../../services/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
-import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import {
   executeCommand,
   installPackages,
@@ -229,6 +228,10 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [groupBusy, setGroupBusy] = useState<Record<string, boolean>>({});
   const [probing, setProbing] = useState(true);
+  // The downloads are a deliberate reveal: the whole list starts tucked away
+  // behind a single row, so the settings tab stays short and nothing downloads
+  // (or is even scrolled past) until the user opens it.
+  const [open, setOpen] = useState(false);
 
   const refresh = useCallback(async (pkgs?: OptionalPackage[]) => {
     const targets = pkgs ?? ALL_PACKAGES;
@@ -366,29 +369,69 @@ export function OptionalPackagesSection({ theme, provisioningActive }: OptionalP
 
   return (
     <View style={styles.container}>
-      <SettingsSectionHeader
-        theme={theme}
-        icon="cube-outline"
-        title="Core Runtime Packages"
-        subtitle="Essential compilers and utilities for the Linux environment."
-      />
-      {REQUIRED_GROUPS.map(renderGroup)}
+      {/* One collapsed row, opened deliberately — the row says what it is. */}
+      <TouchableOpacity
+        style={[styles.row, { backgroundColor: theme.bgSecondary, borderColor: theme.border }]}
+        onPress={() => setOpen((v) => !v)}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Toolchain downloads"
+        accessibilityState={{ expanded: open }}
+      >
+        <View style={[styles.iconTile, { backgroundColor: `${theme.accent}18`, borderColor: `${theme.accent}2E` }]}>
+          <Ionicons name="download-outline" size={16} color={theme.accent} />
+        </View>
+        <View style={styles.titleCol}>
+          <Text style={[styles.rowTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+            Toolchain Downloads
+          </Text>
+          <Text style={[styles.rowMeta, { color: theme.textMuted }]} numberOfLines={1}>
+            Base runtimes and optional tools — tap to install
+          </Text>
+        </View>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={14} color={theme.textMuted} />
+      </TouchableOpacity>
 
-      <SettingsSectionHeader
-        theme={theme}
-        icon="download-outline"
-        title="Optional Tools & Runtimes"
-        subtitle="On-demand toolchains installed outside the base environment."
-        style={styles.spacedHeader}
-      />
-      {OPTIONAL_GROUPS.map(renderGroup)}
+      {open && (
+        <View style={styles.downloadsBody}>
+          <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>
+            CORE RUNTIME PACKAGES
+          </Text>
+          <Text style={[styles.sectionSub, { color: theme.textMuted }]}>
+            Essential developer utilities and compilers for the Linux environment. Auto-installed during setup unless disabled above.
+          </Text>
+          {REQUIRED_GROUPS.map(renderGroup)}
+
+          <Text style={[styles.sectionHeading, { color: theme.textMuted, marginTop: 12 }]}>
+            OPTIONAL TOOLS & RUNTIMES
+          </Text>
+          <Text style={[styles.sectionSub, { color: theme.textMuted }]}>
+            On-demand developer toolchains installed outside the base environment.
+          </Text>
+          {OPTIONAL_GROUPS.map(renderGroup)}
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { gap: 8 },
-  spacedHeader: { marginTop: 12 },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  iconTile: { width: 34, height: 34, borderRadius: 9, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  rowTitle: { fontSize: 13, fontWeight: "700" },
+  rowMeta: { fontSize: 11, marginTop: 1 },
+  downloadsBody: { gap: 8 },
+  sectionHeading: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8, marginTop: 4 },
+  sectionSub: { fontSize: 11, marginTop: -4 },
   groupCard: { borderRadius: 10, borderWidth: 1, overflow: "hidden" },
   groupHeader: {
     flexDirection: "row",

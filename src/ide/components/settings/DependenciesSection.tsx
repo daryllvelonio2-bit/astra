@@ -81,6 +81,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   titleCol: { flex: 1 },
-  title: { fontSize: 13, fontWeight: "700" },
-  meta: { fontSize: 11, marginTop: 1 },
+  title: { fontSize: 12, fontWeight: "700" },
+  meta: { fontSize: 10.5, marginTop: 1 },
 });

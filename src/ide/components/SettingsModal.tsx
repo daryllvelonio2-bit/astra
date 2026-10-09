@@ -233,9 +233,9 @@ const styles = StyleSheet.create({
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerIcon: { width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 10 },
-  title: { fontSize: 17, fontWeight: "700" },
+  title: { fontSize: 15.5, fontWeight: "700" },
   savedHint: { flexDirection: "row", alignItems: "center", gap: 3 },
-  savedText: { fontSize: 11, fontWeight: "600" },
+  savedText: { fontSize: 10.5, fontWeight: "600" },
   scroll: { flex: 1, paddingTop: 12 },
   scrollContent: { paddingBottom: 28 },
 });

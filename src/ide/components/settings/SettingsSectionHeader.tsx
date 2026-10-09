@@ -55,6 +55,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   textCol: { flex: 1 },
-  title: { fontSize: 12, fontWeight: "800", letterSpacing: 0.7 },
-  subtitle: { fontSize: 11, marginTop: 1 },
+  title: { fontSize: 11.5, fontWeight: "800", letterSpacing: 0.6 },
+  subtitle: { fontSize: 10.5, marginTop: 1 },
 });

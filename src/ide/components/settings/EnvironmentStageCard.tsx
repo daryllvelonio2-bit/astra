@@ -144,15 +144,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stageNum: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "700",
   },
   stageTitle: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: "600",
   },
   stageDesc: {
-    fontSize: 10,
+    fontSize: 9.5,
     marginTop: 1,
   },
   stageRight: {
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   stageStateText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "600",
   },
   packageContainer: {
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   packageTitle: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "600",
   },
   chipRow: {
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontFamily: "monospace",
   },
 });

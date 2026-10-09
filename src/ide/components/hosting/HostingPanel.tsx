@@ -21,34 +21,40 @@ import {
   subscribeHosting,
 } from "../../services/hostingService";
 import {
-  StatusHeadline,
+  HostingHeading,
+  StatusRow,
   PrimaryAction,
-  LiveUrlCard,
-  KindChips,
+  UrlCard,
+  TypeLine,
   InstallCard,
-  LogDetails,
+  KIND_ORDER,
 } from "./HostingSections";
+import { HostingTerminal } from "./HostingTerminal";
 
 interface HostingPanelProps {
   workspaceId?: string;
   projectName?: string;
   rootNames: string[];
   onOpenBrowser?: (url: string) => void;
+  /** Bottom tab visible? Drives the embedded terminal's mount/unmount. */
+  visible?: boolean;
 }
 
 /**
  * Hosting tab.
  *
- * Written to be read at a glance by someone who is not a sysadmin: one status
- * headline answers "is it live, and if not, what is it doing", one large action
- * is the only thing to press, and the public link is the biggest thing on
- * screen once it exists. Raw commands live behind Show details.
+ * Answers two questions and nothing else: is the project live, and if not, what
+ * is happening. One status line, one action, and — once a link exists — the URL
+ * as the biggest thing on the panel. The raw log lives in the terminal pane
+ * below (started in the hosted project's directory), not behind a second
+ * collapsible.
  */
 export function HostingPanel({
   workspaceId,
   projectName = "this project",
   rootNames,
   onOpenBrowser,
+  visible = true,
 }: HostingPanelProps) {
   const { theme } = useTheme();
   // Deliberately NOT memoized: the subscription below re-renders us, and a
@@ -150,6 +156,12 @@ export function HostingPanel({
     }
   };
 
+  const cycleKind = () => {
+    const idx = kind ? KIND_ORDER.indexOf(kind) : -1;
+    setKind(KIND_ORDER[(idx + 1) % KIND_ORDER.length]);
+    setKindTouched(true);
+  };
+
   const copyUrl = async () => {
     if (!state.publicUrl) return;
     try {
@@ -181,61 +193,52 @@ export function HostingPanel({
   const needsInstall = !!plan && (!runtime || !runtime.installed);
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: theme.bgPrimary }}
-      contentContainerStyle={{ padding: 12, gap: 10, paddingBottom: 32 }}
-    >
-      <View style={{ gap: 2 }}>
-        <Text style={{ color: theme.textPrimary, fontSize: 15, fontWeight: "800" }}>Host</Text>
-        <Text style={{ color: theme.textSecondary, fontSize: 11.5, lineHeight: 16 }}>
-          Publishes {projectName} to the internet from this phone. No account, no signup.
-        </Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.bgPrimary }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 12, gap: 10, paddingBottom: 12 }}
+      >
+        <HostingHeading title="Host" icon="rocket-outline" />
 
-      <StatusHeadline
-        status={state.status}
-        step={state.step}
-        error={state.error}
-        projectName={projectName}
-      />
-
-      <PrimaryAction
-        label={actionLabel}
-        mode={mode}
-        disabled={actionDisabled}
-        onPress={onPrimaryPress}
-      />
-
-      {running && state.publicUrl && (
-        <LiveUrlCard
-          url={state.publicUrl}
+        <StatusRow
+          status={state.status}
+          step={state.step}
+          error={state.error}
           port={state.port}
           tunnel={state.tunnel}
-          copied={copied}
-          onCopy={copyUrl}
-          onOpen={() => onOpenBrowser?.(state.publicUrl as string)}
         />
-      )}
 
-      <KindChips
-        kind={kind}
-        planLabel={plan ? plan.label : null}
-        onSelect={(id) => {
-          setKind(id);
-          setKindTouched(true);
-        }}
-      />
-
-      {needsInstall && plan && (
-        <InstallCard
-          plan={plan}
-          runtime={runtime}
-          installing={busy && state.status === "installing"}
-          onInstall={handleInstall}
+        <PrimaryAction
+          label={actionLabel}
+          mode={mode}
+          disabled={actionDisabled}
+          onPress={onPrimaryPress}
         />
-      )}
 
-      <LogDetails log={state.log} />
-    </ScrollView>
+        {running && state.publicUrl && (
+          <UrlCard
+            url={state.publicUrl}
+            port={state.port}
+            tunnel={state.tunnel}
+            copied={copied}
+            onCopy={copyUrl}
+            onOpen={() => onOpenBrowser?.(state.publicUrl as string)}
+          />
+        )}
+
+        <TypeLine kind={kind} onCycle={cycleKind} />
+
+        {needsInstall && plan && (
+          <InstallCard
+            plan={plan}
+            runtime={runtime}
+            installing={busy && state.status === "installing"}
+            onInstall={handleInstall}
+          />
+        )}
+      </ScrollView>
+
+      <HostingTerminal workspaceId={workspaceId} visible={visible} />
+    </View>
   );
 }

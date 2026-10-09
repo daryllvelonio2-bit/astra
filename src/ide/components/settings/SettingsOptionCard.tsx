@@ -173,8 +173,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   textCol: { flex: 1, gap: 2 },
-  title: { fontSize: 13, fontWeight: "700" },
-  subtitle: { fontSize: 11.5, lineHeight: 15 },
+  title: { fontSize: 12, fontWeight: "700" },
+  subtitle: { fontSize: 11, lineHeight: 14 },
   trailing: {
     flexDirection: "row",
     alignItems: "center",
