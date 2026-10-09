@@ -32,12 +32,7 @@ import {
 import { resolveGuestProjectDir } from "./hostingProjectDir";
 import { prepareProject } from "./hostingPrepare";
 import { portReadinessCommand } from "./hostingPortProbe";
-import {
-  GUEST_TIMEOUT_MS,
-  runBounded,
-  SERVE_LAUNCH_TIMEOUT_S,
-  TUNNEL_LAUNCH_TIMEOUT_S,
-} from "./hostingTimeout";
+import { GUEST_TIMEOUT_MS, runBounded, SERVE_LAUNCH_TIMEOUT_S, TUNNEL_LAUNCH_TIMEOUT_S } from "./hostingTimeout";
 import { parseProbeDiag, recordProbe } from "./hostingTrace";
 import { isTransientHostStatus, killStaleGuestProcesses } from "./hostingStale";
 import {
@@ -286,7 +281,6 @@ async function beginHosting(opts: {
   const serve = plan.serve(guestDir, port, opts.nodeFlavor);
   pushLog(`$ ${serve}`);
   await run(`rm -f ${HOST_LOG} ${HOST_PID}`);
-  // Serve launch: the one call bounded natively (detaches, never kills) so its proot cannot park the shared queue.
   const serveCmd = `cd ${guestDir} && nohup bash -lc ${JSON.stringify(serve)} > ${HOST_LOG} 2>&1 & echo $! > ${HOST_PID}; sleep 1; cat ${HOST_PID}`;
   await run(serveCmd, SERVE_LAUNCH_TIMEOUT_S);
 
