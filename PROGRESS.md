@@ -1,5 +1,14 @@
 # Project Progress Tracker
 
+### [2026-10-10] - Settings → Linux: development-dependencies block REMOVED, orphans deleted
+- **Ask (user):** remove the dependencies-by-kind block from the Linux tab and clean up whatever it orphans — "the tab must read as if the block was never there."
+- **Unwired (`settings/EnvironmentSection.tsx`, 440 → 436):** deleted the `import { DependenciesSection } from "./DependenciesSection"` line and the `<DependenciesSection theme={theme} provisioningActive={status.isProvisioning} />` render with its `{/* 6. Development Dependencies ... */}` comment. The `container` keeps its `gap: 12`; the tab now ends at Optional Extras, exactly as before the block existed (no leftover heading, no empty container, no extra spacing).
+- **Deleted — orphaned by the removal (grep evidence):** `settings/DependenciesSection.tsx` (referenced only by `EnvironmentSection.tsx`), `components/dependencies/DependenciesScreen.tsx` (only by `DependenciesSection.tsx`), `components/dependencies/DependencyCategorySection.tsx` (only by `DependenciesScreen.tsx`), `components/dependencies/DependencyToolRow.tsx` (only by `DependencyCategorySection.tsx`). The `components/dependencies/` folder is gone.
+- **Kept — still referenced elsewhere:** `services/devCategories.ts` (411) is used by `components/CreateProjectModal.tsx` (`toolById`) and by `dependencyInstallService.ts`; `services/dependencyInstallService.ts` (91) is used by `components/CreateProjectModal.tsx` (`probeDependencyState`, `installDependency`). Both survive the hosting/project-create flow.
+- **Untouched (per instruction):** the auto-download row, the Environment Status block + Stop action, the four provisioning stage cards, the LIVE LOG drawer, the binary-diagnostics bar and the package list are byte-identical.
+- **Verified:** `npx tsc --noEmit` → exit 0. Whole-tree grep for the four removed names → 0 references outside historical PROGRESS entries and `node_modules`. `EnvironmentSection.tsx` 436 ≤ 500.
+- **On-device look required:** confirm the Linux tab ends cleanly after Optional Extras with no gap or ghost heading — cannot verify layout here.
+
 ### [2026-10-10] - Settings → Linux: older presentation restored from `main` (card language reverted for this tab only)
 - **Ask (user):** the re-skinned / de-cluttered Linux tab "is not what he meant" — look at the older version on `main` and bring that back, without losing the newer dependencies-by-kind screen.
 - **Route (git):** `git fetch origin main` → `git checkout origin/main -- src/ide/components/settings/EnvironmentSection.tsx src/ide/components/settings/OptionalPackagesSection.tsx src/ide/components/settings/EnvironmentStageCard.tsx`, then unstaged with `git restore --staged` so the work sits in the tree, then two guard fixes applied by hand. `environmentStages.ts` was already byte-identical to `main` (no restore needed).

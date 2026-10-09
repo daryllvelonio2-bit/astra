@@ -20,7 +20,11 @@
  *
  * Its plain form is `https://formsubmit.co/<address>`, which would put a
  * developer address in this file and on the wire. Its **invisible-email
- * alias** avoids exactly that: FormSubmit swaps the address for a random
+ * alias** avoids exactly that: FormSubmit swaps the address for a random string, and its AJAX endpoint returns the JSON this
+ * module parses (the plain endpoint answers with HTML). Activation is PER DESTINATION: the first
+ * submission emails an "Activate Form" link, and until it is clicked every send is refused with
+ * success:false. The alias comes from that same form email. To CC a second inbox, add it in
+ * FormSubmit's own form settings rather than here.
  * string (`<hash>`), so the endpoint below names nobody.
  *
  * WHERE THE HASH COMES FROM (one human step, outside the app):
@@ -30,7 +34,7 @@
  *   2. Click that link. FormSubmit replies with the form's alias/`<hash>`.
  *   3. Paste the resulting endpoint here (the `el/<hash>` or the bare `/<hash>`
  *      form both accept the urlencoded body we send), e.g.
- *        export const FEEDBACK_ENDPOINT = "https://formsubmit.co/el/<hash>";
+ *        export const FEEDBACK_ENDPOINT = "https://formsubmit.co/ajax/<random-string>";
  *
  * THE TWO DESTINATION ADDRESSES ARE CONFIGURED ON FORMSUBMIT'S SIDE, NOT HERE.
  * The form behind that hash is bound to the developer inbox; to reach BOTH
