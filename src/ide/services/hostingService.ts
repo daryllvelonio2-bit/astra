@@ -30,6 +30,8 @@ import {
   isEnvironmentReady,
 } from "../../../modules/linux-runner/src";
 import { resolveGuestProjectDir } from "./hostingProjectDir";
+import { prepareProject } from "./hostingPrepare";
+import { isTransientHostStatus, killStaleGuestProcesses } from "./hostingStale";
 import {
   HostProjectKind,
   HOST_PLANS,
@@ -67,19 +69,7 @@ const HOST_LOG = "/tmp/astra-host.log";
 const HOST_PID = "/tmp/astra-host.pid";
 const TUNNEL_LOG = "/tmp/astra-tunnel.log";
 const TUNNEL_PID = "/tmp/astra-tunnel.pid";
-const PREP_LOG = "/tmp/astra-prep.log";
-const PREP_PID = "/tmp/astra-prep.pid";
 
-/**
- * Everything the guest needs before a project can be served, and the command
- * that actually serves it. Kept in one table so the panel and the service can
- * never disagree about what "Laravel" means.
- */
-
-/**
- * Pick the project kind from the files at the workspace root. Order matters:
- * a Laravel app can also contain an index.html in public/, but artisan wins.
- */
 // ---------------------------------------------------------------------------
 // state + subscription (same shape as the toolchain gate, so the UI is boring)
 // ---------------------------------------------------------------------------
@@ -155,7 +145,11 @@ export async function checkRuntime(kind: HostProjectKind): Promise<RuntimeInfo> 
  * project's policy is that nothing auto-installs behind the user's back, and on
  * mobile data a 60 MB apt run is a decision, not a detail.
  */
-export async function installRuntime(kind: HostProjectKind): Promise<boolean> {
+export function installRuntime(kind: HostProjectKind): Promise<boolean> {
+  return track(beginInstall(kind));
+}
+
+async function beginInstall(kind: HostProjectKind): Promise<boolean> {
   const plan = HOST_PLANS[kind];
   set({ status: "installing", step: `Installing ${plan.label} (${plan.approxSize})…` });
   // Same resilient apt preamble the toolchain provisioner uses: stale locks and
@@ -200,7 +194,16 @@ export async function installRuntime(kind: HostProjectKind): Promise<boolean> {
  * Returns the public URL on success. Every failure sets state.error to something
  * a person can act on — the raw shell text goes to the log instead.
  */
-export async function startHosting(opts: {
+export function startHosting(opts: {
+  workspaceId: string;
+  projectName: string;
+  kind: HostProjectKind;
+  nodeFlavor?: NodeFlavor;
+}): Promise<string | null> {
+  return track(beginHosting(opts));
+}
+
+async function beginHosting(opts: {
   workspaceId: string;
   projectName: string;
   kind: HostProjectKind;
@@ -209,13 +212,20 @@ export async function startHosting(opts: {
   const { workspaceId, projectName, kind } = opts;
   const plan = HOST_PLANS[kind];
   const port = plan.defaultPort;
-  // NOT /workspaces/<id>: the registry id is a slug while the folder on disk
-  // keeps its own name (the same id-vs-folder trap that produced duplicate
-  // workspace cards). getWorkspaceDirPath returns the real folder, and the
-  // guest sees it under /workspaces, so take the last path segment.
-  const guestDir = await resolveGuestProjectDir(workspaceId, run);
 
+  // End any previous run FIRST — including the guest processes it leaked — so a
+  // leftover composer/cloudflared cannot hold this run hostage, and clear the
+  // cancel flag so this run's waits are not aborted the instant they start.
   await stopHosting();
+  hostCancelled = false;
+
+  // Only a plan that names a marker (Laravel) may have its folder discovered in
+  // the guest; a static site keeps the folder the workspace resolved to and is
+  // never redirected to some unrelated composer.json.
+  const guestDir = await resolveGuestProjectDir(workspaceId, run, {
+    marker: plan.projectMarker,
+  });
+
   set({
     status: "checking",
     kind,
@@ -251,53 +261,11 @@ export async function startHosting(opts: {
   }
 
   // --- 0. the project itself (Laravel only) --------------------------------
-  // composer install can run for minutes, far past a one-shot command's limit,
-  // so it is detached and polled like the server is.
-  if (plan.prepare) {
-    set({ status: "installing", step: "Preparing the project (first run only)…" });
-    const steps = plan.prepare(guestDir);
-    for (let i = 0; i < steps.length; i++) {
-      const st = steps[i];
-      pushLog(`prep ${i + 1}/${steps.length}: ${st.cmd.slice(0, 70)}`);
-      const res = await run(st.cmd);
-      if (st.detached) {
-        if (st.waitFor) {
-          // vendor/ is already on disk from a previous run: redoing the install
-          // costs minutes for no change. The artifact IS the readiness signal.
-          const already = await run(`[ -f ${st.waitFor} ] && echo YES || echo NO`);
-          if (already.out.includes("YES")) {
-            pushLog("already installed — skipping the dependency step");
-            continue;
-          }
-          const done = await waitForFile(st.waitFor, 1800);
-          if (!done) {
-            const tail = await run(`tail -n 8 ${PREP_LOG}`);
-            tail.out.split("\n").forEach(pushLog);
-            set({
-              status: "error",
-              step: "",
-              error:
-                "composer did not finish installing the project's dependencies. Its last lines are below.",
-            });
-            return null;
-          }
-        }
-        continue;
-      }
-      if (res.code !== 0) {
-        // A step that FAILED must never look like a step that worked. This is the
-        // bug that cost the earlier attempts: the launch failed silently.
-        pushLog(`step failed (exit ${res.code}): ${res.out.trim().slice(-160) || "(no output)"}`);
-        set({
-          status: "error",
-          step: "",
-          error: `Preparing the project failed at step ${i + 1}: ${st.cmd.slice(0, 60)}…`,
-        });
-        return null;
-      }
-    }
-    pushLog("project prepared");
-  }
+  // Every step checks its exit code, and the detached composer step carries its
+  // own wall-clock deadline; a failure ends the run with a plain sentence the
+  // panel shows, never a spinner that never stops.
+  const prepared = await prepareProject(kind, guestDir, { run, set, log: pushLog });
+  if (!prepared) return null;
 
   // --- 1. the server -------------------------------------------------------
   set({ status: "starting", step: `Starting ${plan.label} on port ${port}…` });
@@ -381,26 +349,6 @@ async function prepareGuest(): Promise<void> {
       "[ -e /etc/ssl/cert.pem ] || ln -sf /etc/ssl/certs/ca-certificates.crt /etc/ssl/cert.pem; " +
       "true"
   );
-}
-
-/**
- * Poll for the file a detached step produces, surfacing the tail of its log as
- * the current step. A silent wait was how a 15-minute stall looked like work.
- */
-async function waitForFile(path: string, seconds: number): Promise<boolean> {
-  for (let i = 0; i < Math.ceil(seconds / 5); i++) {
-    // ONE command per batch, not two per iteration: spawning a guest process is
-    // the expensive part under PRoot, and doing it every five seconds is what
-    // made a wait look like a loop.
-    const res = await run(
-      `for i in 1 2 3 4 5 6 7 8 9 10; do [ -f ${path} ] && { echo YES; break; }; sleep 5; done`
-    );
-    if (res.out.includes("YES")) return true;
-    const last = await run(`tail -n 1 ${PREP_LOG} 2>/dev/null`);
-    const line = last.out.trim();
-    if (line && line !== "YES" && line !== "NO") set({ step: line.slice(0, 80) });
-  }
-  return false;
 }
 
 /** Poll the guest's own loopback until the server answers. */
@@ -495,23 +443,44 @@ async function waitForUrl(logFile: string, pattern: RegExp, seconds: number): Pr
   return null;
 }
 
-/** Stop the server and the tunnel. Safe to call when nothing is running. */
 /** Set when the user cancels, so the wait loops stop instead of running out. */
 let hostCancelled = false;
 
+/**
+ * Non-null while a start/install is genuinely in flight in THIS JS session.
+ * reconcileHosting() trusts this over the visible status.
+ */
+let liveRun: Promise<unknown> | null = null;
+
+function track<T>(p: Promise<T>): Promise<T> {
+  liveRun = p;
+  const clear = () => {
+    if (liveRun === p) liveRun = null;
+  };
+  p.then(clear, clear);
+  return p;
+}
+
+/**
+ * A transient status with NO run in flight is a ghost — a reload dropped the
+ * async function but kept the visible state, which is why Start stayed dead even
+ * after a restart. Fall back to idle. Never auto-starts a run; never touches an
+ * active one.
+ */
+export function reconcileHosting(): void {
+  if (liveRun) return;
+  if (!isTransientHostStatus(state.status)) return;
+  set({ status: "idle", step: "", port: null, publicUrl: null, tunnel: null, error: null });
+}
+
+/** Stop the server, the tunnel and any leaked composer step. Safe when nothing runs. */
 export async function stopHosting(): Promise<void> {
   hostCancelled = true;
-  await run(
-    `for f in ${HOST_PID} ${TUNNEL_PID}; do ` +
-      `if [ -f $f ]; then kill $(cat $f) 2>/dev/null; rm -f $f; fi; done; ` +
-      `pkill -f "cloudflared tunnel" 2>/dev/null; ` +
-      `pkill -f "ssh -n -o StrictHostKeyChecking=no" 2>/dev/null; ` +
-      `pkill -f "artisan serve" 2>/dev/null; ` +
-      `pkill -f "http.server" 2>/dev/null; ` +
-      `true`
-  );
+  // ONE guest call kills every process a previous run could have leaked
+  // (composer, artisan serve, php -S, cloudflared, the ssh tunnel).
+  const report = await killStaleGuestProcesses(run);
   const wasRunning = state.status !== "idle" && state.status !== "error";
-  if (wasRunning) pushLog("stopped");
+  if (wasRunning) pushLog(report ? `stopped (${report})` : "stopped");
   set({
     status: "idle",
     step: "",

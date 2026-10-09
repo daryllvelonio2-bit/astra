@@ -16,6 +16,7 @@ import {
   checkRuntime,
   getHostingState,
   installRuntime,
+  reconcileHosting,
   startHosting,
   stopHosting,
   subscribeHosting,
@@ -63,6 +64,14 @@ export function HostingPanel({
   const state = getHostingState();
   const [, forceTick] = useState(0);
   useEffect(() => subscribeHosting(() => forceTick((t) => t + 1)), []);
+
+  // Deliberately do NOT start a run on mount. Instead, the moment the tab is
+  // shown, drop any ghost left by a previous JS session: a transient status with
+  // no live run becomes idle, so Start is always reachable. Cancel-safe — it
+  // never touches a run that is genuinely in flight.
+  useEffect(() => {
+    if (visible) reconcileHosting();
+  }, [visible]);
 
   const [pkg, setPkg] = useState<any>(null);
   const [kind, setKind] = useState<HostProjectKind | null>(null);

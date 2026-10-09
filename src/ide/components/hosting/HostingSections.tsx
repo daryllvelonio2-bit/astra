@@ -131,7 +131,7 @@ export function StatusRow({
           {headline}
         </Text>
         {!!secondary && (
-          <Text style={[styles.hint, { color: failed ? theme.accentRed : theme.textMuted }]} numberOfLines={2}>
+          <Text style={[styles.hint, { color: failed ? theme.accentRed : theme.textMuted }]} numberOfLines={failed ? 4 : 2}>
             {secondary}
           </Text>
         )}

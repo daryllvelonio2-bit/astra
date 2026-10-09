@@ -9,6 +9,27 @@
 
 export type HostProjectKind = "laravel" | "node" | "static";
 
+/**
+ * The detached composer install, and the numbers around it.
+ *
+ * WHY A DEADLINE AT ALL: `composer install` with no composer.json (or with a
+ * package that prompts) used to sit on a prompt forever — a 5.5-hour zombie
+ * process was found alive on the phone, and the prepare polled it the whole
+ * time. A wall-clock `timeout` makes that impossible: the process is killed,
+ * the run fails loudly, the guest is free again.
+ *
+ * WHY 600s: composer's own per-operation default is 300s, and a real Laravel
+ * tree (~20-40 MB of packages) over a phone connection under PRoot is slow but
+ * finite. 600s (10 min) is 2x that default and still 30x shorter than the
+ * zombie / 3x under the old 30-minute poll, so a genuine slow install finishes
+ * while a stalled one is cut off fast.
+ */
+export const COMPOSER_INSTALL_DEADLINE_S = 600;
+/** Where the detached step drains its output, read on failure for the tail. */
+export const PREP_LOG = "/tmp/astra-prep.log";
+/** Where the detached step writes its own exit code so the poll can stop. */
+export const PREP_RC = "/tmp/astra-prep.rc";
+
 export interface RuntimeInfo {
   installed: boolean;
   /** What the user needs to install, in plain words. */
@@ -37,6 +58,12 @@ export interface PrepareStep {
   detached?: boolean;
   /** Guest path whose existence means the detached step finished. */
   waitFor?: string;
+  /**
+   * Guest file the detached step writes its OWN exit code into when it ends.
+   * The poll watches this alongside `waitFor`, so a step that FAILS (or is
+   * killed by its deadline) ends the run instead of being polled forever.
+   */
+  exitFile?: string;
 }
 
 export const HOST_PLANS: Record<
@@ -50,6 +77,13 @@ export const HOST_PLANS: Record<
     serve: (guestDir: string, port: number, flavor?: NodeFlavor) => string;
     /** One-time project preparation, before the server. Optional: Laravel only. */
     prepare?: (guestDir: string) => PrepareStep[];
+    /**
+     * The guest-side file this plan REQUIRES in its project folder, or undefined
+     * when it needs none. Only a plan that names a marker may have the project
+     * folder discovered elsewhere in the guest — a static site must never be
+     * redirected to some unrelated composer.json.
+     */
+    projectMarker?: string;
     /** A file whose presence in the project root identifies this kind. */
     detect: (rootNames: string[], pkg: any) => boolean;
   }
@@ -84,6 +118,7 @@ export const HOST_PLANS: Record<
     // without an APP_KEY every page is a 500. composer is pulled from apt on
     // first use (~5 MB), then composer install fetches the app's packages.
     detect: (rootNames) => has(rootNames, "artisan"),
+    projectMarker: "composer.json",
     // Each entry is one plain command. apt's composer is used because the spike
     // MEASURED it working (Composer 2.5.5, 20 MB, ~8 s) -- my earlier theory that
     // apt was the stall was wrong.
@@ -93,9 +128,17 @@ export const HOST_PLANS: Record<
         { cmd: apt },
         {
           // Detached: a Laravel tree is ~34 MiB and outlives any one-shot command.
-          cmd: `cd ${dir} && COMPOSER_ALLOW_SUPERUSER=1 nohup composer install --no-interaction --no-progress --prefer-dist --no-dev > /tmp/astra-prep.log 2>&1 &`,
+          //
+          // The `timeout -k` is the whole fix for the 5.5-hour zombie: with no
+          // composer.json composer sat on a prompt forever, and the poll never
+          // noticed. `--no-interaction` can never be prompted, `timeout` kills a
+          // stalled run at its deadline (SIGTERM, then SIGKILL 10s later), the
+          // leading `rm` clears any stale marker, and the group writes its OWN
+          // exit code to PREP_RC so the poll stops on failure instead of forever.
+          cmd: `rm -f ${PREP_RC}; cd ${dir} && nohup bash -c 'COMPOSER_ALLOW_SUPERUSER=1 timeout -k 10 ${COMPOSER_INSTALL_DEADLINE_S} composer install --no-interaction --no-progress --prefer-dist --no-dev > ${PREP_LOG} 2>&1; echo $? > ${PREP_RC}' >/dev/null 2>&1 &`,
           detached: true,
           waitFor: `${dir}/vendor/autoload.php`,
+          exitFile: PREP_RC,
         },
         { cmd: `[ -f ${dir}/.env ] || cp ${dir}/.env.example ${dir}/.env` },
         { cmd: `cd ${dir} && unset PHP_INI_SCAN_DIR && php artisan key:generate --force` },
