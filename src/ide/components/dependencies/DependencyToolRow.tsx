@@ -5,10 +5,15 @@ import { ThemeColors } from "../../../theme/themeContext";
 import { DevTool, sizeLabel } from "../../services/devCategories";
 
 /**
- * One tool line — the option the user acts on. The name leads at the largest
- * type, the size/requirement chips are quiet metadata, and the one-line note
- * (or a manual tool's WHERE-to-get hint) sits muted below. The Get button is
- * the accent tap target; installed tools show a green check instead.
+ * One tool line — the option the user acts on.
+ *
+ * Decluttered (chips cut): the name leads, then ONE muted line carries every
+ * fact that used to be its own pill — requirement, size, large-download, and
+ * the installed/included state — as plain text, followed by the tool's note (or
+ * a manual tool's WHERE-to-get hint). The only control on the right is the
+ * single action: Get for an installable tool, a Manual badge for a tool the app
+ * cannot install. Installed/bundled rows read their state in the muted line, so
+ * the old standalone green check is gone.
  */
 
 interface DependencyToolRowProps {
@@ -30,26 +35,26 @@ export function DependencyToolRow({
   provisioningDisabled,
   onInstall,
 }: DependencyToolRowProps) {
+  const isManual = tool.install.kind === "manual";
+  const isBundled = tool.install.kind === "bundled";
   // The actionable line: manual tools show WHERE to get it, everything else
   // shows what it is for.
   const detail = tool.install.kind === "manual" ? tool.install.hint : tool.note;
+  // State as a plain word (was a green check circle).
+  const state = isBundled ? "included" : installed === true ? "installed" : null;
+
+  // Every former chip, folded into one muted line as plain text. Nothing that
+  // changes a decision disappears — it stops competing as separate pills.
+  const meta = [tool.requirement, sizeLabel(tool.size), tool.heavy ? "large download" : null, state]
+    .filter((part): part is string => !!part)
+    .join(" · ");
 
   const renderAction = () => {
     if (busy) {
       return <ActivityIndicator size={14} color={theme.accent} />;
     }
-    if (tool.install.kind === "bundled") {
-      return (
-        <StatusPill
-          theme={theme}
-          icon="checkmark"
-          label="Included"
-          fg={theme.textSecondary}
-          border={theme.border}
-        />
-      );
-    }
-    if (tool.install.kind === "manual") {
+    if (isManual) {
+      // The unmistakable action for a tool the app cannot install.
       return (
         <StatusPill
           theme={theme}
@@ -60,8 +65,9 @@ export function DependencyToolRow({
         />
       );
     }
-    if (installed === true) {
-      return <Ionicons name="checkmark-circle" size={20} color={theme.accentGreen} />;
+    if (isBundled || installed === true) {
+      // Already reads "included"/"installed" on the muted line — no check pill.
+      return null;
     }
     return (
       <TouchableOpacity
@@ -87,44 +93,13 @@ export function DependencyToolRow({
   return (
     <View style={styles.pkgRow}>
       <View style={styles.pkgInfo}>
-        <View style={styles.pkgNameRow}>
-          <Text style={[styles.pkgName, { color: theme.textPrimary }]} numberOfLines={1}>
-            {tool.name}
-          </Text>
-          <View style={[styles.aptChip, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}>
-            <Text style={[styles.aptChipText, { color: theme.textSecondary }]}>
-              {sizeLabel(tool.size)}
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.aptChip,
-              {
-                backgroundColor: tool.requirement === "required" ? `${theme.accent}18` : theme.bgTertiary,
-                borderColor: tool.requirement === "required" ? `${theme.accent}40` : theme.border,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.aptChipText,
-                { color: tool.requirement === "required" ? theme.accent : theme.textMuted },
-              ]}
-            >
-              {tool.requirement}
-            </Text>
-          </View>
-          {tool.heavy && (
-            <View style={[styles.heavyChip, { backgroundColor: `${theme.accentGold}18`, borderColor: `${theme.accentGold}40` }]}>
-              <Text style={[styles.heavyChipText, { color: theme.accentGold }]}>LARGE</Text>
-            </View>
-          )}
-        </View>
-        {!!detail && (
-          <Text style={[styles.pkgDesc, { color: theme.textMuted }]} numberOfLines={1}>
-            {detail}
-          </Text>
-        )}
+        <Text style={[styles.pkgName, { color: theme.textPrimary }]} numberOfLines={1}>
+          {tool.name}
+        </Text>
+        <Text style={[styles.pkgMeta, { color: theme.textMuted }]} numberOfLines={2}>
+          {meta}
+          {detail ? ` — ${detail}` : ""}
+        </Text>
       </View>
 
       <View style={styles.pkgAction}>{renderAction()}</View>
@@ -156,23 +131,8 @@ function StatusPill({
 const styles = StyleSheet.create({
   pkgRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   pkgInfo: { flex: 1, gap: 2 },
-  pkgNameRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5 },
   pkgName: { fontSize: 13, fontWeight: "700" },
-  aptChip: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-  },
-  aptChipText: { fontSize: 9.5, fontFamily: "monospace" },
-  heavyChip: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-  },
-  heavyChipText: { fontSize: 9, fontWeight: "800" },
-  pkgDesc: { fontSize: 11 },
+  pkgMeta: { fontSize: 11, lineHeight: 14 },
   pkgAction: { minWidth: 30, alignItems: "flex-end", justifyContent: "center" },
   installBtn: {
     flexDirection: "row",

@@ -139,35 +139,29 @@ function PackageGroupCard({
           {group.packages.map((pkg) => {
             const isInstalled = !!installed[pkg.id];
             const isBusy = !!busy[pkg.id];
+            // Same chip treatment as the dependencies list: the package names,
+            // the large-download flag and the installed state are folded into
+            // one plain-text muted line instead of three separate pills.
+            const meta = [pkg.apt.join(" "), pkg.heavy ? "large download" : null, isInstalled ? "installed" : null]
+              .filter((part): part is string => !!part)
+              .join(" · ");
             return (
               <View key={pkg.id} style={styles.pkgRow}>
                 <View style={styles.pkgInfo}>
-                  <View style={styles.pkgNameRow}>
-                    <Text style={[styles.pkgName, { color: theme.textPrimary }]}>
-                      {pkg.name}
-                    </Text>
-                    <View style={[styles.aptChip, { backgroundColor: theme.bgTertiary, borderColor: theme.border }]}>
-                      <Text style={[styles.aptChipText, { color: theme.textSecondary }]}>
-                        {pkg.apt.join(" ")}
-                      </Text>
-                    </View>
-                    {pkg.heavy && (
-                      <View style={[styles.heavyChip, { backgroundColor: `${theme.accentGold}18`, borderColor: `${theme.accentGold}40` }]}>
-                        <Text style={[styles.heavyChipText, { color: theme.accentGold }]}>
-                          LARGE
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={[styles.pkgDesc, { color: theme.textSecondary }]}>
-                    {pkg.desc}
+                  <Text style={[styles.pkgName, { color: theme.textPrimary }]} numberOfLines={1}>
+                    {pkg.name}
+                  </Text>
+                  <Text style={[styles.pkgDesc, { color: theme.textSecondary }]} numberOfLines={2}>
+                    {meta} — {pkg.desc}
                   </Text>
                 </View>
                 <View style={styles.pkgAction}>
                   {isBusy || groupBusy ? (
                     <ActivityIndicator size={14} color={theme.accent} />
                   ) : isInstalled ? (
-                    <Ionicons name="checkmark-circle" size={20} color={theme.accentGreen} />
+                    // Reads "installed" on the muted line — the green check that
+                    // used to sit here is gone.
+                    null
                   ) : (
                     <TouchableOpacity
                       style={[
@@ -455,22 +449,7 @@ const styles = StyleSheet.create({
   packageList: { borderTopWidth: 1, padding: 10, gap: 10 },
   pkgRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   pkgInfo: { flex: 1, gap: 3 },
-  pkgNameRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5 },
   pkgName: { fontSize: 12.5, fontWeight: "700" },
-  aptChip: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-  },
-  aptChipText: { fontSize: 9.5, fontFamily: "monospace" },
-  heavyChip: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-  },
-  heavyChipText: { fontSize: 9, fontWeight: "800" },
   pkgDesc: { fontSize: 11, lineHeight: 15 },
   pkgAction: { minWidth: 30, alignItems: "flex-end", justifyContent: "center", paddingTop: 2 },
   installBtn: {

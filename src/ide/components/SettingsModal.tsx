@@ -236,6 +236,11 @@ const styles = StyleSheet.create({
   title: { fontSize: 15.5, fontWeight: "700" },
   savedHint: { flexDirection: "row", alignItems: "center", gap: 3 },
   savedText: { fontSize: 10.5, fontWeight: "600" },
-  scroll: { flex: 1, paddingTop: 12 },
-  scrollContent: { paddingBottom: 28 },
+  // No top padding here: padding on a ScrollView's own style sits on the outer
+  // frame and does not reliably inset the scrolling content on Android, which is
+  // why the first/list row used to be cut flush at the tab strip. The top
+  // clearance now lives in contentContainerStyle (content-space, always applied)
+  // and the tab strip above is opaque and z-layered, so nothing is half-cut.
+  scroll: { flex: 1 },
+  scrollContent: { paddingTop: 16, paddingBottom: 28 },
 });

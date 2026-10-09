@@ -36,7 +36,11 @@ interface SettingsTabBarProps {
  */
 export function SettingsTabBar({ activeTab, onSelectTab, theme }: SettingsTabBarProps) {
   return (
-    <View style={[styles.tabBar, { borderColor: theme.border }]}>
+    // Opaque and layered ABOVE the scrolling content: the sheet's own elevated
+    // background (never transparent) so nothing shows through, plus a zIndex so
+    // the strip paints over the ScrollView it sits before — a row scrolling to
+    // the top edge disappears under the strip instead of looking sliced.
+    <View style={[styles.tabBar, { borderColor: theme.border, backgroundColor: theme.bgElevated }]}>
       {TABS.map((tab) => {
         const isActive = activeTab === tab.id;
         return (
@@ -73,6 +77,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     paddingTop: 4,
     gap: 4,
+    // z-order: ABOVE the ScrollView sibling (later tree order would otherwise
+    // win) so the opaque strip covers content that scrolls up beneath it.
+    zIndex: 10,
   },
   tab: {
     flex: 1,
