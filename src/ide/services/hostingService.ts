@@ -31,6 +31,7 @@ import {
 } from "../../../modules/linux-runner/src";
 import { resolveGuestProjectDir } from "./hostingProjectDir";
 import { prepareProject } from "./hostingPrepare";
+import { portReadinessCommand } from "./hostingPortProbe";
 import { isTransientHostStatus, killStaleGuestProcesses } from "./hostingStale";
 import {
   HostProjectKind,
@@ -338,8 +339,9 @@ async function beginHosting(opts: {
  *  - /etc/hosts has no `localhost`. cloudflared looks it up, fails
  *    ("lookup localhost on 1.1.1.1:53: no such host") and EXITS after printing
  *    its URL -- a tunnel that looks fine and is already dead.
- *  - curl exits (77) on a missing CA-bundle path, which killed the readiness
- *    probe even though the probe itself is plain HTTP.
+ *  - curl exits (77) on a missing CA-bundle path. The readiness probe no longer
+ *    depends on curl (see hostingPortProbe.ts), but cloudflared's prechecks and
+ *    any curl/wget a user runs do, so the bundle is still asserted.
  *
  * Both are idempotent and cheap enough to assert on every start.
  */
@@ -351,23 +353,21 @@ async function prepareGuest(): Promise<void> {
   );
 }
 
-/** Poll the guest's own loopback until the server answers. */
+/**
+ * Poll the guest's own loopback until the server answers.
+ *
+ * ONE command polls inside the guest (the loop lives in the guest, so a poll is
+ * a single PRoot start — never a fresh guest process per second, which is what
+ * starved the guest for minutes). The check itself lives in hostingPortProbe.ts;
+ * it must not assume any client the plan did not install, which is exactly the
+ * bug that made it never see a server that was up.
+ */
 async function waitForPort(port: number, seconds: number, onTick: () => void): Promise<boolean> {
-  // ONE command polls inside the guest. The previous version launched a separate
-  // guest process every second -- under PRoot each start costs seconds, so a
-  // "60 second" wait ran for minutes and saturated the guest. That is what made
-  // the terminal look dead, `cd` unresponsive, and hosting appear to hang: one
-  // bug, three symptoms. Any HTTP response counts, including a 500, because it
-  // proves the server is listening; the tunnel is a separate step.
   const batches = Math.max(1, Math.ceil(seconds / 20));
   for (let b = 0; b < batches; b++) {
     if (hostCancelled) return false;
     if (b > 0) onTick();
-    const res = await run(
-      `for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do ` +
-        `curl -s -o /dev/null --max-time 2 http://127.0.0.1:${port}/ && { echo READY; break; }; ` +
-        `sleep 1; done; echo CHECKED`
-    );
+    const res = await run(portReadinessCommand(port));
     if (res.out.includes("READY")) return true;
     // The server's own words, so a failure names itself instead of spinning.
     const tail = await run(`tail -n 2 ${HOST_LOG} 2>/dev/null`);
