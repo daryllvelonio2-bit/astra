@@ -23,6 +23,30 @@
 /** How long one guest call may run before the JS side abandons it. */
 export const GUEST_TIMEOUT_MS = 30_000;
 
+/**
+ * The serve launch is the ONE guest call that must NOT be awaited to its end.
+ * `nohup php artisan serve &` (or the php -S fallback) backgrounds a server
+ * that outlives the call, and the call's proot stays alive tracing it — so an
+ * unbounded wait parks the shared AsyncFunction queue forever and every later
+ * guest call queues behind it. This bound is a few seconds: long enough for the
+ * server to actually start, short enough to free the queue before the readiness
+ * probe runs. On expiry the NATIVE timeout path detaches — it never kills the
+ * proot or its tree — so the server keeps running for the probe and the tunnel.
+ *
+ * This is passed to `executeCommand` for the serve launch only. Nothing else
+ * gets a native bound: the Terminal and the composer step need unbounded (or
+ * their own) long-running waits.
+ */
+export const SERVE_LAUNCH_TIMEOUT_S = 8;
+
+/**
+ * The tunnel clients (cloudflared, ssh -R) are long-lived by design. Bound the LAUNCH call
+ * natively too: otherwise its proot parks the shared expo queue right after readiness and the
+ * URL wait that follows never executes. Same detach semantics as the serve launch - the
+ * tunnel keeps running, only the wait ends.
+ */
+export const TUNNEL_LAUNCH_TIMEOUT_S = 8;
+
 /** The runner shape: one command in, one result out; must never reject. */
 export type RawGuestExecute = (command: string) => Promise<{ code: number; out: string }>;
 

@@ -32,7 +32,12 @@ import {
 import { resolveGuestProjectDir } from "./hostingProjectDir";
 import { prepareProject } from "./hostingPrepare";
 import { portReadinessCommand } from "./hostingPortProbe";
-import { GUEST_TIMEOUT_MS, runBounded } from "./hostingTimeout";
+import {
+  GUEST_TIMEOUT_MS,
+  runBounded,
+  SERVE_LAUNCH_TIMEOUT_S,
+  TUNNEL_LAUNCH_TIMEOUT_S,
+} from "./hostingTimeout";
 import { parseProbeDiag, recordProbe } from "./hostingTrace";
 import { isTransientHostStatus, killStaleGuestProcesses } from "./hostingStale";
 import {
@@ -118,14 +123,15 @@ function pushLog(line: string): void {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** The native runner normalised to {code,out}. It never throws. */
-const rawGuestCall = async (c: string) => {
-  const x: any = await executeCommand(c);
+const rawGuestCall = async (c: string, timeoutSeconds?: number) => {
+  const x: any = await executeCommand(c, undefined, timeoutSeconds);
   return { code: x?.exitCode ?? 0, out: String(x?.stdout ?? "") };
 };
 
 /** One guest call — always bounded + traced (see hostingTimeout.ts for why). */
-async function run(command: string): Promise<{ code: number; out: string }> {
-  const r = await runBounded(rawGuestCall, command);
+async function run(command: string, timeoutSeconds?: number): Promise<{ code: number; out: string }> {
+  // timeoutSeconds goes to the NATIVE layer for this call only (the serve launch).
+  const r = await runBounded((c) => rawGuestCall(c, timeoutSeconds), command);
   if (r.timedOut) pushLog(`guest call timed out after ${GUEST_TIMEOUT_MS / 1000}s: ${command.replace(/\s+/g, " ").slice(0, 50)}`);
   recordProbe({ command, timedOut: r.timedOut, code: r.code, out: r.out });
   return { code: r.code, out: r.out };
@@ -280,9 +286,9 @@ async function beginHosting(opts: {
   const serve = plan.serve(guestDir, port, opts.nodeFlavor);
   pushLog(`$ ${serve}`);
   await run(`rm -f ${HOST_LOG} ${HOST_PID}`);
-  await run(
-    `cd ${guestDir} && nohup bash -lc ${JSON.stringify(serve)} > ${HOST_LOG} 2>&1 & echo $! > ${HOST_PID}; sleep 1; cat ${HOST_PID}`
-  );
+  // Serve launch: the one call bounded natively (detaches, never kills) so its proot cannot park the shared queue.
+  const serveCmd = `cd ${guestDir} && nohup bash -lc ${JSON.stringify(serve)} > ${HOST_LOG} 2>&1 & echo $! > ${HOST_PID}; sleep 1; cat ${HOST_PID}`;
+  await run(serveCmd, SERVE_LAUNCH_TIMEOUT_S);
 
   // Wait for something to answer on the port. A dev server can take a while
   // (first vite/webpack build), so this is generous but bounded.
@@ -296,9 +302,8 @@ async function beginHosting(opts: {
     pushLog("php artisan serve did not answer; retrying with PHP's built-in server on public/");
     set({ step: "Retrying with PHP's built-in server…" });
     await run(`rm -f ${HOST_LOG}`);
-    await run(
-      `cd ${guestDir} && nohup bash -lc 'php -S 0.0.0.0:${port} -t public' > ${HOST_LOG} 2>&1 & echo $! > ${HOST_PID}; sleep 1; true`
-    );
+    const phpCmd = `cd ${guestDir} && nohup bash -lc 'php -S 0.0.0.0:${port} -t public' > ${HOST_LOG} 2>&1 & echo $! > ${HOST_PID}; sleep 1; true`;
+    await run(phpCmd, SERVE_LAUNCH_TIMEOUT_S);
     ready = await waitForPort(port, 45, () => {
       set({ step: "Waiting for PHP to answer…" });
     });
@@ -399,7 +404,8 @@ async function openTunnel(port: number): Promise<string | null> {
     set({ step: "Opening a Cloudflare quick tunnel…", tunnel: "cloudflared" });
     await run(`rm -f ${TUNNEL_LOG} ${TUNNEL_PID}`);
     await run(
-      `nohup cloudflared tunnel --url http://127.0.0.1:${port} --no-autoupdate > ${TUNNEL_LOG} 2>&1 & echo $! > ${TUNNEL_PID}; sleep 1; true`
+      `nohup cloudflared tunnel --url http://127.0.0.1:${port} --no-autoupdate > ${TUNNEL_LOG} 2>&1 & echo $! > ${TUNNEL_PID}; sleep 1; true`,
+      TUNNEL_LAUNCH_TIMEOUT_S
     );
     const url = await waitForUrl(TUNNEL_LOG, /https:\/\/[a-z0-9-]+\.trycloudflare\.com/, 45);
     if (url) return url;
@@ -421,7 +427,8 @@ async function openTunnel(port: number): Promise<string | null> {
     `nohup ssh -n -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ` +
       `-o ServerAliveInterval=30 -o ExitOnForwardFailure=yes ` +
       `-R 80:127.0.0.1:${port} nokey@localhost.run > ${TUNNEL_LOG} 2>&1 & ` +
-      `echo $! > ${TUNNEL_PID}; sleep 1; true`
+      `echo $! > ${TUNNEL_PID}; sleep 1; true`,
+    TUNNEL_LAUNCH_TIMEOUT_S
   );
   return await waitForUrl(
     TUNNEL_LOG,
