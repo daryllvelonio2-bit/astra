@@ -126,6 +126,33 @@ function PackageGroupCard({
               {allDone ? "All installed" : `${doneCount}/${group.packages.length}`}
             </Text>
           )}
+          {/* While collapsed the bulk install lives on the header so it stays
+              reachable without opening the group. Once open, the full-width
+              "Install all missing" button inside takes over. */}
+          {!expanded && !allDone && !probing && (
+            <TouchableOpacity
+              style={[
+                styles.headerInstallAll,
+                {
+                  backgroundColor: `${theme.accent}12`,
+                  borderColor: `${theme.accent}30`,
+                  opacity: provisioningActive || groupBusy ? 0.5 : 1,
+                },
+              ]}
+              onPress={() => onInstallGroup(group)}
+              disabled={provisioningActive || groupBusy}
+              activeOpacity={0.7}
+            >
+              {groupBusy ? (
+                <ActivityIndicator size={12} color={theme.accent} />
+              ) : (
+                <Ionicons name="albums-outline" size={12} color={theme.accent} />
+              )}
+              <Text style={[styles.headerInstallAllText, { color: theme.accent }]}>
+                Install {group.packages.length - doneCount}
+              </Text>
+            </TouchableOpacity>
+          )}
           <Ionicons
             name={expanded ? "chevron-up" : "chevron-down"}
             size={14}
@@ -223,7 +250,9 @@ function PackageGroupCard({
 }
 
 export function OptionalPackagesSection({ theme, provisioningActive }: OptionalPackagesSectionProps) {
-  const [expandedGroup, setExpandedGroup] = useState<string | null>("req-core");
+  // Every group starts collapsed — same collapse idiom as the stage cards and
+  // the live-log drawer (tap the header to open, tap again to close).
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [installed, setInstalled] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [groupBusy, setGroupBusy] = useState<Record<string, boolean>>({});
@@ -408,6 +437,17 @@ const styles = StyleSheet.create({
   groupDesc: { fontSize: 10, marginTop: 1 },
   groupRight: { flexDirection: "row", alignItems: "center", gap: 4 },
   groupCount: { fontSize: 11, fontWeight: "600" },
+  headerInstallAll: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginRight: 2,
+  },
+  headerInstallAllText: { fontSize: 10.5, fontWeight: "700" },
   packageList: { borderTopWidth: 1, padding: 10, gap: 10 },
   pkgRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   pkgInfo: { flex: 1, gap: 3 },
