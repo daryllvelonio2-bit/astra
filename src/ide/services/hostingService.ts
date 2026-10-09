@@ -359,15 +359,16 @@ async function prepareGuest(): Promise<void> {
  * ONE command polls inside the guest (the loop lives in the guest, so a poll is
  * a single PRoot start — never a fresh guest process per second, which is what
  * starved the guest for minutes). The check itself lives in hostingPortProbe.ts;
- * it must not assume any client the plan did not install, which is exactly the
- * bug that made it never see a server that was up.
+ * the strongest of its signals is the server's OWN log line (the guest's log is
+ * passed in), confirmed against /proc — that needs no client at all, which is
+ * exactly the bug that made a client-only probe never see a server that was up.
  */
 async function waitForPort(port: number, seconds: number, onTick: () => void): Promise<boolean> {
   const batches = Math.max(1, Math.ceil(seconds / 20));
   for (let b = 0; b < batches; b++) {
     if (hostCancelled) return false;
     if (b > 0) onTick();
-    const res = await run(portReadinessCommand(port));
+    const res = await run(portReadinessCommand(port, HOST_LOG));
     if (res.out.includes("READY")) return true;
     // The server's own words, so a failure names itself instead of spinning.
     const tail = await run(`tail -n 2 ${HOST_LOG} 2>/dev/null`);
