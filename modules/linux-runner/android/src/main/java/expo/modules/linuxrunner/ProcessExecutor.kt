@@ -1,13 +1,21 @@
 package expo.modules.linuxrunner
 
 import android.content.Context
+import android.util.Log
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-data class ExecutionResult(val stdout: String, val exitCode: Int)
+data class ExecutionResult(val stdout: String, val exitCode: Int, val timedOut: Boolean = false)
 
 object ProcessExecutor {
+    // On-demand exec trace. Log.i here is OFF unless the tag is raised on the
+    // device (e.g. `adb shell setprop log.tag.LinuxRunnerExec DEBUG`), so a
+    // normal run stays quiet but a device logcat can show, per guest call,
+    // which queue thread ran it (the shared "expo.modules.AsyncFunctionQueue"
+    // vs a dedicated "LinuxRunnerKill") and how long it took — which is exactly
+    // how you prove whether a call is still parking the shared queue.
+    private const val TAG = "LinuxRunnerExec"
     private val activeProcesses = ConcurrentHashMap<String, Process>()
 
     fun stopCommand(commandId: String): Boolean {
@@ -150,6 +158,17 @@ object ProcessExecutor {
         // Track even untracked one-shot executions under an auto id so
         // stopAllCommands() can reach them while they run.
         val effectiveCommandId = if (!commandId.isNullOrBlank()) commandId else "sync-${System.nanoTime()}"
+        val traceOn = Log.isLoggable(TAG, Log.DEBUG)
+        val traceThread = Thread.currentThread()
+        val traceStartMs = System.currentTimeMillis()
+        if (traceOn) {
+            Log.i(TAG, "exec START thread=${traceThread.name} id=${traceThread.id} timeout=${timeoutSeconds}s cmd=${command.take(90)}")
+        }
+        var exitCode = -1
+        var timedOut = false
+        // Set when the wall-clock bound elapses and the process must be left
+        // RUNNING (a detached server) instead of destroyed.
+        var keepAlive = false
         try {
             process = pb.start()
             activeProcesses[effectiveCommandId] = process
@@ -179,22 +198,40 @@ object ProcessExecutor {
                 process.waitFor()
                 true
             }
-            readerThread.join(2000)
 
             if (!finished) {
-                process.destroyForcibly()
-                return ExecutionResult(output.toString() + "\nError: Execution timed out after ${timeoutSeconds}s", -1)
+                // Wall-clock bound elapsed. This call started a long-lived
+                // detached child (e.g. `nohup php artisan serve &`) whose proot
+                // is still tracing it, which is why waitFor never returns on its
+                // own. Stop waiting, but DO NOT destroy the proot and DO NOT
+                // kill its tree: the server must keep running — and stays
+                // supervised by that proot rather than orphaned — while the
+                // shared AsyncFunction queue is freed for the next call. JS
+                // distinguishes this from a real failure via the timedOut flag.
+                keepAlive = true
+                timedOut = true
+                return ExecutionResult(
+                    output.toString() + "\nError: Execution timed out after ${timeoutSeconds}s",
+                    -1,
+                    true
+                )
             }
 
-            val exitCode = process.exitValue()
+            readerThread.join(2000)
+            exitCode = process.exitValue()
             return ExecutionResult(output.toString().trimEnd(), exitCode)
         } catch (e: Exception) {
             return ExecutionResult("Error executing command: ${e.message}", -1)
         } finally {
             activeProcesses.remove(effectiveCommandId)
-            try {
-                process?.destroyForcibly()
-            } catch (_: Exception) {}
+            if (!keepAlive) {
+                try {
+                    process?.destroyForcibly()
+                } catch (_: Exception) {}
+            }
+            if (traceOn) {
+                Log.i(TAG, "exec END thread=${traceThread.name} id=${traceThread.id} dur=${System.currentTimeMillis() - traceStartMs}ms exit=$exitCode timedOut=$timedOut")
+            }
         }
     }
 }

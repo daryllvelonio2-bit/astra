@@ -14,6 +14,12 @@ const emitter: any = LinuxRunnerModule
 export interface ExecutionResult {
   stdout: string;
   exitCode: number;
+  /**
+   * True when the native call hit the per-call `timeoutSeconds` bound and was
+   * detached (the process — e.g. a server launch — keeps running). Absent on
+   * the historical unbounded path.
+   */
+  timedOut?: boolean;
 }
 
 export async function isEnvironmentReady(): Promise<boolean> {
@@ -40,11 +46,16 @@ export async function initializeEnvironment(): Promise<boolean> {
 
 export async function executeCommand(
   command: string,
-  workspaceId?: string
+  workspaceId?: string,
+  timeoutSeconds?: number
 ): Promise<ExecutionResult> {
   if (LinuxRunnerModule?.executeCommand) {
     try {
-      return await LinuxRunnerModule.executeCommand(command, workspaceId ?? null);
+      return await LinuxRunnerModule.executeCommand(
+        command,
+        workspaceId ?? null,
+        timeoutSeconds ?? null
+      );
     } catch (e: any) {
       return { stdout: `Error executing command: ${e.message}`, exitCode: -1 };
     }

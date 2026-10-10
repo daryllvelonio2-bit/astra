@@ -83,16 +83,25 @@ class LinuxRunnerModule : Module() {
             return@AsyncFunction EnvironmentManager.initialize(context)
         }
 
-        AsyncFunction("executeCommand") { command: String, workspaceId: String? ->
+        AsyncFunction("executeCommand") { command: String, workspaceId: String?, timeoutSeconds: Int? ->
             val context = appContext.reactContext ?: return@AsyncFunction mapOf(
                 "stdout" to "Error: React context unavailable",
                 "exitCode" to -1
             )
             EnvironmentManager.initialize(context)
-            val result = ProcessExecutor.execute(context, command, workspaceId, 0)
+            // timeoutSeconds = 0/null means the historical unbounded wait (the
+            // Terminal needs it); a positive value bounds only THIS call and,
+            // on expiry, detaches rather than kills (see ProcessExecutor).
+            val result = ProcessExecutor.execute(
+                context,
+                command,
+                workspaceId,
+                (timeoutSeconds ?: 0).toLong()
+            )
             return@AsyncFunction mapOf(
                 "stdout" to result.stdout,
-                "exitCode" to result.exitCode
+                "exitCode" to result.exitCode,
+                "timedOut" to result.timedOut
             )
         }
 
