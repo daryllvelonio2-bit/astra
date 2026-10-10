@@ -25,6 +25,12 @@ const CMDLINE_PATTERNS = [
   "[c]omposer",
   "[a]rtisan serve",
   "php -[S]",
+  // The process actually holding the dev-server port is a BARE php: `php artisan serve`
+  // spawns an inner php whose command line is just "php" (or php8.4), which no other
+  // pattern here matches. Seen on the device as a leftover php holding 0.0.0.0:8000 and
+  // making the next run fail with "Address already in use". This reap runs before anything
+  // of ours starts, so a bare php can only be a leftover server.
+  "[p]hp",
   "http[.]server",
   "npm [r]un dev",
   "cloudflared [t]unnel",
