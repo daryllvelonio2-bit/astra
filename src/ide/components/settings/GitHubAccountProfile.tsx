@@ -15,19 +15,17 @@ import { SettingsOptionCard } from "./SettingsOptionCard";
 import { withTimeout } from "./withTimeout";
 import { showAppDialog } from "../../services/appDialog";
 import { fetchUserProfile } from "../../services/gitHubAccountService";
-import { fetchMyRepos } from "../../services/gitHubRepoService";
-import { GitHubRepo, GitHubUserDetail } from "../../services/gitHubTypes";
+import { GitHubUserDetail } from "../../services/gitHubTypes";
 import { logoutGitHub, GitHubSession } from "../../services/gitService";
 
 /**
  * The signed-in body of the GitHub account section (Settings -> GitHub):
- * identity, public counts, the account's repositories, and sign-out.
+ * identity, the public counts and sign-out - a profile card, not a repo browser.
  *
  * Everything here reuses the app's existing GitHub data paths — no second auth
  * path and no new dependency:
  *  - `fetchUserProfile` (gitHubAccountService -> gitHubApi) reads the saved
  *    token itself and returns the profile; the token never reaches this file.
- *  - `fetchMyRepos` (gitHubRepoService) is the same call MyReposList uses.
  *  - `logoutGitHub` (gitHubAuthService) is the same sign-out the Git tab uses.
  * The avatar URL is the only credential-adjacent value shown and it is a public
  * image URL; no token or credential is rendered anywhere.
@@ -36,8 +34,6 @@ import { logoutGitHub, GitHubSession } from "../../services/gitService";
 /** A hung request must not leave the section spinning — fail it and offer Retry. */
 const LOAD_TIMEOUT_MS = 15000;
 /** The Settings ScrollView is not virtualized, so cap the rows rendered. */
-const REPO_DISPLAY_LIMIT = 25;
-const GITHUB_WEB_BASE = "https://github.com/";
 
 /** Owner avatar with an initials fallback so a slow/absent image never blanks. */
 function Avatar({ uri, login, size, theme }: { uri?: string; login: string; size: number; theme: ThemeColors }) {
@@ -71,15 +67,6 @@ function Stat({ label, value, theme }: { label: string; value: number; theme: Th
 }
 
 /** Explicit public/private badge — private is gold (lock), public is muted. */
-function VisibilityPill({ isPrivate, theme }: { isPrivate: boolean; theme: ThemeColors }) {
-  const color = isPrivate ? theme.accentGold : theme.textMuted;
-  return (
-    <View style={[styles.pill, { backgroundColor: `${color}1F`, borderColor: `${color}55` }]}>
-      <Ionicons name={isPrivate ? "lock-closed" : "globe-outline"} size={9} color={color} />
-      <Text style={[styles.pillText, { color }]}>{isPrivate ? "private" : "public"}</Text>
-    </View>
-  );
-}
 
 function InlineError({ text, theme, onRetry }: { text: string; theme: ThemeColors; onRetry: () => void }) {
   return (
@@ -105,9 +92,7 @@ export function GitHubAccountProfile({
 }) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<GitHubUserDetail | null>(null);
-  const [repos, setRepos] = useState<GitHubRepo[]>([]);
   const [profileError, setProfileError] = useState("");
-  const [reposError, setReposError] = useState("");
   const alive = useRef(true);
 
   useEffect(() => {
@@ -120,36 +105,23 @@ export function GitHubAccountProfile({
   const load = useCallback(async () => {
     setLoading(true);
     setProfileError("");
-    setReposError("");
     try {
       // Read the results defensively: this project's tsconfig does not narrow
       // boolean-literal unions, so `res.error` on an `ok: true` branch is a
       // type error — the same treatment MyReposList uses.
-      const [profileRes, reposRes] = await withTimeout(
-        Promise.all([fetchUserProfile(), fetchMyRepos("updated", 100)]),
-        LOAD_TIMEOUT_MS
-      );
+      const profileRes = await withTimeout(fetchUserProfile(), LOAD_TIMEOUT_MS);
       if (!alive.current) return;
       const p: any = profileRes;
-      const r: any = reposRes;
       if (p && p.ok) {
         setProfile(p.data);
       } else {
         setProfile(null);
         setProfileError((p && p.error && p.error.message) || "Could not load your GitHub profile.");
       }
-      if (r && r.ok) {
-        setRepos(Array.isArray(r.data) ? r.data : []);
-      } else {
-        setRepos([]);
-        setReposError((r && r.error && r.error.message) || "Could not load your repositories.");
-      }
     } catch (_) {
       if (!alive.current) return;
       setProfile(null);
-      setRepos([]);
       setProfileError("Loading your GitHub profile timed out.");
-      setReposError("Loading your repositories timed out.");
     } finally {
       if (alive.current) setLoading(false);
     }
@@ -159,14 +131,6 @@ export function GitHubAccountProfile({
     void load();
   }, [load]);
 
-  // Tap-through: open the repository's GitHub page in the browser — the same
-  // "open the GitHub URL" behaviour the app uses elsewhere (useFileActions /
-  // useCommitMenuActions). The full in-app repo view lives in the Git tab.
-  const openRepo = useCallback((repo: GitHubRepo) => {
-    const url = repo.htmlUrl || (repo.fullName ? `${GITHUB_WEB_BASE}${repo.fullName}` : "");
-    if (!url) return;
-    Linking.openURL(url).catch(() => {});
-  }, []);
 
   const confirmSignOut = useCallback(() => {
     showAppDialog({
@@ -193,7 +157,6 @@ export function GitHubAccountProfile({
     });
   }, [onSignedOut]);
 
-  const visibleRepos = useMemo(() => repos.slice(0, REPO_DISPLAY_LIMIT), [repos]);
   const name = profile?.name || "";
   const avatarUri = profile?.avatarUrl || session.avatarUrl;
 
@@ -227,56 +190,6 @@ export function GitHubAccountProfile({
       ) : profileError ? (
         <InlineError text={profileError} theme={theme} onRetry={() => void load()} />
       ) : null}
-
-      {/* Repositories */}
-      <SettingsSectionHeader
-        theme={theme}
-        icon="git-branch-outline"
-        title="Repositories"
-        subtitle="Tap one to open it on GitHub."
-      />
-      {reposError ? (
-        <InlineError text={reposError} theme={theme} onRetry={() => void load()} />
-      ) : loading && repos.length === 0 ? (
-        <View style={styles.stateRow}>
-          <ActivityIndicator size="small" color={theme.accent} />
-          <Text style={[styles.stateText, { color: theme.textMuted }]}>Loading your repositories…</Text>
-        </View>
-      ) : repos.length === 0 ? (
-        <Text style={[styles.stateText, { color: theme.textMuted }]}>No repositories on this account.</Text>
-      ) : (
-        <View style={styles.repoList}>
-          {visibleRepos.map((repo) => (
-            <TouchableOpacity
-              key={String(repo.id || repo.fullName)}
-              style={[styles.repoRow, { backgroundColor: theme.bgPrimary, borderColor: theme.border }]}
-              onPress={() => openRepo(repo)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.repoBody}>
-                <Text style={[styles.repoName, { color: theme.textPrimary }]} numberOfLines={1}>
-                  {repo.name || repo.fullName}
-                </Text>
-                <View style={styles.repoMeta}>
-                  <VisibilityPill isPrivate={repo.isPrivate} theme={theme} />
-                  {!!repo.language && (
-                    <Text style={[styles.repoMetaText, { color: theme.textSecondary }]} numberOfLines={1}>
-                      {repo.language}
-                    </Text>
-                  )}
-                  {repo.isFork && <Text style={[styles.repoMetaText, { color: theme.textMuted }]}>fork</Text>}
-                </View>
-              </View>
-              <Ionicons name="open-outline" size={13} color={theme.textMuted} />
-            </TouchableOpacity>
-          ))}
-          {repos.length > visibleRepos.length && (
-            <Text style={[styles.stateText, { color: theme.textMuted }]}>
-              Showing {visibleRepos.length} of {repos.length}. Open the Git tab for the full list.
-            </Text>
-          )}
-        </View>
-      )}
 
       {/* Sign out */}
       <SettingsSectionHeader
