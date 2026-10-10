@@ -392,7 +392,34 @@ async function waitForPort(port: number, seconds: number, onTick: () => void): P
  * toolchain already installs.
  */
 async function openTunnel(port: number): Promise<string | null> {
-  const hasCloudflared = (await run("command -v cloudflared")).code === 0;
+  let hasCloudflared = (await run("command -v cloudflared")).code === 0;
+
+  if (!hasCloudflared) {
+    // The guest has no curl and no wget, but it has php, and php can fetch a file. Do this
+    // before the ssh fallback: localhost.run's anonymous form answers with its own landing
+    // page, not a tunnel (proven on the device), so it cannot host anything. The fetch is
+    // detached then polled, so no guest call outlives its bound, and the binary is put on
+    // PATH so the existing launch path is used unchanged.
+    set({ step: "Fetching cloudflared…", tunnel: "cloudflared" });
+    pushLog("cloudflared is not in the guest; fetching it with php (once per device)");
+    await run(
+      `nohup php -d allow_url_fopen=1 -r 'copy("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64","/tmp/cloudflared") or exit(1); chmod("/tmp/cloudflared",0755); echo OK;' > /tmp/cloudflared-dl.log 2>&1 &`,
+      SERVE_LAUNCH_TIMEOUT_S
+    );
+    for (let i = 0; i < 6 && !hasCloudflared; i++) {
+      await sleep(20000);
+      hasCloudflared = (
+        await run(
+          "[ -x /tmp/cloudflared ] && cp /tmp/cloudflared /usr/local/bin/cloudflared && command -v cloudflared >/dev/null && echo YES || echo NO"
+        )
+      ).out.includes("YES");
+    }
+    pushLog(
+      hasCloudflared
+        ? "cloudflared is ready in the guest"
+        : "cloudflared could not be fetched; falling back to the ssh tunnel"
+    );
+  }
 
   if (hasCloudflared) {
     set({ step: "Opening a Cloudflare quick tunnel…", tunnel: "cloudflared" });
