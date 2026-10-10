@@ -433,7 +433,7 @@ async function openTunnel(port: number): Promise<string | null> {
       }
       await run(`rm -f ${TUNNEL_LOG} ${TUNNEL_PID}`);
       await run(
-        `nohup cloudflared tunnel --protocol http2 --edge-ip-version 4 --loglevel debug --url http://127.0.0.1:${port} --no-autoupdate > ${TUNNEL_LOG} 2>&1 & echo $! > ${TUNNEL_PID}; sleep 1; true`,
+        `nohup cloudflared tunnel --protocol http2 --edge-ip-version 4 --url http://127.0.0.1:${port} --no-autoupdate > ${TUNNEL_LOG} 2>&1 & echo $! > ${TUNNEL_PID}; sleep 1; true`,
         TUNNEL_LAUNCH_TIMEOUT_S
       );
       url = await waitForUrl(TUNNEL_LOG, /https:\/\/[^\s|"]*trycloudflare\.com/, 60);
@@ -478,7 +478,7 @@ async function waitForUrl(logFile: string, pattern: RegExp, seconds: number): Pr
     // a fresh guest process every second.
     const res = await run(
       `for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do ` +
-        `grep -oE 'https://[a-z0-9.-]+' ${logFile} 2>/dev/null | head -1 && break; sleep 1; done; ` +
+        `grep -oE 'https://[A-Za-z0-9._-]+\\.trycloudflare\\.com' ${logFile} 2>/dev/null | tail -1 && break; sleep 1; done; ` +
         `tail -n 2 ${logFile} 2>/dev/null`
     );
     const match = res.out.match(pattern);
