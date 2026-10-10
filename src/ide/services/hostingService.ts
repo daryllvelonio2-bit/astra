@@ -426,7 +426,7 @@ async function openTunnel(port: number): Promise<string | null> {
   );
   return await waitForUrl(
     TUNNEL_LOG,
-    /https:\/\/[a-z0-9-]+\.(?:lhr\.life|localhost\.run)/,
+    /https:\/\/[a-z0-9-]+\.lhr\.life/,
     45
   );
 }
