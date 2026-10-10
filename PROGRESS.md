@@ -5961,3 +5961,16 @@
 - **Files (all < 500):** `hostingTimeout.ts` 69 (new), `hostingTrace.ts` 99 (new), `hostingPortProbe.ts` 69 -> 92, `hostingService.ts` 492 -> 500. The composer deadline, the stale-process reaping, the one-invocation-per-poll rule and every error-state string are unchanged.
 - **Verified:** `npx tsc --noEmit` exit 0; the probe command + its diagnostics run under `bash` on the host (READY+DIAG on a live listener; `CHECKED` + `DIAG_LISTEN:NO` and `DIAG_LOG:NOEXIST` on the negative paths); `runBounded` run in node (hang -> `timedOut` exactly at the bound, fast -> settles, reject -> caught, process exits with no leaked timer); `recordProbe` never throws with both FS ops throwing and undefined inputs, and caps at 60 lines.
 - **Needs the physical device:** the trace write needs All-Files access (otherwise it is a silent no-op); reproduce the on-phone hang and confirm the panel now reaches the error within the bound and `adb pull /sdcard/astra-probe.txt` shows the TIMED OUT blocks. The deeper cure — so a jammed `modulesQueue` frees itself instead of merely being bypassed on the JS side — is a per-call timeout on the native `ProcessExecutor` (`timeoutSeconds` is already a parameter); that needs a rebuild/reinstall and must NOT be a blanket timeout on `executeCommand` (the Terminal relies on unbounded long builds).
+
+### [2026-10-03] - Trial/expiry gate removed from `main` (kept on `tempo`) (revert)
+- **Ask:** the published `main` branch must not carry the temporary trial/expiry gate.
+- **Reverted on `main`:** `App.tsx` restored to its pre-trial form (upstream's copy — upstream never touched the file, so the restore is exact), and the two trial-only files deleted: `src/ide/services/licenseService.ts` and `src/onboarding/TrialExpiredScreen.tsx`.
+- **Nothing else referenced them** (verified: only `App.tsx` imported `licenseService`/`TrialExpiredScreen`), so no orphan imports or dead gates remain.
+- **Verification:** `npx tsc --noEmit` exit 0 after the removal; `grep -E 'getLicenseState|TrialExpiredScreen|licenseState' App.tsx` → 0 hits; the rebuilt release bundle no longer contains the trial markers.
+- **Where the feature still lives:** branch `tempo` (and `origin/tempo`) keeps the full tested implementation — 7-day window, clock-rollback guard, dual storage that survives clear-app-data, and the owner override.
+
+### [2026-10-05] - GitHubIssueView split under the 500-line cap; scratch probes removed (refactor)
+- **Rule violation:** `src/ide/components/github/GitHubIssueView.tsx` was 510 lines against agents.md rule 5 (no file over 500).
+- **Fix:** moved its `StyleSheet.create` block into `GitHubIssueView.styles.ts` (45 lines) and imported it — the same pattern already used by `CloneRepoModal.styles.ts` and `git/GitChangesList.styles.ts`. The component is now 470 lines and **no style value changed**.
+- **Cleanup:** removed the accidentally-committed scratch probes `cdp1.tmp.js` and `inspect_scroll.tmp.js` (both were tracked in git), plus the 102 MB stale `app-debug.apk` sitting in the build output directory.
+- **Verification:** `npx tsc --noEmit` exit 0; `find src -name '*.ts' -o -name '*.tsx'` filtered at >500 lines returns nothing.
