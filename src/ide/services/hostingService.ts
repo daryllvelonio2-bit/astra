@@ -425,10 +425,10 @@ async function openTunnel(port: number): Promise<string | null> {
     set({ step: "Opening a Cloudflare quick tunnel…", tunnel: "cloudflared" });
     await run(`rm -f ${TUNNEL_LOG} ${TUNNEL_PID}`);
     await run(
-      `nohup cloudflared tunnel --url http://127.0.0.1:${port} --no-autoupdate > ${TUNNEL_LOG} 2>&1 & echo $! > ${TUNNEL_PID}; sleep 1; true`,
+      `nohup cloudflared tunnel --protocol http2 --url http://127.0.0.1:${port} --no-autoupdate > ${TUNNEL_LOG} 2>&1 & echo $! > ${TUNNEL_PID}; sleep 1; true`,
       TUNNEL_LAUNCH_TIMEOUT_S
     );
-    const url = await waitForUrl(TUNNEL_LOG, /https:\/\/[^\s|"]*trycloudflare\.com/, 45);
+    const url = await waitForUrl(TUNNEL_LOG, /https:\/\/[^\s|"]*trycloudflare\.com/, 90);
     if (url) return url;
     pushLog("cloudflared did not produce a URL; falling back to ssh reverse tunnel");
   }
