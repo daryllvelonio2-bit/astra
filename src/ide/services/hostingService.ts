@@ -428,7 +428,7 @@ async function openTunnel(port: number): Promise<string | null> {
       `nohup cloudflared tunnel --url http://127.0.0.1:${port} --no-autoupdate > ${TUNNEL_LOG} 2>&1 & echo $! > ${TUNNEL_PID}; sleep 1; true`,
       TUNNEL_LAUNCH_TIMEOUT_S
     );
-    const url = await waitForUrl(TUNNEL_LOG, /https:\/\/[a-z0-9-]+\.trycloudflare\.com/, 45);
+    const url = await waitForUrl(TUNNEL_LOG, /https:\/\/[^\s|"]*trycloudflare\.com/, 45);
     if (url) return url;
     pushLog("cloudflared did not produce a URL; falling back to ssh reverse tunnel");
   }
@@ -474,7 +474,7 @@ async function waitForUrl(logFile: string, pattern: RegExp, seconds: number): Pr
     const last = res.out.trim().split("\n").pop() || "";
     if (last && !/^#/.test(last)) set({ step: last.slice(0, 90) });
   }
-  const tail = await run(`tail -n 6 ${logFile} 2>/dev/null`);
+  const tail = await run(`tail -n 24 ${logFile} 2>/dev/null`);
   tail.out.split("\n").forEach(pushLog);
   return null;
 }
