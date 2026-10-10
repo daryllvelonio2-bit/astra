@@ -26,20 +26,19 @@ import { GeneralSection } from "./settings/GeneralSection";
 import { EditorSection } from "./settings/EditorSection";
 import { EnvironmentSection } from "./settings/EnvironmentSection";
 import { ShortcutsSection } from "./settings/ShortcutsSection";
-import { FeedbackSection } from "./settings/FeedbackSection";
+import { GitHubAccountSection } from "./settings/GitHubAccountSection";
 import { SupportSection } from "./settings/SupportSection";
 
 interface SettingsModalProps {
   visible: boolean;
   onClose: () => void;
-  workspaceId?: string;
   onSyncWorkspace?: () => void;
   onRerunStartup?: () => void;
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 
-export function SettingsModal({ visible, onClose, workspaceId, onSyncWorkspace, onRerunStartup }: SettingsModalProps) {
+export function SettingsModal({ visible, onClose, onSyncWorkspace, onRerunStartup }: SettingsModalProps) {
   const { theme, themeMode, setTheme } = useTheme();
   // The sheet's last rows must clear the system navigation bar — respect
   // the live bottom inset (3-button nav paints over a fixed 16 padding).
@@ -188,8 +187,8 @@ export function SettingsModal({ visible, onClose, workspaceId, onSyncWorkspace, 
             {activeTab === "shortcuts" && (
               <ShortcutsSection theme={theme} />
             )}
-            {activeTab === "feedback" && (
-              <FeedbackSection theme={theme} workspaceId={workspaceId} />
+            {activeTab === "github" && (
+              <GitHubAccountSection theme={theme} />
             )}
             {activeTab === "support" && (
               <SupportSection theme={theme} />

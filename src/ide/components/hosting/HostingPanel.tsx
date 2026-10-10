@@ -30,14 +30,13 @@ import {
   InstallCard,
   KIND_ORDER,
 } from "./HostingSections";
-import { HostingTerminal } from "./HostingTerminal";
 
 interface HostingPanelProps {
   workspaceId?: string;
   projectName?: string;
   rootNames: string[];
   onOpenBrowser?: (url: string) => void;
-  /** Bottom tab visible? Drives the embedded terminal's mount/unmount. */
+  /** Bottom tab visible? Gates the ghost-state reconcile below. */
   visible?: boolean;
 }
 
@@ -46,9 +45,7 @@ interface HostingPanelProps {
  *
  * Answers two questions and nothing else: is the project live, and if not, what
  * is happening. One status line, one action, and — once a link exists — the URL
- * as the biggest thing on the panel. The raw log lives in the terminal pane
- * below (started in the hosted project's directory), not behind a second
- * collapsible.
+ * as the biggest thing on the panel.
  */
 export function HostingPanel({
   workspaceId,
@@ -246,8 +243,6 @@ export function HostingPanel({
           />
         )}
       </ScrollView>
-
-      <HostingTerminal workspaceId={workspaceId} visible={visible} />
     </View>
   );
 }

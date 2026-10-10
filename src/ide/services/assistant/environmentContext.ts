@@ -15,7 +15,8 @@
  * kinds), environmentStages.ts (base toolchain), optionalPackages.ts (extras),
  * runService.ts (Run), workspaceService.ts / nativeFs.ts (files),
  * gitService.ts / gitCloneService.ts / gitCollaboratorsApi.ts (git),
- * feedbackTransport.ts (feedback).
+ * gitHubAuthService.ts / gitHubAccountService.ts / gitHubRepoService.ts
+ * (GitHub account).
  */
 
 export const ENVIRONMENT_SECTION_TITLE = "What this environment is and what it can do";
@@ -51,6 +52,6 @@ export function buildEnvironmentSection(): string {
     "- Run shell commands in the guest (the Terminal tab — this is where your commands execute).",
     "- Git: init, status, stage/unstage, commit, branches/switch, fetch, pull, push, and clone (HTTPS or SSH, `owner/repo` shorthand), plus GitHub repo collaborators (list, invite with push access, remove).",
     "- Install dependencies by kind of work: the base toolchain, a per-project runtime, or optional packages — each on the user's tap.",
-    "- Send feedback to the developers from Settings → Feedback (the app sends it directly).",
+    "- Sign in to GitHub from Settings → GitHub: the app shows a one-time code, you approve it on github.com, and your profile and repositories appear there (signing out clears the saved token).",
   ].join("\n");
 }

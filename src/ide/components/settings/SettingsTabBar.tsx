@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemeColors } from "../../../theme/themeContext";
 
-export type SettingsTabId = "general" | "editor" | "environment" | "shortcuts" | "feedback" | "support";
+export type SettingsTabId = "general" | "editor" | "environment" | "shortcuts" | "github" | "support";
 
 interface SettingsTab {
   id: SettingsTabId;
@@ -18,7 +18,7 @@ const TABS: SettingsTab[] = [
   { id: "editor", title: "Editor", icon: "code-slash-outline" },
   { id: "environment", title: "Linux", icon: "cube-outline" },
   { id: "shortcuts", title: "Keys", icon: "key-outline" },
-  { id: "feedback", title: "Feedback", icon: "mail-outline" },
+  { id: "github", title: "GitHub", icon: "logo-github" },
   { id: "support", title: "Support", icon: "wallet-outline" },
 ];
 

@@ -80,7 +80,7 @@ const SECTIONS: { icon: any; title: string; lines: string[] }[] = [
     lines: [
       "General — theme, which bottom tabs are visible, keyboard and mouse mode, and re-running this setup.",
       "Editor — editing preferences.  Keys — keyboard shortcuts.",
-      "Feedback — send a message to the developers without leaving the app.",
+      "GitHub — sign in to see your profile and repositories here, and sign out.",
       "Support — an optional GCash donation. It changes nothing inside the app.",
     ],
   },

@@ -72,7 +72,7 @@ export function IDEModals({
 
       <SettingsModal
         visible={isSettingsVisible} onClose={onCloseSettings}
-        workspaceId={workspaceId} onSyncWorkspace={refreshWorkspace}
+        onSyncWorkspace={refreshWorkspace}
       />
       <ExtensionMarketplaceModal visible={isMarketplaceVisible} onClose={onCloseMarketplace} />
       <ProjectSearchModal
