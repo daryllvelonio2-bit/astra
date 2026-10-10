@@ -403,7 +403,7 @@ async function openTunnel(port: number): Promise<string | null> {
     set({ step: "Fetching cloudflared…", tunnel: "cloudflared" });
     pushLog("cloudflared is not in the guest; fetching it with php (once per device)");
     await run(
-      `nohup php -d allow_url_fopen=1 -r 'copy("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64","/tmp/cloudflared") or exit(1); chmod("/tmp/cloudflared",0755); echo OK;' > /tmp/cloudflared-dl.log 2>&1 &`,
+      `nohup env -u PHP_INI_SCAN_DIR php -d allow_url_fopen=1 -r 'copy("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64","/tmp/cloudflared") or exit(1); chmod("/tmp/cloudflared",0755); echo OK;' > /tmp/cloudflared-dl.log 2>&1 &`,
       SERVE_LAUNCH_TIMEOUT_S
     );
     for (let i = 0; i < 6 && !hasCloudflared; i++) {

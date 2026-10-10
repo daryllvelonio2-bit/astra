@@ -19,7 +19,7 @@ import { readFileNative, writeFileNative } from "../../../modules/linux-runner/s
 /** The file the user's desktop pulls with `adb pull`. */
 export const PROBE_TRACE_PATH = "/sdcard/astra-probe.txt";
 /** Cap: only the last N lines survive; older records roll off. */
-export const PROBE_TRACE_MAX_LINES = 60;
+export const PROBE_TRACE_MAX_LINES = 400;
 
 const HEADER = [
   "# astra probe trace — one block per hosting guest attempt (last 60 lines kept)",
