@@ -406,11 +406,13 @@ async function openTunnel(port: number): Promise<string | null> {
       `nohup env -u PHP_INI_SCAN_DIR php -d allow_url_fopen=1 -r 'copy("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64","/tmp/cloudflared") or exit(1); chmod("/tmp/cloudflared",0755); echo OK;' > /tmp/cloudflared-dl.log 2>&1 &`,
       SERVE_LAUNCH_TIMEOUT_S
     );
-    for (let i = 0; i < 6 && !hasCloudflared; i++) {
+    for (let i = 0; i < 10 && !hasCloudflared; i++) {
       await sleep(20000);
+      // Verify the BINARY, not just that a file exists: a truncated download is still an
+      // executable file, and would be "installed" and then fail to run.
       hasCloudflared = (
         await run(
-          "[ -x /tmp/cloudflared ] && cp /tmp/cloudflared /usr/local/bin/cloudflared && command -v cloudflared >/dev/null && echo YES || echo NO"
+          "[ -x /tmp/cloudflared ] && cp /tmp/cloudflared /usr/local/bin/cloudflared && /usr/local/bin/cloudflared --version >/dev/null 2>&1 && echo YES || echo NO"
         )
       ).out.includes("YES");
     }
