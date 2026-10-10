@@ -423,14 +423,26 @@ async function openTunnel(port: number): Promise<string | null> {
 
   if (hasCloudflared) {
     set({ step: "Opening a Cloudflare quick tunnel…", tunnel: "cloudflared" });
-    await run(`rm -f ${TUNNEL_LOG} ${TUNNEL_PID}`);
-    await run(
-      `nohup cloudflared tunnel --protocol http2 --url http://127.0.0.1:${port} --no-autoupdate > ${TUNNEL_LOG} 2>&1 & echo $! > ${TUNNEL_PID}; sleep 1; true`,
-      TUNNEL_LAUNCH_TIMEOUT_S
-    );
-    const url = await waitForUrl(TUNNEL_LOG, /https:\/\/[^\s|"]*trycloudflare\.com/, 90);
+    let url: string | null = null;
+    // Provisioning the quick tunnel can time out (~15s) or come back HTTP 429; both are
+    // transient, and hammering makes the throttle worse, so it is exactly one retry.
+    for (let attempt = 1; attempt <= 2 && !url; attempt++) {
+      if (attempt > 1) {
+        pushLog("cloudflared produced no URL; retrying once (provisioning can time out or throttle)");
+        await sleep(4000);
+      }
+      await run(`rm -f ${TUNNEL_LOG} ${TUNNEL_PID}`);
+      await run(
+        `nohup cloudflared tunnel --protocol http2 --edge-ip-version 4 --loglevel debug --url http://127.0.0.1:${port} --no-autoupdate > ${TUNNEL_LOG} 2>&1 & echo $! > ${TUNNEL_PID}; sleep 1; true`,
+        TUNNEL_LAUNCH_TIMEOUT_S
+      );
+      url = await waitForUrl(TUNNEL_LOG, /https:\/\/[^\s|"]*trycloudflare\.com/, 60);
+    }
     if (url) return url;
-    pushLog("cloudflared did not produce a URL; falling back to ssh reverse tunnel");
+    // The fetch only runs when the binary is ABSENT, so a truncated or broken copy would be
+    // reused forever. Drop it here and the next run fetches a clean one.
+    await run("rm -f /usr/local/bin/cloudflared /tmp/cloudflared");
+    pushLog("cloudflared produced no URL; cleared its cached binary and falling back to ssh");
   }
 
   const hasSsh = (await run("command -v ssh")).code === 0;
